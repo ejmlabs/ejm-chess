@@ -9,7 +9,7 @@ Let people play dependable live chess worldwide, with clear controls, authoritat
 ### Requirement: Simplified operating budget
 
 The service SHALL use the owner's 2026-10-22 decision: one $100 monthly
-spending target, existing $45/$70 usage alerts, and the $85 emergency stop.
+spending target, existing usage alerts and emergency stop.
 This requirement supersedes earlier mandatory per-service allocations and
 repeated financial-review gates in this change. Dated cost calculations are
 historical estimates. Runtime bounds, source integrity, ranked correctness

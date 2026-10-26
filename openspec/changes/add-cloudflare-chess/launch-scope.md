@@ -24,7 +24,7 @@ the remaining correctness, privacy, cost, recovery or capacity gates.
   gates pass, then verify the public host and guides before studio discovery.
 - The approved budget remains $100 per month. Workers Paid already exists.
   Keep conservative application quotas and preserve accepted work when stopped.
-  The notification thresholds remain $45, $70 and $85 in account-wide usage
+  The notification thresholds are kept in the private provider record in account-wide usage
   charges. These delayed notices cannot enforce a hard invoice cap.
 - Sender remains `chess@ejmlabs.com`; delivery tests and budget alerts use the
   previously approved private owner address. Recovery email stays optional.

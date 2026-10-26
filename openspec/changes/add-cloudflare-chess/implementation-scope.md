@@ -854,7 +854,7 @@ Deployed version `bc95b733-1f09-4823-8fd5-8fc28dcfac4a` raised monthly signup an
 game caps to 10,000 each, email to 5,000 and lifetime signup attempts to 100,000.
 The deployment stop is false. The normal owner Operations form saved account/
 game and email stops false; browser readback showed all three Available.
-Analysis remains stopped. The three $45/$70/$85 usage policies were read back
+Analysis remains stopped. The three usage policies were read back
 as enabled. The existing server bundle hash was unchanged. No public Access
 policy or ranked/tournament feature gate was changed. Billing remains delayed
 and account-wide, so the target is not a guaranteed invoice cap.

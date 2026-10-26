@@ -2,8 +2,8 @@
 
 ## Current policy, 2026-10-22
 
-Use one **$100 monthly target**, alerts at $45 and $70, and the existing $85
-automatic stop to leave headroom for active games and recovery. Billing alerts
+Use one **$100 monthly target**, usage alerts and the existing automatic stop (thresholds are kept in the private
+provider record) to leave headroom for active games and recovery. Billing alerts
 can lag; this is not a guaranteed invoice cap. Earlier service allocations and
 dated cost calculations are historical and no longer gate launch.
 
@@ -24,7 +24,7 @@ are release gates; repeated per-service financial reviews are not.
 
 The approved 2026-10-20 provisioning confirmed the existing Workers Paid
 subscription and enabled the sender domain for `chess@ejmlabs.com`, with body
-previews disabled. Dedicated usage policies at $45, $70 and $85 are enabled
+previews disabled. Dedicated usage policies are enabled
 and address the approved owner inbox. The existing non-chess policies remain
 unchanged. The protected launch deployment uses a 50 ms CPU limit, disabled
 preview URLs and workers.dev, and a persistent private admin policy. The
@@ -164,9 +164,9 @@ Cloudflare usage alerts are processed daily and exclude monthly subscription
 fees. They can arrive after further charges accrue. They are notifications,
 not spending caps, and they are not connected to the application's D1 counters.
 
-Configured usage thresholds are **$45, $70, and $85**. Workers Paid's existing
-$5 monthly base fee was verified. If that fee is allocated to chess, these
-thresholds are approximately $50, $75, and $90 total. Shared-account usage
+Configured usage thresholds are kept in the private provider record. Workers Paid's existing
+$5 monthly base fee was verified. If that fee is allocated to chess, the
+thresholds are higher by that amount. Shared-account usage
 includes other products and can trigger these
 alerts before chess reaches its own allowance. The included request, CPU, D1,
 Durable Object, queue, email, and storage allowances are also shared where the
@@ -182,9 +182,9 @@ these application counters.
 
 | Signal | Operator action |
 | --- | --- |
-| $45 usage alert, or 50% of an app allowance | Review chess and shared-account usage, growth, oldest work, and remaining days |
-| $70 usage alert, or unexpectedly rising unit cost | Stop server analysis; investigate before allowing more optional work |
-| $85 usage alert | The associated dedicated webhook stops new games, email, and analysis when Cloudflare delivers the notification; reporting and delivery can be delayed |
+| First usage alert, or 50% of an app allowance | Review chess and shared-account usage, growth, oldest work, and remaining days |
+| Second usage alert, or unexpectedly rising unit cost | Stop server analysis; investigate before allowing more optional work |
+| Final usage alert | The associated dedicated webhook stops new games, email, and analysis when Cloudflare delivers the notification; reporting and delivery can be delayed |
 | Spending threatens the $100 envelope before that alert | Use the private stop controls, preserve accepted work, and inspect billing |
 | Exhausted allowance or retained-receipt ceiling | Keep the stop, inspect reservations and cleanup, and reconcile actual spend before resuming |
 | Failed result outbox or correction, or lag above two minutes | Inspect authority status and provider health; run one bounded retry cycle and investigate persistent failures |
@@ -241,7 +241,7 @@ existing rules.
 
 Cloudflare's destination creation/test returned 201 after its initial test was
 blocked by the bot challenge. The destination is associated only with the
-enabled $85 account-usage policy, preserving its email recipient and the two
+enabled highest account-usage policy, preserving its email recipient and the two
 lower email-only policies. During this historical callback test, the application
 control row recorded all three stops at version 1; repeated authenticated
 delivery while stopped added no version. The later mail acceptance restored all

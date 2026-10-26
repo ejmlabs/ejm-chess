@@ -8,7 +8,7 @@ monthly and whole-account costs remain unqualified, so these figures are
 neither a forecast nor an invoice cap.
 
 The current policy, adopted October 22, is one $100 monthly spending target,
-alerts at $45 and $70, and the $85 emergency stop. Earlier service allocations,
+usage alerts and an emergency stop (thresholds are kept in the private provider record). Earlier service allocations,
 mandatory reserves and repeated financial reviews are superseded. The dated
 calculations below remain estimates, not launch requirements.
 
@@ -149,7 +149,7 @@ or **$4,150** after the published included quantity and rounding. This is a
 sustained-activity example, not a prediction for hibernating games. Concurrency
 cannot be priced without active time and traffic measurements.
 
-The saved $45/$70/$85 usage alerts exclude the plan fee and are processed daily.
+The saved usage alerts exclude the plan fee and are processed daily.
 The high-threshold webhook association was read back and its provider Save/Test
 callback passed. An actual threshold-crossing event and its email delivery have
 not been observed. Even working alerts can arrive after more charges accrue.

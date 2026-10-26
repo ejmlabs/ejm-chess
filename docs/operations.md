@@ -507,7 +507,7 @@ ranked play and the first large-arena tier open together after four checks:
 the real Game/proof/Competition recovery path; the full approved
 2,000-player-per-event provider workload; protected-host player flows; and live
 privacy, admission and spending-control readback. The October 22 spending policy
-uses one $100 monthly target, alerts at $45 and $70, and the $85 emergency stop.
+uses one $100 monthly target, usage alerts and an emergency stop (thresholds are kept in the private provider record).
 Earlier service allocations and mandatory reserves no longer gate launch.
 The isolated capacity run retains its approved $25 incremental ceiling.
 See [proof qualification](timeout-proofs.md),

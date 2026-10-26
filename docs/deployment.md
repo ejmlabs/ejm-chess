@@ -38,7 +38,7 @@ password recovery and new-password sign-in passed an approved-recipient test.
 The old browser session was revoked. The test recorded two email attempts.
 Its temporary stops were later cleared under the October 22 policy. See the
 [account acceptance boundary](qualification/provider-accounts-20261021.md).
-The $45 and $70 alerts and $85 automatic stop remain enabled. Existing unrelated
+The usage alerts and automatic stop remain enabled. Existing unrelated
 resources and alert policies are preserved.
 
 Production `wrangler.jsonc` now binds the dedicated D1 database, restricted

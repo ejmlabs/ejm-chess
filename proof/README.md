@@ -139,8 +139,7 @@ must pass through the private Worker binding, including the serialized burst,
 allowed retry and failure races, before enabling the proof profile.
 
 Financial adoption does not qualify that run. The current policy uses one $100
-monthly spending target, with alerts at $45 and $70 and an emergency stop at
-$85. It replaces per-service allocations and repeated financial approvals.
+monthly spending target, with usage alerts and an emergency stop. It replaces per-service allocations and repeated financial approvals.
 Retain immutable source and provider evidence. Older financial records stay
 bound to the private measurement identity as historical protocol records.
 See [the private review records](../docs/timeout-proofs.md#separate-financial-source-and-provider-gates)

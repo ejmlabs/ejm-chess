@@ -2,8 +2,8 @@
 
 ## Current spending decision, 2026-10-22
 
-The owner directs one $100 monthly chess spending target, existing $45/$70
-usage alerts, and the $85 emergency stop to leave headroom for accepted work.
+The owner directs one $100 monthly chess spending target, existing
+usage alerts and emergency stop to leave headroom for accepted work.
 This supersedes the earlier mandatory per-service dollar allocations, tax and
 unknown-cost reserves, and repeated financial-review gates in this change.
 Those dated calculations are historical estimates, not launch requirements.
@@ -579,7 +579,7 @@ absent. Existing reserved attempts remain funded through stops and month
 rollover; optional Stockfish screening may stop first. These workload controls
 do not remove the account-wide invoice exposure described below.
 
-Configure Cloudflare billing alerts at $45, $70, and $85 of account-wide usage
+Configure Cloudflare billing tiered alerts on account-wide usage
 charges, which approximate $50, $75, and $90 when adding one $5 Workers base
 fee. Record the actual billing cycle, existing subscriptions, account usage,
 recipients, and successful readback. Preserve existing alerts and other products.

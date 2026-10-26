@@ -2,8 +2,8 @@
 
 ## Current spending decision, 2026-10-22
 
-The owner directs one $100 monthly chess spending target, existing $45/$70
-usage alerts, and the $85 emergency stop to leave headroom for accepted work.
+The owner directs one $100 monthly chess spending target, existing
+usage alerts and emergency stop to leave headroom for accepted work.
 This supersedes the earlier mandatory per-service dollar allocations, tax and
 unknown-cost reserves, and repeated financial-review gates in this change.
 Those dated calculations are historical estimates, not launch requirements.
@@ -46,7 +46,7 @@ Create `chess.ejmlabs.com`: a small, dependable online chess game where people w
 - Use compact, consistent page spacing for application routes. Stack descriptions beneath page titles, group fields and actions by purpose, keep links within sentences inline, and let loading tables honor the selected density. Preserve shared component appearances, useful form and table widths, and the centered board.
 - Make compact application layouts a supported shared ejm-ui contract. Extend existing Page and SectionHead options, publish named spacing aliases and a complete gallery example, add browser geometry checks in both themes at phone and desktop widths, migrate chess, and integrate only these shared changes into the main local ejm-ui checkout. Preserve marketing defaults and unrelated work; local integration does not publish or deploy a package.
 - Publish product help, rules, fair play, privacy, and operations guidance with the product. Add studio discovery links only after their destinations are live and verified.
-- Use one $100 monthly Cloudflare spending target with alerts at $45 and $70 and the $85 emergency stop. The 2026-10-22 decision supersedes earlier per-service allocations and repeated financial-review gates. Keep finite workload limits, separate stops for games, email and optional analysis, and accepted-work recovery. The isolated capacity run retains its combined $25 ceiling. Count actual billing units once and state unknown prices and delayed billing plainly. Alerts and stops do not impose a hard invoice cap or qualify correctness, capacity or release.
+- Use one $100 monthly Cloudflare spending target with usage alerts and an emergency stop. The 2026-10-22 decision supersedes earlier per-service allocations and repeated financial-review gates. Keep finite workload limits, separate stops for games, email and optional analysis, and accepted-work recovery. The isolated capacity run retains its combined $25 ceiling. Count actual billing units once and state unknown prices and delayed billing plainly. Alerts and stops do not impose a hard invoice cap or qualify correctness, capacity or release.
 
 ## Capabilities
 

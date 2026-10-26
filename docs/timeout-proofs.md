@@ -94,7 +94,7 @@ valid across stops, disabled admission and month rollover so existing games can
 finish. Keep their binding and fixed image available while they drain.
 
 The policy adopted on 2026-10-22 uses one $100 monthly chess spending target.
-Usage alerts at $45 and $70 and the emergency stop at $85 leave headroom for
+Usage alerts and the emergency stop leave headroom for
 accepted work. It replaces the earlier per-service allocations, named reserves
 and repeated financial approval gates. Fixed admission, attempt, instance and
 runtime limits still apply. Optional server analysis remains disabled.
