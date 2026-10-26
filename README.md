@@ -4,6 +4,26 @@ A multiplayer chess game for `chess.ejmlabs.com`, built for
 Cloudflare Workers. The board, clocks, and moves are the main interface. All routes use the public
 shared ejm-ui design, including account, replay and private review workflows.
 
+> **Status: source import.** This is a source import that does not build from a
+> clean checkout yet. Typecheck, build and the Worker tests need things that are
+> not in this repository:
+>
+> - The matching shared UI source, checked out as `../ejm-ui` (`@ejm/*` packages
+>   are `file:` dependencies). It must provide `@ejm/ui/components/Chessboard` and
+>   a `useSearch` export from `@ejm/ssg`; without them typecheck reports two
+>   errors (`src/client/Board.tsx`, `src/pages/Play.tsx`) and the build fails.
+> - The six private Worker configurations (`wrangler.jsonc`,
+>   `wrangler.capacity.jsonc`, `wrangler.proof-acceptance.jsonc`,
+>   `wrangler.proof-qualification.jsonc`, `wrangler.proof-service.jsonc`,
+>   `wrangler.recovery-drill.jsonc`), which are git-ignored. Worker tests, the
+>   Worker dry run and recovery tests cannot run without them. They also supply
+>   `PRODUCTION_RESOURCE_IDS`, the production database and namespace ids that the
+>   isolated drill, qualification and acceptance paths refuse to target.
+> - Node 24 (`engines`).
+>
+> The capacity patch is partial and unreviewed. Provider identifiers and spending
+> thresholds are kept in the private provider record, not here.
+
 ## Status
 
 This repository restores the retained chess implementation and its OpenSpec
