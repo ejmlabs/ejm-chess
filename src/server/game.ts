@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { Chess } from 'chess.js';
 import { passwordAccountReady, rankedEligibility, revalidateActor, competitiveAccountEligibility } from './auth';
-import { positionOutcome, timeoutOutcome, provedTimeoutOutcome } from './adjudication';
+import { positionOutcome, timeoutOutcome, provedTimeoutOutcome, TIMEOUT_AWAITING_PROOF } from './adjudication';
 import { aiEnabled, type Env } from './env';
 import { consumeGameProtocol, countProtocolEvent, gameProtocolStatus, initializeProtocolLimits } from './abuse';
 import { getEngineLevel, STOCKFISH_BUILD } from '../shared/engine';
@@ -284,7 +284,9 @@ export class Game extends DurableObject<Env> {
     const roundDeadline = state.tournament?.deadlineAt ?? Number.POSITIVE_INFINITY;
     if (state.status === 'active' && state.deadline !== null && now >= state.deadline && state.deadline <= roundDeadline) {
       state.version++;
-      this.finish(state, timeoutOutcome(this.engine(state), this.engine(state).turn()), state.deadline);
+      const flagged = timeoutOutcome(this.engine(state), this.engine(state).turn());
+      const awaitingProof = flagged.reason === 'timeout-win' && state.rulesVersion === PROOF_RULES_VERSION && state.timeoutProof;
+      this.finish(state, awaitingProof ? TIMEOUT_AWAITING_PROOF : flagged, state.deadline);
       changed = true;
     }
     if ((state.status === 'waiting' || state.status === 'ready') && state.readinessDeadline !== null && now >= state.readinessDeadline && state.readinessDeadline <= roundDeadline) {
@@ -302,7 +304,8 @@ export class Game extends DurableObject<Env> {
     if (adjudicationDeadline !== null && now >= adjudicationDeadline && adjudicationDeadline <= roundDeadline) {
       state.version++;
       const policy = state.rulesVersion === PROOF_RULES_VERSION ? PROOF_RULES_VERSION : RULES_VERSION;
-      this.finish(state, { winner: null, score: null, reason: 'technical-void', decisionId: `automatic:${policy}:adjudication:${state.id}:${state.version}` }, adjudicationDeadline);
+      const decisionId = `automatic:${policy}:adjudication:${state.id}:${state.version}`;
+      this.finish(state, { ...timeoutOutcome(this.engine(state), this.engine(state).turn()), decisionId }, adjudicationDeadline);
       return true;
     }
     if (state.tournament && state.status !== 'finished' && now >= roundDeadline) {

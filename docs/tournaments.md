@@ -77,7 +77,9 @@ The stored limit never resets after a retry or service restart.
 | Bye | 1 |
 | Exactly one player ready when readiness expires | Ready player 1, opponent 0 |
 | Neither player ready | 0 each |
-| Technical void or revoked eligibility | 0 each |
+| Time runs out, other side has mating material | Other side 1, player who ran out 0 |
+| Time runs out, other side cannot mate | 0.5 each |
+| Round cutoff void or revoked eligibility | 0 each |
 
 No-show points belong only to the event. The corresponding chess record keeps
 no winner and no scored result. The service does not invent a checkmate,
@@ -92,11 +94,16 @@ board for that pairing. A revoked or expired browser session cannot send game
 commands. A currently valid session for the same eligible identity can continue
 using its held account reservation.
 
+When a player's clock runs out, the player who ran out loses if the other side
+has mating material. If the other side has only a king, or the position is a
+material draw, the game is a draw. A disconnect does not stop the clock, so it
+scores the same way. A fully blocked position with no possible mate is not
+detected and scores as a loss.
+
 At a round's wall limit, an unfinished game becomes a technical void with zero
 points for both players. A chess clock or readiness deadline that expired first
-keeps chronological precedence. Unknown adjudication drains under the versioned
-30-second technical-void policy, or the earlier event cutoff. A completed game
-never changes because of a late deadline or duplicate result.
+keeps chronological precedence. A completed game never changes because of a late
+deadline or duplicate result.
 
 The service does not guarantee that an hourly event finishes before the next
 hour. Delays can extend an event. If three events are already active, a new

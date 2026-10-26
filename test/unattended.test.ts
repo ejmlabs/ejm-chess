@@ -36,34 +36,31 @@ async function stopFixtureAlarms(game: Awaited<ReturnType<typeof activeGame>>['g
 }
 
 describe('unattended recovery and payload retirement', () => {
-  it('voids one uncertain timeout at 30 seconds after restart and repairs a lost alarm through the admission ledger', async () => {
+  it('ends a casual flag at its deadline with a loss for the flagging player and settles it once after restart', async () => {
     const { game, white, black, snapshot } = await activeGame();
     await env.DB.batch([white, black].map(actor => env.DB.prepare('INSERT INTO active_game_seats(user_id,game_id,acquired_at) VALUES(?,?,?)')
       .bind(actor.id, snapshot.id, Date.now())));
     const deadline = snapshot.clocks.deadline!;
     const clock = vi.spyOn(Date, 'now').mockReturnValue(deadline);
-    expect((await game.status())?.status).toBe('pending-adjudication');
-    clock.mockReturnValue(deadline + ADJUDICATION_WAIT_MS - 1);
-    expect((await game.status())?.status).toBe('pending-adjudication');
     await evictDurableObject(game);
+    expect((await game.status())?.status).toBe('finished');
     clock.mockReturnValue(deadline + ADJUDICATION_WAIT_MS);
-    const maintained = await maintainUnattendedGames(env);
-    expect(maintained.recovery).toEqual({ attempted: 1, completed: 1, failed: 0 });
+    await maintainUnattendedGames(env);
     const terminal = await game.status();
-    expect(terminal).toMatchObject({ status: 'finished', version: snapshot.version + 2,
-      result: { endedAt: deadline + ADJUDICATION_WAIT_MS, outcome: { reason: 'technical-void', score: null, winner: null } } });
+    expect(terminal).toMatchObject({ status: 'finished', version: snapshot.version + 1,
+      result: { endedAt: deadline, outcome: { reason: 'timeout-win', score: 0, winner: 'b' } } });
     await game.flush();
     await env.COMPETITION.get(env.COMPETITION.idFromName('global')).flush();
     await evictDurableObject(game);
     expect(await game.status()).toEqual(terminal);
     expect(await env.DB.prepare('SELECT COUNT(*) FROM active_game_seats WHERE game_id=? AND released_at IS NULL').bind(snapshot.id).first('COUNT(*)')).toBe(0);
-    expect(await env.DB.prepare('SELECT reason,score,settlement FROM games WHERE id=?').bind(snapshot.id).first()).toEqual({ reason: 'technical-void', score: null, settlement: 'unrated' });
+    expect(await env.DB.prepare('SELECT reason,score,settlement FROM games WHERE id=?').bind(snapshot.id).first()).toEqual({ reason: 'timeout-win', score: 0, settlement: 'unrated' });
     const competition = env.COMPETITION.get(env.COMPETITION.idFromName('global'));
     const events = await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec<{ payload: string }>('SELECT payload FROM result_events WHERE game_id=?', snapshot.id).toArray());
     expect(events.filter(row => (JSON.parse(row.payload) as GameResult).status === 'finished')).toHaveLength(1);
   });
 
-  it('preserves legacy game rules and cached receipts while v2 recovery closes an old pending timeout', async () => {
+  it('preserves legacy game rules and cached receipts while a legacy-rules flag ends at once', async () => {
     const { game, white, black, snapshot } = await activeGame();
     expect(snapshot.rulesVersion).toBe('online-2026-10-v2-unattended');
     await env.DB.batch([white, black].map(actor => env.DB.prepare('INSERT INTO active_game_seats(user_id,game_id,acquired_at) VALUES(?,?,?)')
@@ -75,22 +72,23 @@ describe('unattended recovery and payload retirement', () => {
     });
     const deadline = snapshot.clocks.deadline!;
     const clock = vi.spyOn(Date, 'now').mockReturnValue(deadline);
-    const pending = (await game.status())!.result!;
-    expect(pending.rulesVersion).toBe('online-2026-10-v1');
-    expect(pending.pgn).not.toContain('[Termination ');
-    expect(JSON.parse(pending.terminalDigest)).toHaveLength(12);
+    const flagged = (await game.status())!.result!;
+    expect(flagged.rulesVersion).toBe('online-2026-10-v1');
+    expect(flagged.pgn).not.toContain('[Termination ');
+    expect(JSON.parse(flagged.terminalDigest)).toHaveLength(12);
     await evictDurableObject(game);
     await game.flush();
     const competition = env.COMPETITION.get(env.COMPETITION.idFromName('global'));
     await competition.flush();
     expect(await env.DB.prepare('SELECT status,rules_version FROM games WHERE id=?').bind(snapshot.id).first())
-      .toEqual({ status: 'pending-adjudication', rules_version: 'online-2026-10-v1' });
+      .toEqual({ status: 'finished', rules_version: 'online-2026-10-v1' });
     clock.mockReturnValue(deadline + ADJUDICATION_WAIT_MS);
     await maintainUnattendedGames(env);
     await competition.flush();
     const result = (await game.status())!.result!;
+    expect(result).toEqual(flagged);
     expect(result).toMatchObject({ rulesVersion: 'online-2026-10-v1', status: 'finished',
-      outcome: { score: null, reason: 'technical-void', decisionId: expect.stringContaining('online-2026-10-v2-unattended') } });
+      outcome: { winner: 'b', score: 0, reason: 'timeout-win' } });
     expect(await env.DB.prepare('SELECT status,rules_version,settlement FROM games WHERE id=?').bind(snapshot.id).first())
       .toEqual({ status: 'finished', rules_version: 'online-2026-10-v1', settlement: 'unrated' });
     expect(await env.DB.prepare('SELECT COUNT(*) FROM active_game_seats WHERE game_id=? AND released_at IS NULL').bind(snapshot.id).first('COUNT(*)')).toBe(0);
@@ -198,7 +196,10 @@ describe('unattended recovery and payload retirement', () => {
       .bind(caseId, setup.black.id, setup.result.id, Date.now(), Date.now()).run();
     await recordEvidence(env, { caseId, gameId: setup.result.id, kind: 'server_game', sourceRef: setup.result.id,
       sourceVersion: String(setup.result.version), summary: { moveCount: setup.result.plies } });
-    expect(await retireGamePayloads(env)).toEqual({ attempted: 1, completed: 1, failed: 0 });
+    // Earlier flagged games in this file now end at their deadline and are also due for retirement.
+    const retired = await retireGamePayloads(env);
+    expect(retired).toEqual({ attempted: retired.attempted, completed: retired.attempted, failed: 0 });
+    expect(retired.attempted).toBeGreaterThanOrEqual(1);
     expect(await env.DB.prepare('SELECT storage_state,terminal_version,terminal_digest FROM casual_game_admissions WHERE game_id=?').bind(setup.result.id).first())
       .toEqual({ storage_state: 'archived', terminal_version: setup.result.version, terminal_digest: setup.result.terminalDigest });
     expect(await env.DB.prepare('SELECT pgn,result_version,rules_version FROM games WHERE id=?').bind(setup.result.id).first())

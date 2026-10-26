@@ -55,8 +55,9 @@ play and ratings while a private bounded proof runs:
 - A supported proof that the surviving player cannot mate records a draw,
   with reason `timeout-proof-draw`.
 - Unknown, exhausted, invalid or failed work leaves the result pending until
-  the original flag time plus 30 seconds. The alarm then records one unrated
-  `technical-void`, with no winner or rating change.
+  the original flag time plus 30 seconds. The alarm then applies the material
+  timeout rule: a `timeout-win` for the surviving side when it has more than a
+  bare king, otherwise a `timeout-insufficient-material` draw.
 
 The winning continuation may require cooperation. This tests whether mate is
 possible, rather than whether a player can force it. A material score, engine
@@ -131,7 +132,7 @@ Basic follows only its allowed ordinary resource/watchdog failure after physical
 Lite stop and disable, without a full Basic corpus rerun. Production retains
 one allocation/job, the fixed singleton with `max_instances=1`, four ranked
 reservations, 1,000 monthly admissions, two credits per game and the original
-30-second technical-void deadline. Production attachment still needs passing
+30-second deadline. Production attachment still needs passing
 resource and recovery evidence. Deploy qualified settings behind full-host
 Access with persistent admission stops closed; admit protected integration
 through the owner control, then open publicly only after that path passes.

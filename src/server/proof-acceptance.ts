@@ -321,8 +321,8 @@ export class ProofAcceptance extends DurableObject<ProofAcceptanceEnv> {
     const settlement = await this.competition().acceptanceInspect(job.game_id);
     const technical = ['G07', 'G08', 'G11'].includes(job.id); const result = observation.game.result;
     const once = settlement.results.length === 1 && settlement.slots.length === 1 && settlement.slots[0].released_at !== null
-      && settlement.ratings.length === (technical ? 0 : 1);
-    let passed = Boolean(result && once && result.status === 'finished' && result.outcome.reason === (technical ? 'technical-void' : 'timeout-proof-win'));
+      && settlement.ratings.length === 1;
+    let passed = Boolean(result && once && result.status === 'finished' && result.outcome.reason === (technical ? 'timeout-win' : 'timeout-proof-win'));
     const faults = (await this.store()).inspect().faultReceipts;
     const required = manifest.faults.filter(fault => fault.command === job.id && !['G08-late-real-receipt', 'G10-lost-stop-ack', 'G11-restart-prover', 'G11-emergency-cleanup'].includes(fault.id));
     passed = passed && required.every(fault => faults.filter(saved => saved.fault === fault.id).length === fault.maximum);

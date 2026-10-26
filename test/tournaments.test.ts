@@ -406,6 +406,45 @@ describe('scheduled tournament authority', () => {
     expect([...awards.values()].reduce((sum, points) => sum + points, 0)).toBe(4);
   });
 
+  it.each([
+    ['mating material', false],
+    ['a bare-king survivor', true],
+  ])('scores a flag against %s as a decided or drawn game, never a void', async (_name, bareKing) => {
+    const { startsAt, clock } = startClock();
+    const competition = await authority();
+    const { id, actors } = await enter(competition, 4, startsAt);
+    clock.mockReturnValue(startsAt);
+    await competition.maintenance();
+    const pairing = (await event(competition, id)).games.find(value => value.round === 1)!;
+    const white = actors.find(actor => actor.id === pairing.whiteId)!;
+    const black = actors.find(actor => actor.id === pairing.blackId)!;
+    const game = await gameFor(pairing, competition);
+    let snapshot: GameSnapshot = await game.snapshot(white);
+    for (const actor of [white, black]) {
+      const reply = await game.command(actor, { type: 'ready', id: crypto.randomUUID(), expectedVersion: snapshot.version });
+      if (!reply.ok) throw new Error(reply.code);
+      snapshot = reply.snapshot;
+    }
+    if (bareKing) {
+      // White keeps the move and only a bare black king remains, so White flagging cannot lose.
+      await runInDurableObject(game, (_instance, state) => {
+        const stored = JSON.parse(state.storage.sql.exec<{ value: string }>('SELECT value FROM game_state').one().value);
+        stored.initialFen = '7k/8/5K2/8/8/8/8/8 w - - 0 1';
+        stored.moves = [];
+        state.storage.sql.exec('UPDATE game_state SET value=?', JSON.stringify(stored));
+      });
+    }
+    clock.mockReturnValue(snapshot.clocks.deadline!);
+    await game.status();
+    await game.flush();
+    const result = (await game.status())!.result!;
+    expect(result.outcome.reason).toBe(bareKing ? 'timeout-insufficient-material' : 'timeout-win');
+    expect(await competition.settle(result)).toEqual({ accepted: true, pending: false });
+    await competition.flush();
+    const scored = (await event(competition, id)).games.find(value => value.id === pairing.id)!;
+    expect([scored.whitePoints, scored.blackPoints]).toEqual([bareKing ? 0.5 : 0, bareKing ? 0.5 : 1]);
+  });
+
   it('serializes casual and tournament account claims and rejects casual reuse of a reserved tournament ID', async () => {
     const competition = await authority();
     const actor = await player();

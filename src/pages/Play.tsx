@@ -48,7 +48,7 @@ function Clock({ state, color, receivedAt }: { state: GameSnapshot; color: Color
 }
 
 const resultText = (state: GameSnapshot) => {
-  if (state.status === 'pending-adjudication') return 'Time expired. An unknown result becomes a technical void after 30 seconds.';
+  if (state.status === 'pending-adjudication') return 'Time expired. A private check can take up to 30 seconds. The result then follows the timeout rule.';
   if (state.outcome?.reason === 'readiness-expired') return 'The invitation expired before both players were ready.';
   if (state.outcome?.reason === 'technical-void') return 'This game was voided. No rating change.';
   if (state.outcome?.reason === 'ai-unavailable') return 'Computer play became unavailable. This game ended without a score.';

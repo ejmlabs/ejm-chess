@@ -15,9 +15,10 @@ does not claim complete FIDE adjudication.
 The narrow native and WebAssembly probes below succeeded. They do not establish
 a bound for arbitrary legal positions, Worker deployment compatibility, or safe
 automatic promotion of pending results to rated wins. The current durable game
-policy pauses an unknown timeout for 30 seconds, then records one unrated
-technical void with no winner. The policy does not wait for a person. A stored
-tournament cutoff can void it earlier. It must never invent a win.
+policy scores a timeout at once as a win for the surviving side when it has
+more than a bare king, otherwise as a draw. A ranked proof game may wait up to
+30 seconds for a private proof first. A stored tournament cutoff can void an
+unfinished game earlier.
 
 `ejm-chess` owns these product rules and experimental probes. No shared UI or
 harness contract changes. The probe is outside runtime imports and the Container
@@ -33,12 +34,11 @@ does not answer whether a specified side can ever mate with cooperation.
 The implemented online policy draws threefold repetition and the fifty-move
 boundary automatically, without an over-the-board claim. Timeout adjudication
 draws when the rules library proves insufficient material or the surviving side
-has only a king. Other timeout positions pause with no rating settlement, then
-become an unrated technical void after 30 seconds. Alarm and scheduled recovery
-use the stored deadline; late execution does not invent extra thinking time.
-This conservative policy can be exploited to avoid losses. It is not full
-FIDE timeout adjudication and needs explicit competitive acceptance before
-ranked admission opens.
+has only a king. Otherwise the player who ran out loses, so a fully blocked
+position with no possible mate is scored wrongly unless a ranked proof shows the
+draw. Alarm and scheduled recovery use the stored deadline; late execution does
+not invent extra thinking time. This is not full FIDE timeout adjudication and
+needs explicit competitive acceptance before ranked admission opens.
 See `src/server/adjudication.ts`, `test/game.test.ts`, and the public `/rules/`
 route for the versioned contract and its existing regression fixtures.
 

@@ -239,6 +239,16 @@ The product SHALL publish and version its draw and timeout policy. It SHALL supp
 - **WHEN** a player's time expires and the opponent has only a king
 - **THEN** the service records a draw rather than a win
 
+#### Scenario: Timeout against mating material
+
+- **WHEN** a player's time expires and the opponent can still deliver checkmate by some legal sequence of moves
+- **THEN** the player who ran out of time loses and the opponent receives the point, including in casual, tournament and arena games
+
+#### Scenario: Disconnect runs the clock out
+
+- **WHEN** a disconnected player's clock expires
+- **THEN** the same timeout rule applies, because a disconnect neither stops nor changes the clock
+
 #### Scenario: Unresolved adjudication cases
 
 - **WHEN** a known timeout or dead-position case has no correct implementation under the published policy
@@ -256,12 +266,17 @@ The product SHALL publish and version its draw and timeout policy. It SHALL supp
 
 ### Requirement: Unresolved adjudication stays pending
 
-Every game SHALL retain its rule-policy version. If bounded adjudication cannot determine an outcome under that policy, play SHALL stop with a visible pending result and no rating settlement. Unattended maintenance SHALL record an unrated technical void after 30 seconds unless a proved supported result already exists; uncertainty SHALL NOT silently become a timeout win.
+A timeout SHALL end the game with a result: a loss for the player who ran out of time when the other side has mating material, otherwise a draw. A ranked proof-policy game MAY wait at most 30 seconds for a validated private proof, then SHALL fall back to that rule. A timeout SHALL NOT become a technical void.
 
 #### Scenario: Mating-potential analysis is inconclusive
 
 - **WHEN** an adjudication tool reaches its resource limit without determining whether the non-flagging player can mate
-- **THEN** both clocks stop, the result waits at most 30 seconds before a technical void, and neither player receives a fabricated win or loss
+- **THEN** both clocks stop, the result waits at most 30 seconds, and the material rule then gives the non-flagging player the win when that player has more than a bare king, or a draw otherwise
+
+#### Scenario: Remaining technical voids
+
+- **WHEN** an owner records a void, a tournament or arena round cutoff passes, eligibility is revoked or the computer opponent is unavailable
+- **THEN** the game ends without a winner; no timeout does
 
 ### Requirement: Ranked timeout-proof admission
 
@@ -319,7 +334,7 @@ Full FIDE or universal completion SHALL NOT be claimed.
 #### Scenario: Proof work fails or exhausts a bound
 
 - **WHEN** a solver or validator reaches its CPU, wall, memory or output limit, returns unknown, or is interrupted
-- **THEN** only saved finite transient retry credits may be used, the original 30-second deadline remains, and any unresolved result becomes one unrated technical void
+- **THEN** only saved finite transient retry credits may be used, the original 30-second deadline remains, and any unresolved result falls back to the material timeout rule
 
 #### Scenario: A delivery acknowledgement is lost
 
@@ -331,7 +346,7 @@ Full FIDE or universal completion SHALL NOT be claimed.
 The proof profile SHALL remain disabled until local and provider tests resolve
 the required ordinary timeout corpus correctly under fixed resource and cost
 limits, including full histories and a cold burst of all reserved slots.
-Failure, unknown and race tests SHALL preserve the technical-void fallback.
+Failure, unknown and race tests SHALL preserve the material-rule fallback.
 This gate SHALL NOT replace other ranked release gates or imply full FIDE
 adjudication, measured worldwide latency or large-event ranked capacity.
 
@@ -343,7 +358,7 @@ adjudication, measured worldwide latency or large-event ranked capacity.
 - **AND** native `undetermined` parser coverage SHALL be labelled synthetic, production SHALL retain the `solver-undetermined` mapping, and neither SHALL count as a genuine native observation
 - **AND** qualification SHALL disclose that no known legal native `undetermined` fixture is retained or claimed executed, record that observation gap and add a genuine fixture if found
 - **AND** injected results or other unknown reasons SHALL NOT substitute for real native evidence or be relabelled `solver-undetermined`
-- **AND** all ordinary-answer, original-deadline, no-rating technical-void, once-only settlement, slot-release, resource, cost, failure and recovery gates SHALL remain required
+- **AND** all ordinary-answer, original-deadline, material-fallback, once-only settlement, slot-release, resource, cost, failure and recovery gates SHALL remain required
 
 #### Scenario: Retained Basic native corpus evidence is reused
 

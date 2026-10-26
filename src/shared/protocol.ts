@@ -60,7 +60,7 @@ export type AiFailure = 'AI_UNAVAILABLE' | 'AI_MODEL_UNAVAILABLE' | 'AI_QUOTA' |
 export type GameStatus = 'waiting' | 'ready' | 'active' | 'finished' | 'pending-adjudication';
 export type ResultReason = 'checkmate' | 'stalemate' | 'threefold-repetition' | 'fifty-move-rule'
   | 'insufficient-material' | 'resignation' | 'draw-agreement' | 'readiness-expired'
-  | 'eligibility-revoked' | 'timeout-insufficient-material' | 'timeout-needs-review' | 'timeout-proof-win' | 'timeout-proof-draw'
+  | 'eligibility-revoked' | 'timeout-insufficient-material' | 'timeout-win' | 'timeout-needs-review' | 'timeout-proof-win' | 'timeout-proof-draw'
   | 'technical-void' | 'ai-unavailable';
 
 export interface GameOutcome {
