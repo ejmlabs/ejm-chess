@@ -134,7 +134,7 @@ recorded upstream URL. Keep the source and license files with any distribution.
 | --- | --- |
 | `ejm-chess` | Rules, game commands, clocks, invitations, matchmaking, ratings, history, account policy, and fair play composition |
 | `ejm-ui` | Every visual primitive, including board and clock surfaces, shared tokens, fonts, site shell, prerendering, headers, and project registry contracts |
-| `ejmlabs` | Studio content and public project discovery |
+| `ejmlabs` | Lab content and public project discovery |
 
 All pages, guides, game surfaces, fields, actions, tables, disclosures, and
 states compose public ejm-ui exports. Shared application recipes also own
@@ -184,7 +184,7 @@ separate piece-art license.
   `/docs/developer-guide/`, and `/credits/`
 
 Product guides, implementation and the migrated OpenSpec plan live here.
-Shared UI guides and public visual contracts belong in `ejm-ui`; Studio discovery
+Shared UI guides and public visual contracts belong in `ejm-ui`; Lab discovery
 belongs in `ejmlabs`. The owner's 2026-10-26 repository correction makes this
 local OpenSpec root authoritative for chess continuation. Historical records
-that named Studio as the planning home remain dated evidence.
+that named Lab as the planning home remain dated evidence.

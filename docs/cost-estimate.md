@@ -19,7 +19,7 @@ allocate that entire fee to chess; they do not add a second subscription charge.
 Other projects use the same account, and their usage can consume included
 quantities or trigger the account-wide alerts.
 
-The checked-in canonical configuration allows 10,000 signup attempts, 10,000
+The private canonical configuration allows 10,000 signup attempts, 10,000
 new game reservations and 5,000 account email attempts per UTC month, plus
 100,000 lifetime signup attempts. Its deployment stop is clear. Feature gates
 still disable ranked, tournaments, arenas, browser computer games and server

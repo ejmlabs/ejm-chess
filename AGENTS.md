@@ -4,7 +4,7 @@ Build the simple multiplayer chess product described by the local
 `openspec/changes/add-cloudflare-chess/` plan. On 2026-10-26, the owner corrected
 repository placement to `ejmlabs/ejm-chess`. This repository now owns the migrated
 OpenSpec root, implementation and product guides. Earlier references to the
-Studio planning home are historical. Read `openspec/HANDOFF.md` before resuming.
+Lab planning home are historical. Read `openspec/HANDOFF.md` before resuming.
 Keep unfinished tasks unchecked and follow the existing OpenSpec workflow.
 
 - Never use em dashes. Write plain, clear text.

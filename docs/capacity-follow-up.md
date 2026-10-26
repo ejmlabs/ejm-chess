@@ -16,7 +16,7 @@ as passing capacity or latency claims. Optional server analysis stays disabled.
 
 The product owns each fixture, driver, native adapter and report. Use the
 public Game, Competition, account, receipt, replay and cache contracts. Keep
-shared UI, studio and harness packages outside these measurements. Production
+shared UI, lab and harness packages outside these measurements. Production
 limits, routes and data stay separate.
 
 Each proposed run needs its own reviewed planning update, exact sealed source,

@@ -4,7 +4,7 @@
 timed arenas alongside the existing [round-robin preview](tournaments.md).
 This contract was selected on 2026-10-20. Local source now includes the arena
 authority, DTOs, HTTP API, D1 projections, and Competition hooks. Arenas are
-disabled in the checked-in default configuration. Focused native checks and
+disabled in the private default configuration. Focused native checks and
 the [local qualification workloads](local-qualification.md) cover the contracts
 listed below. Provider measurements and activation belong to the selected
 release record. This design document alone establishes no public capacity,
@@ -33,7 +33,7 @@ Cloudflare invoice cap; it cannot guarantee a dollar total.
 
 ## Configuration and conservative defaults
 
-The checked-in `wrangler.jsonc` keeps `ARENAS_ENABLED=false`. Only the exact
+The private `wrangler.jsonc` keeps `ARENAS_ENABLED=false`. Only the exact
 value `true` admits new arena work. New entry and pairing close when it is off;
 accepted games, scores, and reservation release continue to drain.
 

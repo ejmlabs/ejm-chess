@@ -208,7 +208,7 @@ compatibility_flags=nodejs_compat
 The `deployed-worker-subdomain-aliases` record at `00:43:19.040955Z` confirms
 both `enabled=false` and `previews_enabled=false`. These are the provider's
 Worker subdomain settings corresponding to disabled `workers.dev` and version
-preview aliases. The checked-in config also sets `workers_dev=false` and
+preview aliases. The private config also sets `workers_dev=false` and
 `preview_urls=false`. Do not create another hostname to bypass the canary.
 
 `readback-chess-crons` at `00:21:57.973299Z` confirms the minute schedule

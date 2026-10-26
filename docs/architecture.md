@@ -4,7 +4,7 @@
 
 `ejm-chess` owns the chess service and its guides. It consumes public `@ejm/*`
 exports for every visual component, tokens, fonts, the site shell, prerendering,
-headers, and site defaults. `ejm-ui` owns those interfaces. `ejmlabs` owns studio discovery.
+headers, and site defaults. `ejm-ui` owns those interfaces. `ejmlabs` owns lab discovery.
 There is no dependency on the agent harness.
 
 Form choices use `Select` from `@ejm/ui/components/ui/select`. The shared

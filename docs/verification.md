@@ -45,7 +45,7 @@ The product owns chess behavior and guides. It consumes public `@ejm/*`
 interfaces from the shared UI owner, based on commit
 `927e463b267567c6f90c49949518c37bd12a696d` plus the delivered chess patch.
 Shared project discovery still hides chess. The reviewed baseline specs have
-been reconciled. Studio publication and final spec sync remain behind the
+been reconciled. Lab publication and final spec sync remain behind the
 unfinished product launch gates.
 
 ## Final local integration checkpoint, 2026-10-21 UTC

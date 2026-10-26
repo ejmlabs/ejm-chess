@@ -5,7 +5,7 @@ Recorded 2026-10-26 for the corrected `ejmlabs/ejm-chess` source PR.
 ## Source and ownership
 
 This repository owns the chess implementation, product guides and migrated
-`add-cloudflare-chess` OpenSpec plan. The owner corrected the earlier Studio PR
+`add-cloudflare-chess` OpenSpec plan. The owner corrected the earlier Lab PR
 placement on 2026-10-26. Read [the current handoff](../openspec/HANDOFF.md) and
 [the unchanged task record](../openspec/changes/add-cloudflare-chess/tasks.md).
 The plan retains 58 of 71 checked tasks. Restoration closes no launch gate.
@@ -24,7 +24,7 @@ a qualified release candidate or proof of current live service behavior.
 
 The old temporary checkout is gone. The private archive and original planning
 checkout remain preserved. The PR adds the restored product source to its
-own repository rather than copying Studio, launch-film or shared UI source.
+own repository rather than copying Lab, launch-film or shared UI source.
 
 ## Shared UI dependency
 

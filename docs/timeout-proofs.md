@@ -8,7 +8,7 @@ execution profile is `cha-native-3484c7e6-v1`. Historical games retain their
 stored policy. Casual games, computer practice and unrated tournaments continue
 to use `online-2026-10-v2-unattended`.
 
-The checked-in default Wrangler configuration has `TIMEOUT_PROOF_PROFILE=off`,
+The private default Wrangler configuration has `TIMEOUT_PROOF_PROFILE=off`,
 `MONTHLY_PROOF_LIMIT=0` and no `PROVER` binding. The final release configuration
 uses a separate private proof service. Ranked enablement requires recorded
 native corpus, Game/Competition settlement, failure/recovery and physical

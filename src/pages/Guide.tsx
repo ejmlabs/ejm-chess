@@ -211,7 +211,7 @@ const guides: Record<string, GuideContent> = server ? {
       <p>Minute and daily triggers recover saved work. Longer calendar, full-hour endurance and regional measurements remain separate qualification; configured ceilings do not prove worldwide performance.</p>
       <AppHeading as="h2">Owners</AppHeading>
       <p>ejm-chess owns chess rules, game state, matchmaking, ratings, account policy, and fair play composition.
-        ejm-ui owns shared visuals and site infrastructure. The studio owns project discovery.
+        ejm-ui owns shared visuals and site infrastructure. The lab owns project discovery.
         The product does not depend on the agent harness.</p>
       <AppHeading as="h2">Player accounts</AppHeading>
       <p>Better Auth owns username and password authentication in native D1. Recovery email is optional. Private account state returns accountReady and hasRecoveryEmail without exposing an address. New game seats require a completed username and password account. Player ranked and tournament eligibility uses credentials, restrictions and launch gates, not email verification. Owner administration still requires a real verified email and Cloudflare Access.</p>
