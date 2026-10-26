@@ -7,7 +7,7 @@ configuration before using deployment commands. See [source handoff](source-hand
 
 ## Status and scope
 
-The recorded protected baseline at `https://chess.ejmlabs.com` used version `592cb559-a9ad-4072-a6e5-c5a17ed34edf`, read back on
+The recorded protected baseline at `https://chess.ejmlabs.com` used version `[id in private provider record]`, read back on
 2026-10-22 at 10:17 UTC. It retains the redesign, 8-character password minimum,
 single account-form submit action and signup-attempt enforcement. Its server
 bundle is unchanged from the preceding protected revision. The

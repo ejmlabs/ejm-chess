@@ -18,7 +18,7 @@ checks; it exposes no native restore or restart endpoint. Follow the
 | Original casual-game source record | Value |
 | --- | --- |
 | Approved source snapshot SHA256 | `fb2877c79a25633727f9add7f301713ea8c74542608cb87ac8997bc4cfddc16a` |
-| Isolated Worker version | `d0cbaa10-8dc0-4e36-ad9a-e494fe7f03f1` |
+| Isolated Worker version | `[id in private provider record]` |
 | Source digest definition | SHA256 of compact, sorted path-to-file-SHA256 JSON for 45 runtime, shared, package, migration and drill files |
 | Game rules policy | `online-2026-10-v2-unattended` |
 | Rating policy | `glicko2-online-2026-10-v1` |

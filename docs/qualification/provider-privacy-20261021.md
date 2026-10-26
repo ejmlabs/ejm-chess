@@ -21,7 +21,7 @@ flags stayed off, and monthly game, email and analysis allowances stayed zero.
 | Frozen source SHA256 | `cea0925bca8ebc885b56924254022e5fcda42550531f17bf8360e5215a060bc7` |
 | Uploaded bundle SHA256 | `911440fa2d29235cbfa526b430b725940db2a89304eba75ae137997bad5959ef` |
 | No-bundle upload config SHA256 | `8c2e964a3924dec929a538a618759bd90912c5e6cc6f42c85c2b1405feafb4ec` |
-| Isolated Worker version | `d33d5370-34c6-48c7-a917-dd60de53c2b6` |
+| Isolated Worker version | `[id in private provider record]` |
 | Account policy | `account-2026-10-v1` |
 | D1 migrations | All 14, including `0014_account_privacy.sql` |
 
