@@ -1,0 +1,5 @@
+# Local evidence tooling only. No downloads, ports, or deployed service.
+FROM ejm-chess-analysis-verify:local
+COPY runner.py benchmark.py qualify_screening.py test_qualification.py test_runner.py ./
+COPY qualification/corpus ./qualification/corpus
+CMD ["python", "-B", "-m", "unittest", "-v", "test_qualification.py"]

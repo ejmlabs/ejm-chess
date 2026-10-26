@@ -1,0 +1,25 @@
+node_modules/
+dist/
+.ejm-ssg/
+.wrangler/
+.worker-build/
+.recovery-worker-build/
+.proof-qualification-worker-build/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+test-results/
+coverage/
+.logs/
+.qualification/
+
+__pycache__/
+*.py[cod]
+
+# Private provider bindings and qualification configuration are restored locally.
+/wrangler.jsonc
+/wrangler.capacity.jsonc
+/wrangler.proof-acceptance.jsonc
+/wrangler.proof-qualification.jsonc
+/wrangler.proof-service.jsonc
+/wrangler.recovery-drill.jsonc

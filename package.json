@@ -1,0 +1,56 @@
+{
+  "name": "ejm-chess",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "npm run build && wrangler dev --env local",
+    "build": "npm run engine:check && ejm-ssg build && npm run budget:guides",
+    "engine:check": "node scripts/stockfish-assets.mjs",
+    "engine:fetch": "node scripts/stockfish-assets.mjs --fetch",
+    "engine:probe": "node scripts/probe-stockfish.mjs",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json",
+    "test": "npm run test:worker && npm run test:driver",
+    "test:worker": "vitest run",
+    "test:driver": "node --test scripts/capacity-driver.test.mjs",
+    "qualify:local": "node scripts/qualify-local.mjs",
+    "worker:check": "wrangler deploy --env '' --dry-run --outdir .worker-build",
+    "budget": "ejm-ssg budget && npm run budget:guides",
+    "budget:guides": "ejm-ssg budget dist --js 95 --css 14 --ignore 'play/**' --ignore 'history/**' --ignore 'leaderboard/**' --ignore 'admin/**' --ignore 'player/**' --ignore 'replay/**' --ignore 'tournaments/**'"
+  },
+  "dependencies": {
+    "@better-auth/core": "1.7.12",
+    "@cloudflare/containers": "0.3.7",
+    "@echecs/round-robin": "4.1.0",
+    "@echecs/tournament": "3.3.0",
+    "@ejm/core": "file:../ejm-ui/packages/core",
+    "@ejm/site": "file:../ejm-ui/packages/site",
+    "@ejm/ssg": "file:../ejm-ui/packages/ssg",
+    "@ejm/tokens": "file:../ejm-ui/packages/tokens",
+    "@ejm/ui": "file:../ejm-ui/packages/ui",
+    "better-auth": "1.7.12",
+    "chess.js": "1.4.0",
+    "glicko2": "1.2.2",
+    "jose": "6.2.13",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.6",
+    "@cloudflare/workers-types": "5.20261019.1",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.5",
+    "wrangler": "4.151.3",
+    "ws": "8.21.0"
+  }
+}

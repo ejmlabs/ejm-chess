@@ -1,0 +1,25 @@
+{
+  "solver": {
+    "repository": "https://github.com/miguel-ambrona/chasolver",
+    "commit": "3484c7e65247003fac8705a9290dc2b5d0978b94",
+    "version": "3.0.0",
+    "license": "MIT",
+    "archive": "vendor/chasolver-3484c7e6.tar.gz",
+    "sha256": "2ee5f9507d5dc5ef1c024ec2b15023142e6bfa909afcbdd178b868969bc9a62f",
+    "analyzerSha256": "b04d386eb07edb7d1d90dfa5da5010b6836d43100ed5f26015904a5f19bc7341",
+    "cargoLockSha256": "c7692f12bed9b584997f9e35332d7d3b1e76387981310660b89ab3aeb77feb06"
+  },
+  "validator": {
+    "package": "chess",
+    "version": "1.11.2",
+    "license": "GPL-3.0-or-later",
+    "source": "https://files.pythonhosted.org/packages/93/09/7d04d7581ae3bb8b598017941781bceb7959dd1b13e3ebf7b6a2cd843bc9/chess-1.11.2.tar.gz",
+    "archive": "vendor/chess-1.11.2.tar.gz",
+    "sha256": "a8b43e5678fdb3000695bdaa573117ad683761e5ca38e591c4826eba6d25bb39"
+  },
+  "images": {
+    "rust": "rust:1.85.0-slim-bookworm@sha256:c842cc0357b91bb15ad2bb89934513d0d226f711fac7f7fedb176d3311714d47",
+    "python": "python:3.13-slim-bookworm@sha256:f040863673aea2570c3ff6a5c3fb4c673a016cbc5375005ad145915922b6b78a",
+    "platform": "linux/amd64"
+  }
+}

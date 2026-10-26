@@ -1,0 +1,2 @@
+# Preserve the exact upstream bytes checked by the engine manifest.
+public/engines/** -text

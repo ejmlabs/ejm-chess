@@ -1,0 +1,203 @@
+{
+  "startedAt": "2026-10-21T00:36:01.105Z",
+  "finishedAt": "2026-10-21T00:37:11.825Z",
+  "exitCode": 0,
+  "phase": "arena",
+  "entrants": 2000,
+  "requestedDurationMs": 900000,
+  "command": [
+    "node",
+    "/private/tmp/ejm-chess-2yz1VsKp/ejm-chess/node_modules/vitest/vitest.mjs",
+    "run",
+    "--config",
+    "vitest.qualification.config.ts"
+  ],
+  "sources": {
+    "package-lock.json": "2ccf1b919c25cb61188ae056e25073821f6f19fa7a95f6600cf8fdee4207afa4",
+    "wrangler.jsonc": "ae90ae1ca93ea08cdbac908f4a395e67d0a9ac573c6c1540b15cd0971ed92d7f",
+    "vitest.config.ts": "de85b119fd457d6acb5ed44c0efea53acd284a82d2203503c038dead7d3e8152",
+    "vitest.qualification.config.ts": "c4899a820324ae7d1edff5712ef3934408f67a317c5102a2ddf82f9d8a9422ba",
+    "src/server/competition.ts": "2336c59c27cf4120d02d17304e525999551b12cac6a048f8427aae1804790a3e",
+    "src/server/game.ts": "91ad76454ebfb7248aa92dd7ba54d19f4d722daf8475c763b481995f867cfc16",
+    "src/server/arena.ts": "d22b9caee4e6e3c43ff9c0bce910501f1b70b5c1ac4e1a65fdb4b0a994f621e1",
+    "src/server/arena-policy.ts": "428778c29463192b715fbc7972387ae8ce6c37f023c43265ccd509cf3b670438",
+    "src/server/maintenance.ts": "689a8f71aa6325db594699f6244bd7b12036766d44fa8f3fe8800fa8ea6fd819",
+    "migrations/0011_retirement_work.sql": "ac2286be17ad89e3461fab6a15a191ce6a0b06f4339c2a21feb190f4afbad735",
+    "qualification/arena.qualify.ts": "49cec64fefd1b3ff468bfffa828197e5c10f0b858b51860627f0f66149c5c2ea"
+  },
+  "sourceChangedDuringRun": [],
+  "sourceAtFinish": {
+    "package-lock.json": "2ccf1b919c25cb61188ae056e25073821f6f19fa7a95f6600cf8fdee4207afa4",
+    "wrangler.jsonc": "ae90ae1ca93ea08cdbac908f4a395e67d0a9ac573c6c1540b15cd0971ed92d7f",
+    "vitest.config.ts": "de85b119fd457d6acb5ed44c0efea53acd284a82d2203503c038dead7d3e8152",
+    "vitest.qualification.config.ts": "c4899a820324ae7d1edff5712ef3934408f67a317c5102a2ddf82f9d8a9422ba",
+    "src/server/competition.ts": "2336c59c27cf4120d02d17304e525999551b12cac6a048f8427aae1804790a3e",
+    "src/server/game.ts": "91ad76454ebfb7248aa92dd7ba54d19f4d722daf8475c763b481995f867cfc16",
+    "src/server/arena.ts": "d22b9caee4e6e3c43ff9c0bce910501f1b70b5c1ac4e1a65fdb4b0a994f621e1",
+    "src/server/arena-policy.ts": "428778c29463192b715fbc7972387ae8ce6c37f023c43265ccd509cf3b670438",
+    "src/server/maintenance.ts": "689a8f71aa6325db594699f6244bd7b12036766d44fa8f3fe8800fa8ea6fd819",
+    "migrations/0011_retirement_work.sql": "ac2286be17ad89e3461fab6a15a191ce6a0b06f4339c2a21feb190f4afbad735",
+    "qualification/arena.qualify.ts": "49cec64fefd1b3ff468bfffa828197e5c10f0b858b51860627f0f66149c5c2ea"
+  },
+  "host": {
+    "platform": "darwin",
+    "release": "25.5.0",
+    "node": "v24.19.0",
+    "cpu": "Apple M4 Pro",
+    "logicalCpus": 12,
+    "totalMemoryBytes": 25769803776
+  },
+  "packages": {
+    "vitest": "5.0.5",
+    "cloudflareVitest": "1.4.6",
+    "wrangler": "4.151.3",
+    "chessJs": "1.4.0"
+  },
+  "maxResidentSetBytes": 1193721856,
+  "memoryScope": "macOS time reports the local test command maximum resident set; this is not per-game or deployed Durable Object memory.",
+  "measurements": [
+    {
+      "kind": "native-arena-local",
+      "entrants": 2000,
+      "targetGames": 1000,
+      "policyClock": "Virtual registration arrivals and cadence; elapsed service times use performance.now().",
+      "auth": "Existing credential-backed D1 fixtures; no signup, password hashing, HTTP, Turnstile, or email load.",
+      "environment": "Local Cloudflare Vitest/workerd with real SQLite/D1 and Game Durable Objects; no WAN or Cloudflare region.",
+      "fixtureMs": 632,
+      "registration": {
+        "requests": 10000,
+        "logicalArrivalMs": 30000,
+        "initiallyRegistered": 1597,
+        "acceptedAfterRetry": 2000,
+        "responses": {
+          "accepted-or-duplicate": 4981,
+          "ARENA_RETRY": 5019
+        },
+        "elapsedMs": 10999,
+        "latency": {
+          "samples": 10000,
+          "p50Ms": 26,
+          "p95Ms": 48,
+          "p99Ms": 73,
+          "maxMs": 94
+        },
+        "scope": "Virtual-time rate-limit correctness. Not an end-to-end registrations/sec claim."
+      },
+      "pairing": {
+        "games": 1000,
+        "maintenancePasses": 243,
+        "elapsedMs": 9624,
+        "logicalElapsedMs": 30375,
+        "distinctPlayers": 2000
+      },
+      "moves": {
+        "samples": 1000,
+        "p50Ms": 10,
+        "p95Ms": 19,
+        "p99Ms": 55,
+        "maxMs": 102,
+        "scope": "Native private-binding service latency with 16 games in flight; includes RPC/commit, excludes WAN; CPU unmeasured."
+      },
+      "connections": {
+        "simultaneousParticipantSockets": 2000,
+        "totalUpgrades": 4000,
+        "reconnects": 2000,
+        "reconnectElapsedMs": 1289,
+        "latency": {
+          "samples": 4000,
+          "p50Ms": 18,
+          "p95Ms": 30,
+          "p99Ms": 72,
+          "maxMs": 111
+        },
+        "scope": "Native authenticated private-binding upgrades, including a replacement burst; no public edge/WAN or provider hibernation claim."
+      },
+      "settlement": {
+        "unique": 1000,
+        "elapsedMs": 1420,
+        "uniquePerSecond": 704.225352112676,
+        "latency": {
+          "samples": 1000,
+          "p50Ms": 22,
+          "p95Ms": 33,
+          "p99Ms": 38,
+          "maxMs": 39
+        },
+        "duplicates": 5000,
+        "duplicateElapsedMs": 713,
+        "accounting": {
+          "receipts": 1000,
+          "pointsHalf": 2000,
+          "games": 2000,
+          "unresolved": 0,
+          "bytes": 9990144
+        },
+        "scope": "Native terminal Game verification plus atomic authority acceptance. D1 projection/release measured separately. Not the 15-minute sustained admission workload."
+      },
+      "projection": {
+        "pages": 63,
+        "generation": 3,
+        "distinctEntrants": 2000,
+        "maintenancePasses": 143,
+        "elapsedMs": 2425,
+        "scope": "Full D1 generation and reservation release after result burst. Not a spectator-cache or regional-lag benchmark."
+      },
+      "finished": true,
+      "retirement": {
+        "retired": 1000,
+        "elapsedMs": 30263,
+        "totalPerSecond": 33.043650662525195,
+        "afterInitial32PerSecond": 32.04237007613373,
+        "passLatency": {
+          "samples": 929,
+          "p50Ms": 7,
+          "p95Ms": 15,
+          "p99Ms": 46,
+          "maxMs": 250
+        },
+        "sampleBefore": {
+          "allocatedBytes": 53248,
+          "payloadBytes": 1072,
+          "commandReceipts": 4
+        },
+        "sampleAfter": {
+          "allocatedBytes": 53248,
+          "payloadRows": 0,
+          "commandReceipts": 0,
+          "tombstones": 1,
+          "tombstoneBytes": 584
+        },
+        "ledgers": {
+          "permanentIds": 1000,
+          "archived": 1000
+        },
+        "scope": "Native Game.archive and D1 acknowledgements. Explicit scaled mode, four RPCs in flight, persisted 32/sec token bucket. Retention jumps one logical hour; refill follows real elapsed time. One 1000-game batch does not establish 72000-payload steady-state storage or deployed cost. SQLite allocated pages may be retained for reuse."
+      },
+      "unqualified": [
+        "three simultaneous 2000-entry events",
+        "20 unique settlements/sec for 15 minutes",
+        "40 settlements/sec recovery while sustaining new traffic",
+        "72000-payload hot-storage steady state",
+        "public HTTP/account creation",
+        "10,000 cached spectators",
+        "move CPU",
+        "provider resource memory",
+        "deployed regions",
+        "live cost"
+      ],
+      "test": "qualifies bounded native arena admission, game authority, sockets, scoring, and paged recovery",
+      "result": "passed"
+    }
+  ],
+  "publicationRevision": {
+    "date": "2026-10-26",
+    "scope": "Personal runtime path normalization for public source handoff.",
+    "fields": [
+      "command[0]"
+    ],
+    "originalRecordSha256": "962fdd5ce9a49f6116d29e4e93a329f6398d828922fbca815125689bf348b4b9",
+    "originalRecordRetainedPrivately": true,
+    "historicalSourceHashesRetained": true,
+    "executionRerun": false
+  }
+}

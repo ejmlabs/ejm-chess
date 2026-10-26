@@ -1,0 +1,94 @@
+diff --git a/openspec/specs/ejmlabs-site/spec.md b/openspec/specs/ejmlabs-site/spec.md
+new file mode 100644
+--- /dev/null
++++ b/openspec/specs/ejmlabs-site/spec.md
+@@ -0,0 +1,22 @@
++# ejmlabs-site Specification
++
++## Purpose
++
++Records the published studio home contract needed by chess discovery while source adoption is reviewed separately.
++
++## Requirements
++
++### Requirement: Home page
++The home page SHALL lead with display type, public project copy and direct actions, SHALL NOT show project previews or simulated product windows, SHALL list ejm-cli, ejm-ide and ejm-harness as external rows to their own sites, use a Sage band, and end with the Ink footer.
++
++#### Scenario: No imitation on the home page
++- **WHEN** the home page is parsed
++- **THEN** it contains no simulated product window
++
++#### Scenario: Project rows
++- **WHEN** the home page is parsed
++- **THEN** the three project links point to cli, ide and harness on ejmlabs.com and carry `rel="external"`
++
++#### Scenario: Project marks beside names
++- **WHEN** a visitor reads Current projects at phone or desktop widths in either page theme
++- **THEN** each name has its approved mark beside it with clear contrast on Sage, reserved dimensions and one accessible project link without a duplicate image label
+diff --git a/openspec/specs/documentation-discovery/spec.md b/openspec/specs/documentation-discovery/spec.md
+new file mode 100644
+--- /dev/null
++++ b/openspec/specs/documentation-discovery/spec.md
+@@ -0,0 +1,17 @@
++# documentation-discovery Specification
++
++## Purpose
++
++Records the existing product guide discovery contract used by the chess additions while preserving richer local specifications.
++
++## Requirements
++
++### Requirement: Direct guide links
++
++The studio site SHALL offer a user guide and a developer guide for ejm-cli, ejm-harness, and ejm-ide. Each link SHALL open the corresponding guide on that project's domain.
++
++#### Scenario: Find a project guide
++
++- **WHEN** a visitor opens the studio documentation section
++- **THEN** each project has named user and developer guide links
++- **AND** the links use the project's canonical domain
+diff --git a/openspec/specs/public-web-access/spec.md b/openspec/specs/public-web-access/spec.md
+new file mode 100644
+--- /dev/null
++++ b/openspec/specs/public-web-access/spec.md
+@@ -0,0 +1,40 @@
++# public-web-access Specification
++
++## Purpose
++
++Records the protected public-host contract used by chess while preserving existing hosts, preview controls, and machine clients.
++
++## Requirements
++
++### Requirement: Worldwide public access
++
++The public hosts `ejmlabs.com`, `ide.ejmlabs.com`, `cli.ejmlabs.com`, and `harness.ejmlabs.com` SHALL NOT block or challenge requests solely because of their source country.
++
++#### Scenario: Ordinary visitor outside the United States
++
++- **WHEN** a visitor outside the United States requests a public page without triggering a threat control
++- **THEN** the site serves it without a country restriction or private-service sign-in
++
++### Requirement: Public production entry points retain edge protection
++
++The four public production sites SHALL serve traffic through their protected custom domains. Unnecessary production workers.dev addresses and version URLs SHALL be disabled. Deployment configuration SHALL preserve these limits. Intentional previews SHALL have a separate, verified access policy before publication.
++
++#### Scenario: Alternate production URL
++
++- **WHEN** an anonymous client requests an unwanted alternate production Worker hostname
++- **THEN** that hostname does not serve the production application
++
++#### Scenario: Production redeployment
++
++- **WHEN** a public site is redeployed from its checked-in configuration
++- **THEN** it does not reopen a production workers.dev address or version URL
++
++#### Scenario: Intentional preview
++
++- **WHEN** a preview is published outside the production zone's protection
++- **THEN** its access policy is enforced and verified independently of the production WAF
++
++#### Scenario: Canonical clients remain compatible
++
++- **WHEN** alternate production URLs are disabled
++- **THEN** canonical pages, documentation, release metadata, and existing digest-bound downloads retain their expected browser and machine-client behavior

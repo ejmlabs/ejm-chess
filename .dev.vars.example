@@ -1,0 +1,7 @@
+# Copy to .dev.vars.local and replace this value with a random secret.
+# fnm exec --using 24.19.0 node -e 'console.log(require("node:crypto").randomBytes(32).toString("hex"))'
+AUTH_SECRET="replace-with-at-least-32-random-characters"
+
+# Browser Stockfish practice is enabled by default and needs no provider key.
+# Set false to close new practice and end unfinished practice without a score.
+# AI_ENABLED="false"

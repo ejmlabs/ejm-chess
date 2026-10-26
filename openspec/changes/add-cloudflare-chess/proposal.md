@@ -1,0 +1,79 @@
+# Proposal
+
+## Current spending decision, 2026-10-22
+
+The owner directs one $100 monthly chess spending target, existing $45/$70
+usage alerts, and the $85 emergency stop to leave headroom for accepted work.
+This supersedes the earlier mandatory per-service dollar allocations, tax and
+unknown-cost reserves, and repeated financial-review gates in this change.
+Those dated calculations are historical estimates, not launch requirements.
+Use supported monthly caps of 10,000 signup attempts, 10,000 games and 5,000
+account emails, with 100,000 lifetime signup attempts. Clear deployment and
+account/game/email stops for protected-host use. Preserve abuse rate limits,
+authentication and accepted-work recovery. Keep optional server analysis disabled.
+Ranked correctness and tournament qualification still apply. Public Access is
+removed only through the existing launch sequence. The $100 target is not a
+hard provider invoice cap: alerts can lag and accepted work continues.
+Owner authorization covers this configuration and financial-policy change;
+do not request another approval for the same decision. Runtime test bounds
+and source integrity remain required; repeated cost optimization does not.
+The product owns these controls and docs; no shared UI API changes are needed.
+
+
+## Why
+
+Create `chess.ejmlabs.com`: a small, dependable online chess game where people worldwide can find opponents and compete on global leaderboards. Chess players need a clear board, correct clocks and results, and a fair play process they can trust.
+
+## What Changes
+
+- Plan a separate `ejm-chess` product, hosted entirely on Cloudflare, with a responsive board, live human opponents, reconnects, game history, and PGN export.
+- Require explicit username/password accounts for all new games, as requested by the owner on 2026-10-20. This supersedes guest casual admission. Preserve existing guest games and history without promoting their identities. Recovery email is optional at signup and for competition. Use any supplied private email for verification and password recovery only, with no marketing; explain that skipping it leaves no email password reset. Start with proposed 5+3 blitz and 10+5 rapid formats, separate ratings, and one worldwide leaderboard per format. Friendly invitations are unrated.
+- Accept passwords of 8 to 128 characters when creating, resetting, or completing an account, as requested on 2026-10-21. Keep existing-password verification compatible. Show one submit action per account form and only the navigation needed to reach another account view.
+- Make the server authoritative for seats, legal moves, clocks, and outcomes. Use maintained chess, board, auth, and rating packages rather than writing replacements.
+- Adopt the pinned MIT CHA-Solver package for bounded private timeout proofs under a new saved rules profile. Reserve proof capacity and two finite attempt credits before ranked game admission; validate positive mating witnesses against retained history through an independent maintained rules package. Preserve unknown results and the original 30-second technical-void deadline. Qualify difficult positions, failure recovery, provider bounds, and a small proof pool within the existing $100 monthly budget before enabling the profile. This follow-up extends completed package feasibility and does not claim full FIDE adjudication.
+- Add layered fair play controls: abuse prevention, server records, postgame engine screening, farming checks, reports, private review, appeals, and rating compensation. The latest unattended-operation request supersedes the earlier offer to review flags. Reports and engine signals remain informational when no reviewer is active. Do not promise that a browser game can prevent all engine assistance.
+- Keep the interface focused on playing. Support touch, mouse, keyboard, underpromotion, reduced motion, and clear connection states. Add a remembered Show legal moves toggle, on by default, with legal destination dots and capture rings when selecting a piece on the player's turn.
+- Add private match replays from authoritative PGN, with move selection, keyboard navigation, board flipping, and download.
+- Add a chess logo and favicon family in the shared token owner and consume public exports. Keep unreleased discovery disabled.
+- Run opt-in, bounded round-robin tournaments automatically at fixed UTC cadences, with no-show handling, standings, and restart recovery. Use unrated games and separate event standings until competitive gates pass.
+- Make ordinary runtime unattended through automatic expiry, bounded recovery and retention, and technical voids for unresolved adjudication. Never automate cheating convictions from statistical signals.
+- Replace the earlier OpenRouter opponent with optional unrated browser Stockfish practice, as requested on 2026-10-20. Serve a pinned maintained single-thread engine from the Cloudflare site, load it only for computer play, and offer named difficulty settings without claimed Elo. The server still validates every move, clock, and result. No model API, provider key, or token quota is needed.
+- Support hundreds and thousands of entrants through versioned timed arenas with continuous bounded pairing, pause/resume, shared account reservations, and paged cached standings. The four-player round-robin preview remains a separate format. Qualify 2,000 entrants and 1,000 combined live games first, then the proposed 10,000-entry/5,000-live tier; these targets are not public capacity claims. Party mode remains a separate brainstorm with no approved implementation scope.
+- Complete the approved isolated native capacity harness under the owner's finish-and-launch instruction, reaffirmed on 2026-10-22. Retain all six failed attempts without resetting or rearming their identities. The registration-only sixth run `56089a5b-0826-45e2-85ed-8a7bae106eb0` prepared 256 accounts, offered 238 registrations, received 56 expected retry replies and 182 uncertain HTTP 503 replies, then stopped at its controller-call allowance. It acknowledged no registrations. The complete trace and scoped native readback retain zero known Game admissions, two held permits and one unresolved dispatch, without a native-shutdown claim. Across six attempts, ten permits and five dispatches remain held. The reviewed correction must address the eight-grant exhaustion, saved Competition ticket and fresh-instance stop recovery before another exact diagnostic. These are corrections within the existing workload and ceiling. Fourth run `e8932527-765c-4613-b453-b09a6d6842de` in `capacity-provider-20261022-warm-v1` reused the exact empty `firsttier03` resources and armed, then saturated during fixture preparation. Its incomplete trace records 297 successful preparation responses and 11 uncertain requests. Owner stop acknowledged zero charged Game IDs, two active objects, one unresolved dispatch and no native-shutdown receipt. Prepare only a diagnosed, bounded private batch fixture repair that preserves all 6,000 real user, credential-account and session records and the normal three-event, 2,000-entry registration workload. Preserve the 640-read single-attempt fixture bound and reserve at most 1,280 extra reads for up to three platform read attempts, whose metadata covers only the final attempt. Count the reserve inside the unchanged 100-million-read ceiling, shared $25 test ceiling and single $100 target. Fifth run `f92e8db1-9991-4432-8c30-487eedaf6d17` prepared all 6,000 accounts, then failed during registration with 256 uncertain replies and no acknowledged registration reply; its stop, zero charged Game IDs, two held permits and one unresolved dispatch remain retained. Before the full retry, allow one reviewed, sealed registration-only diagnostic using 256 real primary accounts, exactly 768 normal registration attempts, 256 inflight requests and a 90-second hard window. It admits no Games, queues, sockets, proof, cache-load or fault work and cannot qualify capacity. Freeze and review its source, schedule, scaled finite envelope, native zero-Game stop and shared ledger before execution. No passing full candidate is recorded. Any corrected candidate still needs exact frozen source, resources, feasible UTC schedule and root review before load. Keep 19,000 required results, the full 900-second stream, fixed recovery lead, runtime bounds, production ceilings, prior permits, uncertain dispatches and charges. No allowance, reset, refund or financial reapproval is introduced.
+- Apply the owner's 2026-10-21 critical-path release decision: launch ranked play and the measured first large-arena tier together after real proof/recovery qualification, the full approved first-tier load run, protected-host player flows and verified spending/privacy stops. Keep the nine-day calendar observation, full-hour retention/endurance run, six-region WAN benchmarks and later tier as unfinished follow-up qualification. Do not claim those measurements passed or promise their unmeasured performance. Optional server analysis stays disabled.
+- Reuse the retained 2026-10-21 Basic native corpus evidence for the same immutable image and all 27 current fixtures, including its four cold requests. The differing raw-file and structured-JSON corpus digests map exactly. This preserves native corpus coverage without repeating it. The renewed Basic 12-Game candidate remains inert preparation. Its different Worker build still needs current Game/Competition settlement, Prover recovery and physical shutdown evidence; no current Game branch is passed by the historical corpus.
+- Use ejm-ui throughout every chess route, including the board surface, clocks, prose, fields, radio choices, disclosures, tables, notices, loading states, and actions. Add missing reusable contracts in the shared owner before consumer adoption; product components compose public exports and retain domain behavior without custom visual primitives. Reuse public `@ejm/*` contracts, including the shared Select for product form choices. Add upstream chess identity and an unreleased-project discovery gate; use existing public header/build options and extend them only for verified policy gaps. Retain product-specific game behavior in chess. Existing cross-site menus must not expose chess before verified publication.
+- Use compact, consistent page spacing for application routes. Stack descriptions beneath page titles, group fields and actions by purpose, keep links within sentences inline, and let loading tables honor the selected density. Preserve shared component appearances, useful form and table widths, and the centered board.
+- Make compact application layouts a supported shared ejm-ui contract. Extend existing Page and SectionHead options, publish named spacing aliases and a complete gallery example, add browser geometry checks in both themes at phone and desktop widths, migrate chess, and integrate only these shared changes into the main local ejm-ui checkout. Preserve marketing defaults and unrelated work; local integration does not publish or deploy a package.
+- Publish product help, rules, fair play, privacy, and operations guidance with the product. Add studio discovery links only after their destinations are live and verified.
+- Use one $100 monthly Cloudflare spending target with alerts at $45 and $70 and the $85 emergency stop. The 2026-10-22 decision supersedes earlier per-service allocations and repeated financial-review gates. Keep finite workload limits, separate stops for games, email and optional analysis, and accepted-work recovery. The isolated capacity run retains its combined $25 ceiling. Count actual billing units once and state unknown prices and delayed billing plainly. Alerts and stops do not impose a hard invoice cap or qualify correctness, capacity or release.
+
+## Capabilities
+
+### New Capabilities
+
+- `chess-play`: Live chess, casual invitations, board interaction, authoritative clocks and adjudication, reconnects, and completed game records.
+- `chess-competition`: Account eligibility, ranked matchmaking, ratings, settlement, and global leaderboards.
+- `chess-fair-play`: Preventive controls, private engine evidence, review, appeals, rating repair, and bounded analysis operations.
+
+### Modified Capabilities
+
+- `ejmlabs-site`: Discover the chess product and use an accurate Play action without treating it as a coding tool or a simulated showcase.
+- `documentation-discovery`: Link to chess-owned player and developer guides after publication.
+- `public-web-access`: Extend public access and protected canonical-host requirements to `chess.ejmlabs.com`.
+
+## Impact
+
+| Owner | Planned responsibility and public contracts |
+| --- | --- |
+| New `ejm-chess` product | Game Worker and assets, game and competition Durable Objects, D1 auth and read models, background analysis, private bounded timeout proofs, product guides. Consume published package exports through declared dependencies. |
+| `ejm-ui` | `@ejm/site/projects` chess identity and discovery gating, existing public head/header policy options and any verified extensions, tokens, controls, and shell contracts. No chess rules or account state in shared UI. |
+| `ejmlabs` | Studio discovery/content, affected public docs links, and chess-host security operations. Preserve current site migration and unrelated dirty files. |
+
+Dependency direction is chess and studio into public UI packages. Chess does not depend on the agent harness. This repo-local change is the planning home; it does not grant write access to a sibling product or to `ejm-ui`. Apply must establish the owner checkouts and scoped work before edits there, using OpenSpec where an owner already has a root and working normally otherwise.
+
+The three modified capability deltas extend four requirements present in the accepted local studio migration. GitHub main `c92a4a0df2944e6ac6c22498ad4d132f0518d569` still lacks those specification paths. The separate reviewed change `reconcile-chess-planning-baseline` records only the four prerequisite blocks for those absent remote paths and proves actual OpenSpec mergeability; it preserves the richer local specs and imports no migration code. Product verification proceeds independently. Studio discovery waits for verified product and guide destinations, and spec sync or archive waits for the baseline proof. Strict change validation alone does not prove mergeability.
+
+Cloudflare services proposed: Workers Static Assets, Workers, SQLite-backed Durable Objects, D1, Queues, Turnstile, Email Service, a capped Stockfish Container pool, and a separate private capped CHA-Solver Container pool. Email Sending is in public beta; paid-plan access, domain onboarding, delivery, container cost, and regional latency are deployment gates. At the initial proposal, no resources had been provisioned and no live behavior had been verified. The dated 2026-10-21 UTC product evidence now records a protected canonical-host canary, the existing Workers Paid subscription, sender onboarding, saved budget alerts and a tested stop webhook, and account verification/password recovery for one approved recipient. Public new work remains stopped. Complete recovery, deployed proof and analysis costs, capacity, regional qualification, and public ranked launch remain open. See `implementation-scope.md` for the publication boundary and evidence limits.
+
+This proposal changes no production code or public pages. Product implementation, publication, and fair play readiness require the apply workflow and its checks. Public ranked and first-tier arena launch requires a tested unattended adjudication, abuse, privacy, recovery, and capacity policy with honest engine-detection limits. The approved initial release gates are defined in the design's critical-path release section; unfinished follow-up measurements do not block that release and cannot be reported as complete.

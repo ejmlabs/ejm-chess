@@ -1,0 +1,21 @@
+{
+  "engineVersion": "stockfish-17.1",
+  "sourceCommit": "03e27488f3d21d8ff4dbf3065603afa21dbd0ef3",
+  "release": {
+    "url": "https://github.com/official-stockfish/Stockfish/releases/download/sf_17.1/stockfish-ubuntu-x86-64.tar",
+    "sha256": "4dafdd04f71e70755a327b5be258937b281e60ba87bc0a5801399908240d4a73",
+    "member": "stockfish/stockfish-ubuntu-x86-64"
+  },
+  "source": {
+    "url": "https://codeload.github.com/official-stockfish/Stockfish/tar.gz/03e27488f3d21d8ff4dbf3065603afa21dbd0ef3",
+    "sha256": "cfbfca1cea52f47beebf6221969b314a9164c61ca7fe9831bbf7ae52628881a7"
+  },
+  "networks": [
+    { "file": "nn-1c0000000000.nnue", "sha256": "1c0000000000a67d629999d932d0c373f7450ce43cd12d0562868f4eaf9ae2ad" },
+    { "file": "nn-37f18f62d772.nnue", "sha256": "37f18f62d772f3107e1d6aaca3898c130c3c86f2ab63e6555fbbca20635a899d" }
+  ],
+  "pythonChessSource": {
+    "url": "https://files.pythonhosted.org/packages/93/09/7d04d7581ae3bb8b598017941781bceb7959dd1b13e3ebf7b6a2cd843bc9/chess-1.11.2.tar.gz",
+    "sha256": "a8b43e5678fdb3000695bdaa573117ad683761e5ca38e591c4826eba6d25bb39"
+  }
+}
