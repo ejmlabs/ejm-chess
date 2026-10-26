@@ -151,8 +151,8 @@ standings must not omit an unresolved accepted game.
 Persist each game's identity, reservation, and wall deadline before external
 initialization. Retries and restarts must use those same values. The game wall
 limit includes readiness and play. An earlier chess clock, readiness, or proven
-terminal result keeps precedence. The common online rules and conservative
-technical-void policy still apply; see the
+terminal result keeps precedence. The common online rules and the material
+timeout rule still apply; see the
 [adjudication policy](adjudication-feasibility.md).
 
 A game still unresolved at its published wall limit receives the defined
@@ -177,7 +177,9 @@ games drain. The three-open-event cap still applies to unresolved older events.
 | Draw | 0.5 each |
 | Loss | 0 |
 | No-show | 0 |
-| Technical void, including revoked eligibility | 0 each |
+| Time runs out, other side has mating material | Other side 1, player who ran out 0 |
+| Time runs out, other side cannot mate | 0.5 each |
+| Round cutoff void, including revoked eligibility | 0 each |
 | Waiting without an opponent | 0 |
 
 There are no bye, streak, or berserk points. No-show scoring differs from the

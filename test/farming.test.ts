@@ -73,6 +73,19 @@ describe('informational farming facts', () => {
     expect(status.recent).toMatchObject([{ gameId: early.id, patterns: ['early-resignation'] }]);
   });
 
+  it.each([
+    ['an early timeout win', 4, 1],
+    ['a timeout win after ten plies', 12, 0],
+  ])('treats %s like an early resignation only before ten plies', async (_name, plies, flagged) => {
+    const competition = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
+    const timeout = result({ plies, outcome: { winner: 'b', score: 0, reason: 'timeout-win' } });
+    const status = await runInDurableObject(competition, (_instance, state) => {
+      recordFarmingCheck(state.storage.sql, timeout, Date.now());
+      return farmingStatus(state.storage.sql);
+    });
+    expect(status).toMatchObject({ checked: 1, flagged, patterns: { 'early-resignation': flagged } });
+  });
+
   it('rejects self-play before creating a check or accepting a result', async () => {
     const competition = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
     const game = result();

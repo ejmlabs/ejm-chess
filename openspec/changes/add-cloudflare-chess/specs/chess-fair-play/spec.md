@@ -152,17 +152,17 @@ Public ranked launch SHALL require tested unattended adjudication, objective abu
 
 ### Requirement: Unattended runtime
 
-Ordinary play and tournaments SHALL not wait indefinitely for human review. Unknown adjudication SHALL become one versioned technical void after 30 seconds. Unattended mode SHALL disclose report review availability and disable new case-based sanctions and appeal decisions. Engine accuracy, IP, focus, report count, or other statistical screening alone SHALL never convict or restrict an account.
+Ordinary play and tournaments SHALL not wait indefinitely for human review. A timeout SHALL be decided by the published material rule without human review; only a ranked proof game MAY wait up to 30 seconds for a private proof. Unattended mode SHALL disclose report review availability and disable new case-based sanctions and appeal decisions. Engine accuracy, IP, focus, report count, or other statistical screening alone SHALL never convict or restrict an account.
 
 #### Scenario: No reviewer is active
 
 - **WHEN** a participant reports suspected engine assistance
 - **THEN** the private receipt discloses review unavailability, promises no human action, and triggers no automatic sanction
 
-#### Scenario: Unknown adjudication expires
+#### Scenario: Proof wait expires
 
 - **WHEN** no proved result exists after the bounded wait
-- **THEN** one technical void preserves the record and normal durable settlement releases reservations without a fabricated winner
+- **THEN** the material timeout rule decides the game once and normal durable settlement releases reservations
 
 ### Requirement: Bounded unreviewed report closure
 

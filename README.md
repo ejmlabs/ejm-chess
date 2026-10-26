@@ -35,8 +35,8 @@ Known limits:
 
 - New games require a username/password account. Recovery email is optional, including for competition. Any supplied address is private and used only for verification and password recovery, with no marketing. Skipping email means a lost password cannot be reset by email. Local development disables email delivery but supports password signup/signin and casual play. Real verification and recovery delivery passed for one approved recipient in the protected preview. This does not establish broad deliverability. See [accounts](docs/accounts.md).
 - A timeout draws when the rules library proves insufficient material or the
-  player with time left has only a king. Other timeout positions need adjudication.
-  Pending results do not settle ratings and become technical voids after 30 seconds under the unattended v2 policy. A separate default-off v3 ranked timeout-proof path is implemented; native/provider qualification and all launch gates remain required. See [private timeout proofs](docs/timeout-proofs.md).
+  player with time left has only a king. Otherwise the player who ran out loses, and a disconnect does not stop the clock.
+  A fully blocked position with no possible mate is not detected under the unattended v4 policy and scores as a loss. A separate default-off v3 ranked timeout-proof path is implemented; native/provider qualification and all launch gates remain required. See [private timeout proofs](docs/timeout-proofs.md).
 - Browser chess cannot guarantee cheat prevention. Engine screening, thresholds,
   objective abuse controls, privacy, and rating corrections need validation before ranked launch. Reports are informational in unattended mode; there is no automatic cheating conviction.
 - Computer practice runs Stockfish on the player's device with four named strengths, without model APIs or tokens. Strength depends on the device and search budget; no Elo is claimed. Computer games never affect ratings or human fair play screening.

@@ -50,6 +50,7 @@ function Clock({ state, color, receivedAt }: { state: GameSnapshot; color: Color
 const resultText = (state: GameSnapshot) => {
   if (state.status === 'pending-adjudication') return 'Time expired. A private check can take up to 30 seconds. The result then follows the timeout rule.';
   if (state.outcome?.reason === 'readiness-expired') return 'The invitation expired before both players were ready.';
+  if (state.outcome?.reason === 'timeout-win' && state.outcome.winner) return `${state.outcome.winner === 'w' ? 'White' : 'Black'} wins on time.`;
   if (state.outcome?.reason === 'technical-void') return 'This game was voided. No rating change.';
   if (state.outcome?.reason === 'ai-unavailable') return 'Computer play became unavailable. This game ended without a score.';
   if (state.outcome) return state.outcome.score === 0.5 ? `Draw by ${state.outcome.reason.replaceAll('-', ' ')}.` : state.outcome.winner ? `${state.outcome.winner === 'w' ? 'White' : 'Black'} wins by ${state.outcome.reason.replaceAll('-', ' ')}.` : 'The game ended without a result.';

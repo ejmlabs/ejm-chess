@@ -31,7 +31,7 @@ A Queue job contains exactly these fields:
 {
   "gameId": "d66cf801-96e4-42f4-955f-743f12b142fb",
   "resultVersion": 1,
-  "rulesVersion": "online-2026-10-v2-unattended",
+  "rulesVersion": "online-2026-10-v4-unattended",
   "priority": "report",
   "engineVersion": "stockfish-17.1",
   "profileVersion": "screen-v1"

@@ -285,7 +285,7 @@ function ArenaEvents({ me, accountReady, now }: { me: Me | null; accountReady: b
       <p>A win earns one point, a draw half a point. Losses, no-shows, waiting without an opponent, and technical voids earn zero. There are no byes or streak bonuses.
         A pair may meet twice only with another opponent between meetings.</p>
       <p>Accepted games finish after pairing closes, with an 18-minute blitz or 40-minute rapid wall limit including readiness.
-        Unresolved games become technical voids. Service delays can keep an event draining while accepted results recover.</p>
+        Games unfinished at the wall limit become technical voids. Service delays can keep an event draining while accepted results recover.</p>
       <p>Games are unrated and do not affect the global leaderboard. Published standings may lag your private score.
         The shown entrant limit is a configured admission cap; larger public capacity has not been verified.</p>
     </Prose></section>

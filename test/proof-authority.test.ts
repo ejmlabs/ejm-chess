@@ -166,11 +166,26 @@ describe('timeout proof result arbitration', () => {
     expect(fetcher).toHaveBeenCalledOnce();
     clock.mockReturnValue(flagAt + 30_000);
     const ended = await match.game.snapshot(match.black);
-    expect(ended).toMatchObject({ status: 'finished', endedAt: flagAt + 30_000, outcome: { winner: expect.stringMatching(/^[wb]$/), reason: 'timeout-win' } });
+    expect(ended).toMatchObject({ status: 'finished', endedAt: flagAt + 30_000, outcome: { winner: 'b', score: 0, reason: 'timeout-win' } });
     await match.game.flush();
     const ratings = await runInDurableObject(competition, (_instance, state) =>
       state.storage.sql.exec('SELECT 1 FROM rating_events WHERE game_id=?', ended.id).toArray());
     expect(ratings).toHaveLength(1);
+  });
+
+  it('finishes a ranked proof game with insufficient material at the flag without starting proof work', async () => {
+    const match = await pair();
+    const active = await ready(match);
+    await runInDurableObject(match.game, (_instance, state) => {
+      const stored = JSON.parse(state.storage.sql.exec<{ value: string }>('SELECT value FROM game_state').one().value);
+      stored.initialFen = '7k/8/5KB1/8/8/8/8/8 w - - 0 1';
+      stored.moves = [];
+      state.storage.sql.exec('UPDATE game_state SET value=?', JSON.stringify(stored));
+    });
+    vi.spyOn(Date, 'now').mockReturnValue(active.clocks.deadline!);
+    expect(await match.game.snapshot(match.white)).toMatchObject({ status: 'finished',
+      outcome: { winner: null, score: 0.5, reason: 'timeout-insufficient-material' } });
+    expect(await runInDurableObject(match.game, (_instance, state) => state.storage.sql.exec('SELECT 1 FROM timeout_proof_work').toArray())).toEqual([]);
   });
 
   it('accepts one exact private proof, rejects mismatches and duplicates, and rates only its final event', async () => {
@@ -210,7 +225,7 @@ describe('timeout proof result arbitration', () => {
     clock.mockReturnValue(flagAt + 30_000);
     expect(await match.game.acceptTimeoutProof(proof)).toBe(false);
     const final = (await match.game.status())!.result!;
-    expect(final.outcome).toMatchObject({ winner: expect.stringMatching(/^[wb]$/), reason: 'timeout-win' });
+    expect(final.outcome).toMatchObject({ winner: 'b', score: 0, reason: 'timeout-win' });
     await match.game.flush();
     expect(await match.game.acceptTimeoutProof(proof)).toBe(false);
     expect((await match.game.status())!.result).toEqual(final);

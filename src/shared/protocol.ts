@@ -190,5 +190,7 @@ export interface PublicProfile {
   pools: PublicRating[];
 }
 
-export const RULES_VERSION = 'online-2026-10-v2-unattended';
+export const RULES_VERSION = 'online-2026-10-v4-unattended';
+/** Earlier casual, tournament and arena policies. Stored games keep their saved version. */
+export const PRIOR_RULES_VERSIONS = ['online-2026-10-v1', 'online-2026-10-v2-unattended'] as const;
 export const RATING_VERSION = 'glicko2-online-2026-10-v1';

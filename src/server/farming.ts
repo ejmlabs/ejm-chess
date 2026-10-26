@@ -1,6 +1,6 @@
 import type { GameResult } from '../shared/protocol';
 
-export const FARMING_POLICY = 'informational-2026-10-v2';
+export const FARMING_POLICY = 'informational-2026-10-v3';
 const DAY = 86_400_000;
 const RETAINED = 1_000;
 const QUERY_LIMIT = RETAINED + 1;
@@ -44,7 +44,11 @@ export function initializeFarmingChecks(sql: SqlStorage): void {
 }
 
 function pair(check: Check): [string, string] { return JSON.parse(check.pair_key) as [string, string]; }
-function early(check: Check): boolean { return check.winner_id !== null && check.reason === 'resignation' && check.plies < 10; }
+/** A scored resignation or timeout win before ten plies. The pattern keeps its `early-resignation` public name. */
+function isEarly(winnerId: string | null, reason: string, plies: number): boolean {
+  return winnerId !== null && (reason === 'resignation' || reason === 'timeout-win') && plies < 10;
+}
+function early(check: Check): boolean { return isEarly(check.winner_id, check.reason, check.plies); }
 function order(a: Check, b: Check): number { return a.ended_at - b.ended_at || a.game_id.localeCompare(b.game_id); }
 
 function incomplete(sql: SqlStorage, check: Check, work: FarmingWork, reason: CoverageReason): FarmingWork {
@@ -178,7 +182,7 @@ export function recordFarmingCheck(sql: SqlStorage, result: GameResult, now: num
   if (!result.rated || result.ai || result.status !== 'finished' || !result.black) return null;
   if (result.white.id === result.black.id) throw new Error('self_play_result');
   const winner = result.outcome.score === 1 ? result.white.id : result.outcome.score === 0 ? result.black.id : null;
-  const patterns: Pattern[] = result.outcome.reason === 'resignation' && winner !== null && result.plies < 10 ? ['early-resignation'] : [];
+  const patterns: Pattern[] = isEarly(winner, result.outcome.reason, result.plies) ? ['early-resignation'] : [];
   const inserted = sql.exec<Check>(`INSERT OR IGNORE INTO rated_result_checks
     (game_id,event_id,terminal_digest,policy,pair_key,winner_id,reason,plies,ended_at,patterns_json,checked_at,score)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?) RETURNING ${COLUMNS}`, result.id, result.eventId, result.terminalDigest,

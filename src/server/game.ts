@@ -11,7 +11,7 @@ import { hasProofAdmission } from './proof-budget';
 import { parseProofResult, proofDigests, transientProof, PROOF_PROFILE, PROOF_RULES_VERSION, PROOF_INSTANCE, PROOF_RESULT_BYTES,
   type TimeoutProofRequest } from './proof-contract';
 import {
-  FORMATS, RULES_VERSION, RATING_VERSION,
+  FORMATS, PRIOR_RULES_VERSIONS, RULES_VERSION, RATING_VERSION,
   type Actor, type AiOpponent, type Color, type CommandReceipt, type CommandReply, type GameCommand,
   type GameOutcome, type GameResult, type GameSnapshot, type InitGame, type MoveEvent,
   type Seat, type ServerMessage,
@@ -164,7 +164,7 @@ export class Game extends DurableObject<Env> {
       throw new ApiError(409, 'RECOVERY_TARGET_MISMATCH', 'The game name does not identify this object.');
     }
     const savedRules = this.load()?.rulesVersion ?? this.archived()?.rulesVersion;
-    const rules = savedRules === PROOF_RULES_VERSION ? PROOF_RULES_VERSION : RULES_VERSION;
+    const rules = savedRules === PROOF_RULES_VERSION || savedRules === PRIOR_RULES_VERSIONS[1] ? savedRules : RULES_VERSION;
     return captureNativePoint(this.ctx, { kind: 'Game', name, policies: { rules, ratings: RATING_VERSION } }, () => {
       const state = this.load();
       const archived = this.archived();

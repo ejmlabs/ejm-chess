@@ -9,7 +9,7 @@ restart method. The separate `wrangler.recovery-drill.jsonc` entry point owns
 those methods on separate classes and resources.
 
 The capture and isolated restore guards recognize historical
-`online-2026-10-v2-unattended` and additive `online-2026-10-v3-proof` policy
+`online-2026-10-v2-unattended`, current `online-2026-10-v4-unattended` and additive `online-2026-10-v3-proof` policy
 metadata with the existing rating policy. Unknown policies still fail closed.
 The authority fingerprint format and historical v2 evidence remain unchanged.
 An updated source with new tables needs its own capture and source approval.

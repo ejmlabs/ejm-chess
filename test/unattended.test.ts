@@ -36,16 +36,16 @@ async function stopFixtureAlarms(game: Awaited<ReturnType<typeof activeGame>>['g
 }
 
 describe('unattended recovery and payload retirement', () => {
-  it('ends a casual flag at its deadline with a loss for the flagging player and settles it once after restart', async () => {
+  it('repairs a lost alarm by ending a casual flag at its deadline with a loss for the flagging player and settling it once', async () => {
     const { game, white, black, snapshot } = await activeGame();
     await env.DB.batch([white, black].map(actor => env.DB.prepare('INSERT INTO active_game_seats(user_id,game_id,acquired_at) VALUES(?,?,?)')
       .bind(actor.id, snapshot.id, Date.now())));
     const deadline = snapshot.clocks.deadline!;
     const clock = vi.spyOn(Date, 'now').mockReturnValue(deadline);
     await evictDurableObject(game);
-    expect((await game.status())?.status).toBe('finished');
     clock.mockReturnValue(deadline + ADJUDICATION_WAIT_MS);
-    await maintainUnattendedGames(env);
+    const maintained = await maintainUnattendedGames(env);
+    expect(maintained.recovery).toEqual({ attempted: 1, completed: 1, failed: 0 });
     const terminal = await game.status();
     expect(terminal).toMatchObject({ status: 'finished', version: snapshot.version + 1,
       result: { endedAt: deadline, outcome: { reason: 'timeout-win', score: 0, winner: 'b' } } });
@@ -62,7 +62,7 @@ describe('unattended recovery and payload retirement', () => {
 
   it('preserves legacy game rules and cached receipts while a legacy-rules flag ends at once', async () => {
     const { game, white, black, snapshot } = await activeGame();
-    expect(snapshot.rulesVersion).toBe('online-2026-10-v2-unattended');
+    expect(snapshot.rulesVersion).toBe('online-2026-10-v4-unattended');
     await env.DB.batch([white, black].map(actor => env.DB.prepare('INSERT INTO active_game_seats(user_id,game_id,acquired_at) VALUES(?,?,?)')
       .bind(actor.id, snapshot.id, Date.now())));
     await runInDurableObject(game, (_instance, state) => {
@@ -196,10 +196,9 @@ describe('unattended recovery and payload retirement', () => {
       .bind(caseId, setup.black.id, setup.result.id, Date.now(), Date.now()).run();
     await recordEvidence(env, { caseId, gameId: setup.result.id, kind: 'server_game', sourceRef: setup.result.id,
       sourceVersion: String(setup.result.version), summary: { moveCount: setup.result.plies } });
-    // Earlier flagged games in this file now end at their deadline and are also due for retirement.
-    const retired = await retireGamePayloads(env);
-    expect(retired).toEqual({ attempted: retired.attempted, completed: retired.attempted, failed: 0 });
-    expect(retired.attempted).toBeGreaterThanOrEqual(1);
+    // Isolate this game from the finished fixtures of earlier tests in the file.
+    await env.DB.prepare("UPDATE casual_game_admissions SET storage_state='archived' WHERE game_id<>?").bind(setup.result.id).run();
+    expect(await retireGamePayloads(env)).toEqual({ attempted: 1, completed: 1, failed: 0 });
     expect(await env.DB.prepare('SELECT storage_state,terminal_version,terminal_digest FROM casual_game_admissions WHERE game_id=?').bind(setup.result.id).first())
       .toEqual({ storage_state: 'archived', terminal_version: setup.result.version, terminal_digest: setup.result.terminalDigest });
     expect(await env.DB.prepare('SELECT pgn,result_version,rules_version FROM games WHERE id=?').bind(setup.result.id).first())

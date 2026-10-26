@@ -83,7 +83,7 @@ const guides: Record<string, GuideContent> = server ? {
       <p>Ranked games use the <code>online-2026-10-v3-proof</code> policy and reserve bounded proof capacity before they start.
         For a timeout, a private service can prove a win by finding and independently checking a legal path to checkmate for the player with time left.
         A supported no-mate proof gives a draw. The check includes the saved game history and this site's automatic draw rules.
-        An unknown, failed, or late proof keeps the original 30-second deadline and the game then follows the material timeout rule. Existing games retain their original policy.</p>
+        An unknown, failed, or late proof keeps the original 30-second deadline and the game then follows the material timeout rule. Games that started under an earlier policy keep its recorded version, but a clock that runs out in a game still unfinished follows this rule.</p>
       <AppHeading as="h2">Ratings and leaderboards</AppHeading>
       <p>Blitz and rapid use separate Glicko-2 pools. Casual invitations do not affect ratings.
         A ranked game changes ratings only after the server accepts its final result.</p>

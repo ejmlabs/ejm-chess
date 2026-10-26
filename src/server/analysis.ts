@@ -2,7 +2,7 @@ import { Container } from '@cloudflare/containers';
 import { Chess, DEFAULT_POSITION } from 'chess.js';
 import { recordEvidence } from './fairplay';
 import type { AuthEnv } from './auth';
-import { RULES_VERSION } from '../shared/protocol';
+import { PRIOR_RULES_VERSIONS, RULES_VERSION } from '../shared/protocol';
 import { ApiError, readJson } from './security';
 import { reserveMonthlyWork, workStopped } from './budget';
 import { PROOF_RULES_VERSION } from './proof-contract';
@@ -87,7 +87,7 @@ export function parseAnalysisJob(value: unknown): AnalysisJob | null {
   if (Object.keys(item).some(key => !['gameId', 'resultVersion', 'rulesVersion', 'priority', 'engineVersion', 'profileVersion'].includes(key))
     || typeof item.gameId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(item.gameId)
     || !Number.isSafeInteger(item.resultVersion) || Number(item.resultVersion) < 1 || Number(item.resultVersion) > 1_000_000
-    || ![RULES_VERSION, PROOF_RULES_VERSION].includes(String(item.rulesVersion)) || !['report', 'sample'].includes(String(item.priority))
+    || ![RULES_VERSION, PRIOR_RULES_VERSIONS[1], PROOF_RULES_VERSION].includes(String(item.rulesVersion)) || !['report', 'sample'].includes(String(item.priority))
     || item.engineVersion !== ENGINE_VERSION || item.profileVersion !== ANALYSIS_PROFILE) return null;
   return item as unknown as AnalysisJob;
 }
@@ -203,8 +203,8 @@ export async function enqueueReportedGame(env: AnalysisEnv, gameId: string, now 
 export async function reconcileReportedAnalysis(env: AnalysisEnv, now = Date.now()): Promise<void> {
   const rows = await env.DB.prepare(`SELECT g.id FROM games g JOIN fairplay_reports r ON r.game_id=g.id
     JOIN fairplay_cases c ON c.id=r.case_id
-    WHERE g.status='finished' AND g.ai_model_id IS NULL AND g.rules_version IN (?,?) AND r.analysis_requested_at IS NULL AND c.status IN ('open','appeal_open')
-    GROUP BY g.id ORDER BY MIN(r.created_at) LIMIT 20`).bind(RULES_VERSION, PROOF_RULES_VERSION).all<{ id: string }>();
+    WHERE g.status='finished' AND g.ai_model_id IS NULL AND g.rules_version IN (?,?,?) AND r.analysis_requested_at IS NULL AND c.status IN ('open','appeal_open')
+    GROUP BY g.id ORDER BY MIN(r.created_at) LIMIT 20`).bind(RULES_VERSION, PRIOR_RULES_VERSIONS[1], PROOF_RULES_VERSION).all<{ id: string }>();
   for (const row of rows.results) await enqueueReportedGame(env, row.id, now);
 }
 

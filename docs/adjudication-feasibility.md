@@ -7,7 +7,7 @@ results below alone qualifies that profile or enables ranked play.
 
 ## Decision and scope
 
-Use `online-2026-10-v2-unattended` and keep ranked admission closed. chess.js remains the live
+Use `online-2026-10-v4-unattended` (v2 and v1 games keep their recorded version) and keep ranked admission closed. chess.js remains the live
 rules package. CHA-Solver is a promising maintained candidate for proving
 side-specific mating possibility, but this work adds no production solver and
 does not claim complete FIDE adjudication.
