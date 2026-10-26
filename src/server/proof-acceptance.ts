@@ -20,7 +20,8 @@ const stopped = { TIMEOUT_PROOF_PROFILE: 'off', MONTHLY_PROOF_LIMIT: '0', NEW_WO
   AI_ENABLED: 'false', MONTHLY_GAME_LIMIT: '0', MONTHLY_EMAIL_LIMIT: '0', MONTHLY_ANALYSIS_LIMIT: '0' };
 const fields = new Set([...Object.keys(stopped), 'PROOF_ACCEPTANCE', 'PROOF_ACCEPTANCE_SCOPE',
   'PROOF_ACCEPTANCE_SOURCE_REVISION', 'PROOF_ACCEPTANCE_CONTROL_NAMESPACE_ID', 'PROOF_ACCEPTANCE_MANIFEST_SHA256', 'PROOF_ACCEPTANCE_EXECUTION']);
-const executionFields = new Set([...fields, 'DB', 'GAME', 'COMPETITION', 'PROVER', 'PROOF_ACCEPTANCE_TIER', 'PROOF_ACCEPTANCE_PROVER_NAMESPACE_ID']);
+const executionFields = new Set([...fields, 'DB', 'GAME', 'COMPETITION', 'PROVER', 'PROOF_ACCEPTANCE_TIER', 'PROOF_ACCEPTANCE_PROVER_NAMESPACE_ID',
+  'PRODUCTION_RESOURCE_IDS']);
 export type ProofAcceptanceEnv = Record<string, unknown>;
 
 /** No product binding is accepted until the compiled source has a reviewed seal. */

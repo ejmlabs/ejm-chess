@@ -13,6 +13,7 @@ export interface Env extends BudgetEnv {
   AUTH_BASE_URL: string;
   BUDGET_STOP_WEBHOOK_SECRET?: string;
   LOCAL_DEV?: string;
+  PRODUCTION_RESOURCE_IDS?: string;
   OPERATION_MODE?: string;
   TOURNAMENTS_ENABLED?: string;
   ARENAS_ENABLED?: string;

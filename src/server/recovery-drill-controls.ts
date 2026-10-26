@@ -1,5 +1,6 @@
 import type { Env } from './env';
 import { ApiError } from './security';
+import { isProductionResource } from './production-resources';
 import { fingerprintAuthority, RECOVERY_SCHEMA, recoverySha256, recognizedRecoveryPolicies, type RecoveryKind, type RecoveryPoint } from './recovery';
 
 export const DRILL_SCHEMA = 'ejm-chess-recovery-drill-v1';
@@ -52,7 +53,7 @@ export function assertDrillConfiguration(env: DrillEnv): void {
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
   const namespace = /^[0-9a-f]{32}$/;
   if (!/^ejm-chess-recovery-drill-[a-z0-9-]{1,48}$/.test(env.RECOVERY_DRILL_SCOPE ?? '')
-    || !uuid.test(env.RECOVERY_DATABASE_ID ?? '') || env.RECOVERY_DATABASE_ID === 'ebba66c8-3910-4465-a053-426fcb733833'
+    || !uuid.test(env.RECOVERY_DATABASE_ID ?? '') || isProductionResource(env, env.RECOVERY_DATABASE_ID)
     || env.RECOVERY_DATABASE_ID === '00000000-0000-0000-0000-000000000000'
     || !namespace.test(env.RECOVERY_GAME_NAMESPACE_ID ?? '') || !namespace.test(env.RECOVERY_COMPETITION_NAMESPACE_ID ?? '')
     || env.RECOVERY_GAME_NAMESPACE_ID === env.RECOVERY_COMPETITION_NAMESPACE_ID
