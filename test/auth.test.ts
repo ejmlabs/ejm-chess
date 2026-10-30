@@ -109,9 +109,6 @@ describe('native D1 player accounts', () => {
       expect((await budgetStatus(guarded)).signup.lifetimeUsed).toBe(before + 1);
       native.mockClear();
       const users = await env.DB.prepare('SELECT COUNT(*) AS count FROM user').first('count');
-      guarded.MONTHLY_SIGNUP_LIMIT = '0';
-      await expect(authHandler(post('/api/auth/sign-up/email', { username: name(), password }, undefined, guarded), guarded)).rejects.toMatchObject({ status: 503, code: 'SIGNUP_UNAVAILABLE' });
-      guarded.MONTHLY_SIGNUP_LIMIT = '1000';
       const version = (await budgetStatus(guarded)).control.version;
       await setBudgetStops(guarded, 'owner-fixture', { expectedVersion: version, gamesStopped: true, emailStopped: false, analysisStopped: true, reason: 'Testing bounded signup admission.' });
       await expect(authHandler(post('/api/auth/sign-up/email', { username: name(), password }, undefined, guarded), guarded)).rejects.toMatchObject({ status: 503, code: 'SIGNUP_UNAVAILABLE' });

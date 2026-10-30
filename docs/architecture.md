@@ -315,7 +315,7 @@ remain unproved. This does not establish production capacity or cost. See
 the [qualification methods and evidence](local-qualification.md).
 
 `CASUAL_GAME_LIMIT` and `CASUAL_GAME_ID_LIMIT` have no product cap by default.
-Retirement and the monthly game budget bound growth. Retirement frees a payload
+Retirement and the Cloudflare budget stop bound growth. Retirement frees a payload
 slot, never an ID. Permanent
 records still grow, so reaching a journal ceiling closes admission. Local checks
 do not establish unlimited unattended capacity. See [operations](operations.md).

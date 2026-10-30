@@ -81,11 +81,11 @@ origin in each.
 | `MONTHLY_PROOF_LIMIT` | `0`; positive settings capped at 1,000 games per UTC month, with two credits per accepted game and 1,000 permanent receipts total |
 | `PROVER` | Optional private timeout-proof Container namespace; absent from default configuration; one fixed singleton, four shared ranked slots, one native job |
 | `NEW_WORK_STOPPED` | Exact `true` stops new signup attempts, game reservations, account-security sends, and server engine calls; existing signin and accepted games/results retain their recovery paths |
-| `MONTHLY_GAME_LIMIT` | 10,000 reserved game units per UTC calendar month; hard setting ceiling 10,000; all modes share it |
-| `MONTHLY_EMAIL_LIMIT` | 5,000 account-security provider send attempts per UTC month; hard setting ceiling 5,000 |
-| `MONTHLY_ANALYSIS_LIMIT` | 1,000 reserved server engine attempts per UTC month; hard setting ceiling 1,000; analysis remains disabled |
-| `MONTHLY_SIGNUP_LIMIT` | 10,000 signup attempts per UTC month; 0..10,000; invalid settings close signup before hashing |
-| `SIGNUP_ATTEMPT_LIMIT` | 100,000 lifetime signup attempts including existing identities at migration; 0..100,000; no reset or refund |
+| `MONTHLY_GAME_LIMIT` | Deprecated; usage counter only. No admission cap |
+| `MONTHLY_EMAIL_LIMIT` | Deprecated; usage counter only. No admission cap |
+| `MONTHLY_ANALYSIS_LIMIT` | Deprecated; usage counter only. Analysis remains disabled |
+| `MONTHLY_SIGNUP_LIMIT` | Deprecated; usage counter only. No admission cap |
+| `SIGNUP_ATTEMPT_LIMIT` | Deprecated; lifetime usage counter only. No admission cap |
 | `CASUAL_GAME_LIMIT` | No product cap by default; a positive integer may set one. Retirement and the monthly budget bound growth |
 | `CASUAL_GAME_ID_LIMIT` | No product cap by default; a positive integer may set one. The monthly budget bounds new IDs |
 | `RANKED_GAME_LIMIT` | No product cap by default; a positive integer may set one |
@@ -134,10 +134,10 @@ canonical host each need a later check on the approved environment.
 ## Safety ceilings and maintenance
 
 The owner approved a $100 monthly chess spending envelope, with stops and
-alerts. [Budget and stop controls](cloudflare-budget.md) document the enforced
-work allowances, private operator API, alert thresholds, shared-account
-accounting, recovery, and limits. Application quotas and Cloudflare alerts do
-not enforce a hard invoice cap. The three usage-alert policies and the high
+alerts. [Budget and stop controls](cloudflare-budget.md) document the usage
+counters, private operator API, alert thresholds, shared-account accounting,
+recovery, and limits. Application counters and Cloudflare alerts do not enforce
+a hard invoice cap. The three usage-alert policies and the high
 policy's dedicated stop-webhook association were saved and read back. The
 secret-authenticated provider Save/Test callback passed. An actual billing
 threshold event, its email delivery and complete deployed costs remain
@@ -229,7 +229,7 @@ Exact `scaled` uses the existing global Competition as the single coordinator,
 an indexed D1 work queue, at most 32 candidates per pass and four archive RPCs
 in flight. A fixed D1 token bucket permits a burst of 32 and refills at 32
 attempts per second across callers and restarts. Any other value closes
-retirement work. Neither mode changes admission or monthly allowances.
+retirement work. Neither mode changes admission or usage counters.
 
 Apply migration `0011_retirement_work.sql` before this source. It backfills
 eligible work and maintains queue rows through triggers. The Competition
@@ -282,22 +282,21 @@ The default-disabled arena work still needs deployed authentication, cache,
 alarm, regional, sustained admission, storage and cost evidence before public
 admission is raised. See [the local methods and limits](local-qualification.md).
 
-Arena configuration keeps the feature disabled and the small defaults shown
-above. Larger accepted settings are inputs for explicitly scoped local
+Arena configuration keeps the feature disabled. Larger accepted settings are inputs for explicitly scoped local
 qualification. They do not raise the approved monthly spending envelope,
 authorize a public deployment, or prove capacity. Malformed or out-of-range
-arena limits close admission. Record and byte headroom, monthly work allowance,
+arena limits close admission. Record and byte headroom, budget stop,
 start-rate admission, cross-mode reservations, permanent IDs, and retirement
 throughput remain separate checks. Per-event entrants and global game/storage
 ceilings must not be confused when planning a workload.
 
 Open `/admin/` with the matching verified owner account and Cloudflare Access
 identity. Cases use 20-row cursor pages; use Older cases or Newest cases to
-reach the rest of the review queue. Under Operations, use Refresh status to inspect current caps, counts,
+reach the rest of the review queue. Under Operations, use Refresh status to inspect usage counts,
 oldest work, failed outboxes, pending corrections, and paused pools. Retry pending
 work runs one bounded maintenance cycle and reports safe stage errors. Repeat
 only after investigating persistent failures. It does not reset an accepted event.
-The private status response also includes monthly usage, remaining allowances,
+The private status response also includes monthly usage, usage counters,
 operator stops, receipt pressure, recent control changes, and bounded history.
 The stop API requires the current control version and records who changed it.
 

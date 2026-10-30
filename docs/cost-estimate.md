@@ -19,13 +19,12 @@ allocate that entire fee to chess; they do not add a second subscription charge.
 Other projects use the same account, and their usage can consume included
 quantities or trigger the account-wide alerts.
 
-The private canonical configuration allows 10,000 signup attempts, 10,000
-new game reservations and 5,000 account email attempts per UTC month, plus
-100,000 lifetime signup attempts. Its deployment stop is clear. Feature gates
-still disable ranked, tournaments, arenas, browser computer games and server
-analysis until the final release. These are work quotas, not measured capacity
-or dollar allowances. The [deployment guide](deployment.md) records actual
-publication and activation state.
+The private canonical configuration no longer enforces monthly application
+caps. Cloudflare budget alerts and the stop webhook are the economic control.
+Feature gates still disable ranked, tournaments, arenas, browser computer games
+and server analysis until the final release. These are usage counters, not
+measured capacity or dollar allowances. The [deployment guide](deployment.md)
+records actual publication and activation state.
 
 The estimate includes Worker traffic, Game and Competition SQLite Durable
 Objects, D1, and account mail. Browser Stockfish runs on the player's device,

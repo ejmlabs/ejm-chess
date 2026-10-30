@@ -13,9 +13,9 @@ export interface BudgetEnv {
 }
 
 const policies = {
-  games: { setting: 'MONTHLY_GAME_LIMIT', default: 10_000, maximum: 10_000, receipts: 111_000, stop: 'games_stopped' },
-  email: { setting: 'MONTHLY_EMAIL_LIMIT', default: 5_000, maximum: 5_000, receipts: 15_000, stop: 'email_stopped' },
-  analysis: { setting: 'MONTHLY_ANALYSIS_LIMIT', default: 1_000, maximum: 1_000, receipts: 3_000, stop: 'analysis_stopped' },
+  games: { stop: 'games_stopped' },
+  email: { stop: 'email_stopped' },
+  analysis: { stop: 'analysis_stopped' },
 } as const;
 const kinds: BudgetKind[] = ['games', 'email', 'analysis'];
 const RECEIPT_RETENTION_MS = 62 * 86_400_000;
@@ -37,15 +37,10 @@ function period(now: number): number {
 }
 function monthName(value: number): string { return `${Math.floor(value / 12)}-${String(value % 12 + 1).padStart(2, '0')}`; }
 
-/** Missing settings use the small-preview defaults; invalid settings close admission. */
+/** Reports usage only. The Cloudflare budget stop is the economic gate. */
 export function monthlyLimit(env: BudgetEnv, kind: BudgetKind): number {
   if (kind === 'games' && isolatedGameBudget(env)) return 20_000;
-  const policy = policies[kind];
-  const raw = env[policy.setting];
-  if (raw === undefined) return policy.default;
-  if (!/^\d{1,5}$/.test(raw)) return 0;
-  const value = Number(raw);
-  return value <= policy.maximum ? value : 0;
+  return Number.MAX_SAFE_INTEGER;
 }
 function stoppedByEnv(env: BudgetEnv): boolean {
   return env.NEW_WORK_STOPPED !== undefined && env.NEW_WORK_STOPPED !== 'false';
@@ -54,40 +49,27 @@ function unavailable(): ApiError {
   return new ApiError(503, 'BUDGET_UNAVAILABLE', 'New work is paused while the service checks its safety allowance. Try again later.');
 }
 
-function signupLimits(env: BudgetEnv) {
-  const limit = (raw: string | undefined, fallback: number, maximum: number) => {
-    if (raw === undefined) return fallback;
-    return /^\d{1,6}$/.test(raw) && Number(raw) <= maximum ? Number(raw) : 0;
-  };
-  return {
-    monthly: limit(env.MONTHLY_SIGNUP_LIMIT, 10_000, 10_000),
-    lifetime: limit(env.SIGNUP_ATTEMPT_LIMIT, 100_000, 100_000),
-  };
-}
-
 /** A valid challenged signup spends one attempt before maintained hashing. No refunds or reusable credits. */
 export async function reserveSignupAttempt(env: BudgetEnv, now = Date.now()): Promise<boolean> {
   const current = period(now);
-  const limits = signupLimits(env);
-  if (stoppedByEnv(env) || !limits.monthly || !limits.lifetime) return false;
+  if (stoppedByEnv(env)) return false;
   try {
     const accepted = await env.DB.prepare(`UPDATE signup_budget SET period=?,
       monthly_attempts=CASE WHEN period=? THEN monthly_attempts+1 ELSE 1 END,
       lifetime_attempts=lifetime_attempts+1
-      WHERE id='product' AND period<=? AND lifetime_attempts<?
-        AND CASE WHEN period=? THEN monthly_attempts ELSE 0 END<?
+      WHERE id='product' AND period<=?
         AND EXISTS(SELECT 1 FROM operations_control WHERE id='product' AND games_stopped=0)
       RETURNING 1 AS accepted`)
-      .bind(current, current, current, limits.lifetime, current, limits.monthly).first();
+      .bind(current, current, current).first();
     return accepted !== null;
   } catch { throw unavailable(); }
 }
 
 /**
- * Admission is one D1 transaction. SQLite checks the remaining allowance and
- * inserts a stable receipt; its trigger charges only a newly inserted row.
- * Accepted receipts survive stops and month rollover. Uncertain work is never
- * refunded. This is a work allowance, not a Cloudflare invoice cap.
+ * Admission is one D1 transaction. SQLite inserts a stable receipt; its trigger
+ * charges only a newly inserted row. Accepted receipts survive stops and month
+ * rollover. Uncertain work is never refunded. This is usage accounting, not a
+ * Cloudflare invoice cap.
  */
 export async function reserveMonthlyWork(env: BudgetEnv, kind: BudgetKind, id: string, now = Date.now(), units = 1): Promise<boolean> {
   if (!/^[A-Za-z0-9_:.-]{1,200}$/.test(id) || !Number.isInteger(units) || units < 1 || units > (kind === 'games' ? 6 : 1)) {
@@ -106,11 +88,8 @@ export async function reserveMonthlyWork(env: BudgetEnv, kind: BudgetKind, id: s
         WHERE budget_months.period<excluded.period`).bind(kind, current % 12, current, now),
       env.DB.prepare(`INSERT OR IGNORE INTO budget_receipts(kind,id,period,units,created_at)
         SELECT ?,?,?,?,? WHERE ?=0
-          AND EXISTS(SELECT 1 FROM operations_control WHERE id='product' AND ${policy.stop}=0)
-          AND EXISTS(SELECT 1 FROM budget_months WHERE kind=? AND slot=? AND period=? AND used+?<=?)
-          AND EXISTS(SELECT 1 FROM budget_receipt_counts WHERE kind=? AND count<?)`)
-        .bind(kind, id, current, units, now, Number(stoppedByEnv(env)), kind, current % 12, current, units,
-          monthlyLimit(env, kind), kind, policy.receipts),
+          AND EXISTS(SELECT 1 FROM operations_control WHERE id='product' AND ${policy.stop}=0)`)
+        .bind(kind, id, current, units, now, Number(stoppedByEnv(env))),
       env.DB.prepare(`UPDATE budget_months SET denied=MIN(denied+1,1000000000),first_denied_at=COALESCE(first_denied_at,?),updated_at=?
         WHERE kind=? AND slot=? AND period=? AND NOT EXISTS(SELECT 1 FROM budget_receipts WHERE kind=? AND id=? AND units=?)`)
         .bind(now, now, kind, current % 12, current, kind, id, units),
@@ -122,15 +101,11 @@ export async function reserveMonthlyWork(env: BudgetEnv, kind: BudgetKind, id: s
 
 /** A preflight for a new queue/registration entry. A later receipt is still required. */
 export async function newWorkAllowed(env: BudgetEnv, kind: BudgetKind, now = Date.now()): Promise<boolean> {
-  if (stoppedByEnv(env) || monthlyLimit(env, kind) === 0) return false;
-  const current = period(now);
+  if (stoppedByEnv(env)) return false;
   const policy = policies[kind];
   try {
     const isolated = kind === 'games' ? isolatedGameBudget(env) : undefined;
-    const allowance = () => env.DB.prepare(`SELECT 1 FROM operations_control WHERE id='product' AND ${policy.stop}=0
-      AND COALESCE((SELECT used FROM budget_months WHERE kind=? AND slot=? AND period=?),0)<?
-      AND EXISTS(SELECT 1 FROM budget_receipt_counts WHERE kind=? AND count<?)`)
-      .bind(kind, current % 12, current, monthlyLimit(env, kind), kind, policy.receipts).first();
+    const allowance = () => env.DB.prepare(`SELECT 1 FROM operations_control WHERE id='product' AND ${policy.stop}=0`).bind().first();
     if (!isolated) return Boolean(await allowance());
     // Both reads are already funded. A denied run still wins over a D1 error.
     const [available, allowed] = await Promise.allSettled([
@@ -164,27 +139,22 @@ export async function budgetStatus(env: BudgetEnv, now = Date.now()) {
     env.DB.prepare("SELECT period,monthly_attempts,lifetime_attempts FROM signup_budget WHERE id='product'").first<SignupBudget>(),
   ]);
   if (!control || !signup) throw unavailable();
-  const signupPolicy = signupLimits(env);
   const signupUsed = signup.period === current ? signup.monthly_attempts : 0;
   const signupStopped = stoppedByEnv(env) || control.games_stopped !== 0;
   return {
     month: monthName(current), envelopeUsd: 100, invoiceHardCap: false, stoppedByEnv: stoppedByEnv(env),
     control, recentChanges: changes.results,
     signup: {
-      used: signupUsed, limit: signupPolicy.monthly, remaining: Math.max(0, signupPolicy.monthly - signupUsed),
-      lifetimeUsed: signup.lifetime_attempts, lifetimeLimit: signupPolicy.lifetime,
-      lifetimeRemaining: Math.max(0, signupPolicy.lifetime - signup.lifetime_attempts), stopped: signupStopped,
-      accepting: !signupStopped && signup.period <= current && signupUsed < signupPolicy.monthly && signup.lifetime_attempts < signupPolicy.lifetime,
+      used: signupUsed, lifetimeUsed: signup.lifetime_attempts, stopped: signupStopped,
+      accepting: !signupStopped && signup.period <= current,
     },
     allowances: kinds.map(kind => {
       const policy = policies[kind];
       const usage = months.results.find(row => row.kind === kind && row.period === current);
-      const used = usage?.used ?? 0;
-      const limit = monthlyLimit(env, kind);
-      const retainedReceipts = receipts.results.find(row => row.kind === kind)?.count ?? 0;
       const stopped = stoppedByEnv(env) || control[policy.stop] !== 0;
-      return { kind, used, limit, remaining: Math.max(0, limit - used), stopped, accepting: !stopped && used < limit && retainedReceipts < policy.receipts,
-        denied: usage?.denied ?? 0, firstDeniedAt: usage?.first_denied_at ?? null, retainedReceipts, receiptCeiling: policy.receipts };
+      return { kind, used: usage?.used ?? 0, stopped, accepting: !stopped,
+        denied: usage?.denied ?? 0, firstDeniedAt: usage?.first_denied_at ?? null,
+        retainedReceipts: receipts.results.find(row => row.kind === kind)?.count ?? 0 };
     }),
     history: months.results.map(({ period: value, ...row }) => ({ ...row, month: monthName(value) })),
   };

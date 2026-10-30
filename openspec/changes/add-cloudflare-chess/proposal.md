@@ -14,10 +14,9 @@ usage alerts and emergency stop to leave headroom for accepted work.
 This supersedes the earlier mandatory per-service dollar allocations, tax and
 unknown-cost reserves, and repeated financial-review gates in this change.
 Those dated calculations are historical estimates, not launch requirements.
-Use supported monthly caps of 10,000 signup attempts, 10,000 games and 5,000
-account emails, with 100,000 lifetime signup attempts. Clear deployment and
-account/game/email stops for protected-host use. Preserve abuse rate limits,
-authentication and accepted-work recovery. Keep optional server analysis disabled.
+The 2026-10-30 demand policy removes monthly application caps. Use Cloudflare
+budget alerts and the stop webhook. Preserve abuse rate limits, authentication
+and accepted-work recovery. Keep optional server analysis disabled.
 Ranked correctness and tournament qualification still apply. Public Access is
 removed only through the existing launch sequence. The $100 target is not a
 hard provider invoice cap: alerts can lag and accepted work continues.

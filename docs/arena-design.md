@@ -28,8 +28,8 @@ retention, recovery, regional behavior, and cost have passed together.
 The later 10,000-entry and 5,000-live-game tier needs separate qualification.
 Passing the first tier cannot establish the later tier. The total chess budget
 is $100 per month. A configured ceiling or a local test does not prove that the
-workload fits this budget. The monthly game work allowance is separate from a
-Cloudflare invoice cap; it cannot guarantee a dollar total.
+workload fits this budget. The Cloudflare budget stop is separate from a
+guaranteed dollar total.
 
 ## Configuration and conservative defaults
 
@@ -44,7 +44,7 @@ accepted games, scores, and reservation release continue to drain.
 | `ARENA_RETAINED_GAME_LIMIT` | No cap | No cap | Retained rows in the shared preview and arena tournament game ledger |
 | `ARENA_GAME_ID_LIMIT` | No cap | No cap | All permanent IDs in that shared ledger, including archived games |
 | `ARENA_AUTHORITY_BYTE_LIMIT` | 4,294,967,296 bytes, or 4 GiB | 4,294,967,296 bytes, or 4 GiB | Competition SQLite platform byte stop plus space reserved for accepted games |
-| `MONTHLY_GAME_LIMIT` | 10,000 | 10,000 | Shared monthly allowance for new game work |
+| `MONTHLY_GAME_LIMIT` | Usage counter only | Usage counter only | No admission cap; the Cloudflare budget stop governs |
 
 Numeric arena settings accept unsigned decimal integers, including zero.
 Missing values use the defaults. Malformed values or values above the maximum
