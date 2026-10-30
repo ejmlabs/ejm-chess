@@ -912,3 +912,15 @@ browser retest on the Access-protected host passed: invite → explicit Join →
 both Ready → one move each, with no auto-dump through Join. Worker admission
 API behavior was unchanged; focused admission/worker tests still passed before
 deploy. This is a protected canary UX check, not a public-launch claim.
+
+## Material timeout rule on canary, 2026-10-30
+
+After PR #3 merged to `main`, protected canary Worker version
+`6aa3ef0c-7286-4fab-9cc7-d3790792c882` redeployed that source (45 uploaded
+assets; 2,383.55 KiB raw / 456.18 KiB gzip; startup 49 ms). Timeouts now follow
+the material rule on the Access-protected host: loss when the opponent has
+mating material, otherwise draw; ranked proof path stays off. Explicit Join
+behavior from the prior canary build is retained. Focused timeout-related
+Worker tests (81) passed before merge; full canary checklist steps 8+ remain
+paused. This is a protected canary deploy, not a public launch or ranked
+enablement.

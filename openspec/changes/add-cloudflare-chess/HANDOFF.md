@@ -147,14 +147,16 @@ before any wider publication.
 Completed outside the original resume list, with the protected canary still
 closed to the public:
 
-- Deployed Worker version `3e8dae6b-ae1d-4aca-a665-a0f27b78048a` on
-  `chess.ejmlabs.com` (Access retained). Application monthly caps stay off;
+- Deployed Worker version `6aa3ef0c-7286-4fab-9cc7-d3790792c882` on
+  `chess.ejmlabs.com` (Access retained), including explicit Join and the
+  material timeout rule from `main`. Application monthly caps stay off;
   Cloudflare alerts and the `$85` stop remain the economic control.
 - Merged OpenSpec policy reconcile (PR #6) and explicit casual Join (PR #7);
   archived `fix-explicit-casual-join` and synced `openspec/specs/chess-play`.
-- Owner accepted the material timeout rule (PR #3 / `ejm/chess-clock`). Doc and
-  UI gaps for the old automatic void were closed; `AGENTS.md` matches the rule.
-  The private proof-acceptance re-run against the new expectations remains
+  Archived `reconcile-chess-planning-baseline` (no delta specs).
+- Owner accepted and merged the material timeout rule (PR #3). Doc and UI gaps
+  for the old automatic void were closed; `AGENTS.md` matches the rule. The
+  private proof-acceptance re-run against the new expectations remains
   unexecuted and still gates ranked proof enablement.
 - Protected canary player checklist steps 1–7 plus the explicit Join retest are
   done. **Steps 8+ are paused** by owner request; they are not abandoned.
