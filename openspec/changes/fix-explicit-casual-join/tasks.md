@@ -9,8 +9,8 @@
 ## 2. Verification
 
 - [x] 2.1 Run focused Worker/admission tests that cover join, occupied seat and expired invitation (`npm test` or the project’s focused vitest files for admission/worker); verify they still pass with unchanged API behavior.
-- [ ] 2.2 On the protected canary or local preview, re-check invite → explicit Join → both Ready → one move each; verify no auto-dump through the Join screen.
-- [ ] 2.3 Update `docs/verification.md` with the join UX check result when the canary retest is done; verify the note names explicit Join and the date.
+- [x] 2.2 On the protected canary or local preview, re-check invite → explicit Join → both Ready → one move each; verify no auto-dump through the Join screen.
+- [x] 2.3 Update `docs/verification.md` with the join UX check result when the canary retest is done; verify the note names explicit Join and the date.
 
 ## Workflow follow-up
 
