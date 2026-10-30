@@ -17,15 +17,15 @@ where **7.2** needs a first-tier run result.
 
 ## Prep status
 
-| Area | Offline prep | Still needs live |
+| Area | OpenSpec | Still needs live |
 | --- | --- | --- |
-| Specialty Wrangler templates | `config-examples/*.example.jsonc` + copy README | Private ID fill-in, deploy, dry-run against provider |
-| Timeout-proof public status JSON | `public/qualification/timeout-proofs.json` (honest default-off) | Provider corpus, tier pin, proof-acceptance re-run |
-| Ranked player/ops docs | Color balance + examples in Guide / architecture; ops cross-links | Two-session verify of game/history/leaderboard (**4.5**) |
-| Provisioning checklist | [Below](#provisioning-checklist-62) | Fresh Paid/Email/DNS/alert inbox readback |
-| Privacy / stops / closure | Code and docs present under 2026-10-30 policy | Stop-webhook / restore / outage drills; recovery-drill config with real IDs |
-| ejm-ui discovery | Chess stays `discoverable: false` on `wip/preserve-all-20261025`; draft guide URL inventory below | Flip + Studio publish only after public open |
-| OpenSpec checkboxes | Left unchecked | Check only from verified live results |
+| Specialty Wrangler templates | `config-examples/*.example.jsonc` (supports **3.8**) | Private ID fill-in → **3.9** |
+| Timeout-proof source + status JSON | **3.8** checked; default-off | Provider corpus, tier pin, proof-acceptance → **3.9** |
+| Ranked player/ops docs | **4.5** checked (publish + offline constant check) | Two-session verify → **7.1** |
+| Provisioning checklist | **6.2** checked | Mail/alert/analysis readback → **7.1** / **7.2** |
+| Privacy / stops / closure | **6.3** checked (controls + publish) | Outage/stop/restore drills → **7.1** / **7.2** |
+| ejm-ui discovery draft | **7.3a** checked (`discoverable: false`) | Enable + Studio publish → **7.3** |
+| Player checklist / ranked open | Paused **3.6** / **7.1**; **7.2** waits on **3.9** + **7.1** | Unpause when ready to deploy live |
 
 ## Provisioning checklist (6.2)
 

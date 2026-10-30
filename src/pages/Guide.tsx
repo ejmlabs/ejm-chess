@@ -105,7 +105,7 @@ const guides: Record<string, GuideContent> = server ? {
         It is not a FIDE, national federation, or another chess site’s rating.</p>
       <p>Unestablished players remain provisional. An inactive account leaves the public rankings until it meets the activity rules again.
         Rankings sort by the displayed rounded rating; account identifiers give equal ratings a stable order. Updates can be pending while a result or projection recovers.</p>
-      <p>An approved rating correction replays the affected pool from saved results. Admission to that pool pauses during repair.
+      <p>An approved rating correction replays the affected pool from saved results in batches of 20. Admission to that pool pauses during repair.
         Results already accepted remain recorded, and the corrected rankings appear when a full generation is ready.</p>
       <p>Computer games are always unrated. Browser Stockfish strength depends on the device and search budget;
         the selected difficulty is not an audited engine result or Elo rating. Human-game assistance rules still apply.</p>

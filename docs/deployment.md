@@ -4,6 +4,8 @@ Source restored into `ejm-chess` on 2026-10-26. Provider records below are
 historical; no live configuration was read or changed for this handoff. The
 six private Wrangler configurations are excluded from Git. Restore reviewed
 configuration before using deployment commands. See [source handoff](source-handoff.md).
+Offline provisioning checklist and live-verify rows: [live-ready prep](live-ready-prep.md).
+Specialty config templates: [config-examples](../config-examples/README.md).
 
 ## Status and scope
 

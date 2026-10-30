@@ -1,8 +1,8 @@
 # Chess continuation handoff
 
-Source placement updated on 2026-10-26. This change has **58 of 71 tasks checked**.
-The current [task file](tasks.md) is authoritative. This handoff preserves
-source and execution facts; it changes no launch scope, limits or approval.
+Source placement updated on 2026-10-26. Task counts move; the current
+[task file](tasks.md) is authoritative. This handoff preserves source and
+execution facts; it changes no launch scope, limits or approval.
 
 ## Read before resuming
 
@@ -160,12 +160,11 @@ closed to the public:
   unexecuted and still gates ranked proof enablement.
 - Protected canary player checklist steps 1–7 plus the explicit Join retest are
   done. **Steps 8+ are paused** by owner request; they are not abandoned.
-- Offline ranked-inclusive prep (no OpenSpec checkoffs): specialty Wrangler
-  examples under `config-examples/`, honest
-  `public/qualification/timeout-proofs.json`, ranked color-balance docs,
-  provisioning checklist in [live-ready prep](../../../docs/live-ready-prep.md).
-  Live player proof, specialty private configs, proof-acceptance re-run, and
-  ranked enablement remain unfinished.
+- Ranked-inclusive source/docs prep checked in tasks: **3.8**, **4.5**, **6.2**,
+  **6.3**, **7.3a**. Specialty Wrangler examples, timeout-proof status JSON,
+  color-balance guidance, and provisioning checklist are in tree. Still open:
+  paused **3.6**/**7.1**, provider **3.9**, ranked open **7.2**, discovery
+  publish **7.3**, follow-ups **6.4**/**10.4**/**18.x**.
 
 ### Configuration and shared UI notes
 
