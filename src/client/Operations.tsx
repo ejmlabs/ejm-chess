@@ -18,8 +18,8 @@ interface BudgetView {
   envelopeUsd: number;
   stoppedByEnv: boolean;
   control: { version: number; games_stopped: number; email_stopped: number; analysis_stopped: number };
-  allowances: { kind: 'games' | 'email' | 'analysis'; used: number; limit: number; remaining: number; accepting: boolean; denied: number }[];
-  signup: { used: number; limit: number; remaining: number; lifetimeUsed: number; lifetimeLimit: number; accepting: boolean };
+  allowances: { kind: 'games' | 'email' | 'analysis'; used: number; accepting: boolean; denied: number }[];
+  signup: { used: number; lifetimeUsed: number; accepting: boolean };
 }
 interface OperationsStatus { budget: BudgetView;[key: string]: unknown }
 const budgetLabels = { games: 'New games', email: 'Account email', analysis: 'Server analysis' } as const;
@@ -62,7 +62,7 @@ export default function Operations() {
     setPage(await api<ExportPage>(`/api/admin/operations/export?${query}`));
   }
   return <Disclosure summary="Operations and rating journal export"><AppFlow>
-    <Text as="p">Safety caps, unsettled work, projection lag, and repair status. These counters do not establish measured capacity.</Text>
+    <Text as="p">Usage and stops, unsettled work, projection lag, and repair status. These counters do not establish measured capacity.</Text>
     {error && <StateBlock kind="error" message={error} density="compact" />}{message && <div role="status"><Status status="info" label={message} /></div>}
     <AppActions><Button variant="secondary" disabled={busy} onClick={() => void run(loadStatus)}>Refresh status</Button>
       <Button variant="ghost" disabled={busy} onClick={() => void run(async () => {
@@ -72,21 +72,20 @@ export default function Operations() {
       })}>Retry pending work</Button></AppActions>
     {status !== null && <AppSection>
       <AppGroup as="header">
-        <AppHeading as="h3">Spending target and work caps</AppHeading>
-        <Text as="p">Monthly spending target: ${status.budget.envelopeUsd}. The table shows this deployment's configured caps for {status.budget.month}, not estimated capacity for that amount. A cap of 0 disables new work.</Text>
-        <Text as="p" variant="muted">Feature switches and stops apply separately. Active games, accepted results, replay, and recovery continue when admission stops. These controls do not cap the Cloudflare invoice.</Text>
+        <AppHeading as="h3">Spending target and usage</AppHeading>
+        <Text as="p">Monthly spending target: ${status.budget.envelopeUsd}. Cloudflare budget alerts and the stop webhook are the economic limit. The table shows this deployment's usage for {status.budget.month}; it is not a capacity claim.</Text>
+        <Text as="p" variant="muted">Feature switches and stops apply separately. Active games, accepted results, replay, and recovery continue when admission stops. These counters do not cap the Cloudflare invoice.</Text>
       </AppGroup>
       {status.budget.stoppedByEnv && <Status status="info" label="The deployment-wide stop is active. These controls cannot override it." />}
-      <Table label="Configured monthly work caps" caption={`Configured work caps for ${status.budget.month}`} density="compact" truncate={false}
+      <Table label="Monthly usage" caption={`Monthly usage for ${status.budget.month}`} density="compact" truncate={false}
         columns={[{ key: 'kind', label: 'Work' }, { key: 'used', label: 'Used', align: 'right' },
-        { key: 'limit', label: 'Configured cap', align: 'right' }, { key: 'remaining', label: 'Left', align: 'right' }, { key: 'state', label: 'State' }]}
-        rows={[{ id: 'signup', kind: 'Signup attempts', used: status.budget.signup.used,
-          limit: status.budget.signup.limit, remaining: status.budget.signup.remaining,
+        { key: 'denied', label: 'Denied', align: 'right' }, { key: 'state', label: 'State' }]}
+        rows={[{ id: 'signup', kind: 'Signup attempts', used: status.budget.signup.used, denied: 0,
           state: status.budget.signup.accepting ? 'Available' : 'Stopped' }, ...status.budget.allowances.map(item => ({
-          id: item.kind, kind: budgetLabels[item.kind], used: item.used,
-          limit: item.limit, remaining: item.remaining, state: item.accepting ? 'Available' : 'Stopped'
+          id: item.kind, kind: budgetLabels[item.kind], used: item.used, denied: item.denied,
+          state: item.accepting ? 'Available' : 'Stopped'
         }))]} rowKey="id" rowHeader="kind" />
-      <Text as="p" variant="muted">Lifetime signup allowance: {status.budget.signup.lifetimeUsed} of {status.budget.signup.lifetimeLimit}. Failed and repeated attempts stay charged.</Text>
+      <Text as="p" variant="muted">Lifetime signup attempts: {status.budget.signup.lifetimeUsed}. Failed and repeated attempts stay charged.</Text>
       <AppForm onSubmit={event => {
         event.preventDefault(); void run(async () => {
           await api('/api/admin/operations/budget', { expectedVersion: status.budget.control.version, ...stops, reason: stopReason });

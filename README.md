@@ -4,12 +4,35 @@ A multiplayer chess game for `chess.ejmlabs.com`, built for
 Cloudflare Workers. The board, clocks, and moves are the main interface. All routes use the public
 shared ejm-ui design, including account, replay and private review workflows.
 
+> **Status: protected canary, 2026-10-30.** A protected deployment is live at
+> `https://chess.ejmlabs.com` behind Cloudflare Access. Worker version 12
+> (`a9038ccc-3f74-4ea2-9661-4555779b32d7`) was deployed from `main` at
+> `996acf4`. Public play, ranked, tournaments, arenas and server analysis
+> remain closed. A clean checkout still needs the matching shared UI source and
+> reviewed private configuration:
+>
+> - The matching shared UI source, checked out as `../ejm-ui` (`@ejm/*` packages
+>   are `file:` dependencies). It must provide `@ejm/ui/components/Chessboard` and
+>   a `useSearch` export from `@ejm/ssg`; without them typecheck reports two
+>   errors (`src/client/Board.tsx`, `src/pages/Play.tsx`) and the build fails.
+> - The six private Worker configurations (`wrangler.jsonc`,
+>   `wrangler.capacity.jsonc`, `wrangler.proof-acceptance.jsonc`,
+>   `wrangler.proof-qualification.jsonc`, `wrangler.proof-service.jsonc`,
+>   `wrangler.recovery-drill.jsonc`), which are git-ignored. Worker tests, the
+>   Worker dry run and recovery tests cannot run without them. They also supply
+>   `PRODUCTION_RESOURCE_IDS`, the production database and namespace ids that the
+>   isolated drill, qualification and acceptance paths refuse to target.
+> - Node 24 (`engines`).
+>
+> The capacity patch is partial and unreviewed. Provider identifiers and spending
+> thresholds are kept in the private provider record, not here.
+
 ## Status
 
 This repository restores the retained chess implementation and its OpenSpec
 plan for source review. It includes a partial, unverified capacity diagnostic
-patch. Restoration does not establish a current build, deployment, public
-launch or supported capacity. Start with the
+patch. A protected canary is deployed; public launch, ranked play and supported
+capacity are not established. Start with the
 [OpenSpec handoff](openspec/HANDOFF.md) and
 [source and configuration recovery notes](docs/source-handoff.md).
 
@@ -134,7 +157,7 @@ recorded upstream URL. Keep the source and license files with any distribution.
 | --- | --- |
 | `ejm-chess` | Rules, game commands, clocks, invitations, matchmaking, ratings, history, account policy, and fair play composition |
 | `ejm-ui` | Every visual primitive, including board and clock surfaces, shared tokens, fonts, site shell, prerendering, headers, and project registry contracts |
-| `ejmlabs` | Studio content and public project discovery |
+| `ejmlabs` | Lab content and public project discovery |
 
 All pages, guides, game surfaces, fields, actions, tables, disclosures, and
 states compose public ejm-ui exports. Shared application recipes also own
@@ -184,7 +207,7 @@ separate piece-art license.
   `/docs/developer-guide/`, and `/credits/`
 
 Product guides, implementation and the migrated OpenSpec plan live here.
-Shared UI guides and public visual contracts belong in `ejm-ui`; Studio discovery
+Shared UI guides and public visual contracts belong in `ejm-ui`; Lab discovery
 belongs in `ejmlabs`. The owner's 2026-10-26 repository correction makes this
 local OpenSpec root authoritative for chess continuation. Historical records
-that named Studio as the planning home remain dated evidence.
+that named Lab as the planning home remain dated evidence.

@@ -1,16 +1,22 @@
 # Proposal
 
+## Demand policy, 2026-10-30
+
+The owner rejected further pre-qualified demand caps. The monthly billing stop
+is the economic limit. Keep security, correctness and platform-safety ceilings;
+do not gate public opening on a pre-run 2,000-player workload. Measure demand
+after opening. The capacity tasks remain follow-up evidence, not launch gates.
+
 ## Current spending decision, 2026-10-22
 
-The owner directs one $100 monthly chess spending target, existing $45/$70
-usage alerts, and the $85 emergency stop to leave headroom for accepted work.
+The owner directs one $100 monthly chess spending target, existing
+usage alerts and emergency stop to leave headroom for accepted work.
 This supersedes the earlier mandatory per-service dollar allocations, tax and
 unknown-cost reserves, and repeated financial-review gates in this change.
 Those dated calculations are historical estimates, not launch requirements.
-Use supported monthly caps of 10,000 signup attempts, 10,000 games and 5,000
-account emails, with 100,000 lifetime signup attempts. Clear deployment and
-account/game/email stops for protected-host use. Preserve abuse rate limits,
-authentication and accepted-work recovery. Keep optional server analysis disabled.
+The 2026-10-30 demand policy removes monthly application caps. Use Cloudflare
+budget alerts and the stop webhook. Preserve abuse rate limits, authentication
+and accepted-work recovery. Keep optional server analysis disabled.
 Ranked correctness and tournament qualification still apply. Public Access is
 removed only through the existing launch sequence. The $100 target is not a
 hard provider invoice cap: alerts can lag and accepted work continues.
@@ -36,7 +42,7 @@ Create `chess.ejmlabs.com`: a small, dependable online chess game where people w
 - Add private match replays from authoritative PGN, with move selection, keyboard navigation, board flipping, and download.
 - Add a chess logo and favicon family in the shared token owner and consume public exports. Keep unreleased discovery disabled.
 - Run opt-in, bounded round-robin tournaments automatically at fixed UTC cadences, with no-show handling, standings, and restart recovery. Use unrated games and separate event standings until competitive gates pass.
-- Make ordinary runtime unattended through automatic expiry, bounded recovery and retention, and technical voids for unresolved adjudication. Never automate cheating convictions from statistical signals.
+- Make ordinary runtime unattended through automatic expiry, bounded recovery and retention, and the material timeout rule for unresolved flags (a loss when the opponent has mating material, otherwise a draw). Ranked proof games may wait up to 30 seconds for a private proof, then fall back to that same rule. Never automate cheating convictions from statistical signals.
 - Replace the earlier OpenRouter opponent with optional unrated browser Stockfish practice, as requested on 2026-10-20. Serve a pinned maintained single-thread engine from the Cloudflare site, load it only for computer play, and offer named difficulty settings without claimed Elo. The server still validates every move, clock, and result. No model API, provider key, or token quota is needed.
 - Support hundreds and thousands of entrants through versioned timed arenas with continuous bounded pairing, pause/resume, shared account reservations, and paged cached standings. The four-player round-robin preview remains a separate format. Qualify 2,000 entrants and 1,000 combined live games first, then the proposed 10,000-entry/5,000-live tier; these targets are not public capacity claims. Party mode remains a separate brainstorm with no approved implementation scope.
 - Complete the approved isolated native capacity harness under the owner's finish-and-launch instruction, reaffirmed on 2026-10-22. Retain all six failed attempts without resetting or rearming their identities. The registration-only sixth run `56089a5b-0826-45e2-85ed-8a7bae106eb0` prepared 256 accounts, offered 238 registrations, received 56 expected retry replies and 182 uncertain HTTP 503 replies, then stopped at its controller-call allowance. It acknowledged no registrations. The complete trace and scoped native readback retain zero known Game admissions, two held permits and one unresolved dispatch, without a native-shutdown claim. Across six attempts, ten permits and five dispatches remain held. The reviewed correction must address the eight-grant exhaustion, saved Competition ticket and fresh-instance stop recovery before another exact diagnostic. These are corrections within the existing workload and ceiling. Fourth run `e8932527-765c-4613-b453-b09a6d6842de` in `capacity-provider-20261022-warm-v1` reused the exact empty `firsttier03` resources and armed, then saturated during fixture preparation. Its incomplete trace records 297 successful preparation responses and 11 uncertain requests. Owner stop acknowledged zero charged Game IDs, two active objects, one unresolved dispatch and no native-shutdown receipt. Prepare only a diagnosed, bounded private batch fixture repair that preserves all 6,000 real user, credential-account and session records and the normal three-event, 2,000-entry registration workload. Preserve the 640-read single-attempt fixture bound and reserve at most 1,280 extra reads for up to three platform read attempts, whose metadata covers only the final attempt. Count the reserve inside the unchanged 100-million-read ceiling, shared $25 test ceiling and single $100 target. Fifth run `f92e8db1-9991-4432-8c30-487eedaf6d17` prepared all 6,000 accounts, then failed during registration with 256 uncertain replies and no acknowledged registration reply; its stop, zero charged Game IDs, two held permits and one unresolved dispatch remain retained. Before the full retry, allow one reviewed, sealed registration-only diagnostic using 256 real primary accounts, exactly 768 normal registration attempts, 256 inflight requests and a 90-second hard window. It admits no Games, queues, sockets, proof, cache-load or fault work and cannot qualify capacity. Freeze and review its source, schedule, scaled finite envelope, native zero-Game stop and shared ledger before execution. No passing full candidate is recorded. Any corrected candidate still needs exact frozen source, resources, feasible UTC schedule and root review before load. Keep 19,000 required results, the full 900-second stream, fixed recovery lead, runtime bounds, production ceilings, prior permits, uncertain dispatches and charges. No allowance, reset, refund or financial reapproval is introduced.
@@ -46,7 +52,7 @@ Create `chess.ejmlabs.com`: a small, dependable online chess game where people w
 - Use compact, consistent page spacing for application routes. Stack descriptions beneath page titles, group fields and actions by purpose, keep links within sentences inline, and let loading tables honor the selected density. Preserve shared component appearances, useful form and table widths, and the centered board.
 - Make compact application layouts a supported shared ejm-ui contract. Extend existing Page and SectionHead options, publish named spacing aliases and a complete gallery example, add browser geometry checks in both themes at phone and desktop widths, migrate chess, and integrate only these shared changes into the main local ejm-ui checkout. Preserve marketing defaults and unrelated work; local integration does not publish or deploy a package.
 - Publish product help, rules, fair play, privacy, and operations guidance with the product. Add studio discovery links only after their destinations are live and verified.
-- Use one $100 monthly Cloudflare spending target with alerts at $45 and $70 and the $85 emergency stop. The 2026-10-22 decision supersedes earlier per-service allocations and repeated financial-review gates. Keep finite workload limits, separate stops for games, email and optional analysis, and accepted-work recovery. The isolated capacity run retains its combined $25 ceiling. Count actual billing units once and state unknown prices and delayed billing plainly. Alerts and stops do not impose a hard invoice cap or qualify correctness, capacity or release.
+- Use one $100 monthly Cloudflare spending target with usage alerts and an emergency stop. The 2026-10-22 decision supersedes earlier per-service allocations and repeated financial-review gates. Keep finite workload limits, separate stops for games, email and optional analysis, and accepted-work recovery. The isolated capacity run retains its combined $25 ceiling. Count actual billing units once and state unknown prices and delayed billing plainly. Alerts and stops do not impose a hard invoice cap or qualify correctness, capacity or release.
 
 ## Capabilities
 

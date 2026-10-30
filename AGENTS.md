@@ -4,7 +4,7 @@ Build the simple multiplayer chess product described by the local
 `openspec/changes/add-cloudflare-chess/` plan. On 2026-10-26, the owner corrected
 repository placement to `ejmlabs/ejm-chess`. This repository now owns the migrated
 OpenSpec root, implementation and product guides. Earlier references to the
-Studio planning home are historical. Read `openspec/HANDOFF.md` before resuming.
+Lab planning home are historical. Read `openspec/HANDOFF.md` before resuming.
 Keep unfinished tasks unchecked and follow the existing OpenSpec workflow.
 
 - Never use em dashes. Write plain, clear text.
@@ -21,6 +21,15 @@ Keep unfinished tasks unchecked and follow the existing OpenSpec workflow.
 - Protect real behavior and concrete failure risks with focused tests. Do not mirror implementation or test a dependency for its own sake.
 - Keep product guides and operational limits current. Separate implemented, locally tested, staged, and released behavior.
 - Preserve others' work. Do not create a remote, push, provision paid resources, or deploy without the required owner authorization.
+
+## Code principles
+
+- **KISS.** Write the simplest code that solves the whole problem.
+- **YAGNI.** Build only what a task needs now. No speculative options, layers or abstractions.
+- **DRY.** Give each rule, constant, type and behavior one authoritative home. Extend the shared
+  helper; never copy it.
+- **Clean Code.** Use clear names and small functions at one level of abstraction. Delete dead
+  code. Comment only the why. No hidden side effects.
 
 ## Less text, clear meaning
 

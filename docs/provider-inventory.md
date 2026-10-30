@@ -25,8 +25,8 @@ similar.
 ## Later protected deployments and account acceptance
 
 The Guide correction deployed version
-`f532d58c-e821-48a8-8294-334244c4cb41`, deployment
-`3f98366e-7eef-4d9e-a1ae-8b92a7db60e9`, at
+`[id in private provider record]`, deployment
+`[id in private provider record]`, at
 `2026-10-21T09:41:22.92925Z`, with 100% traffic. It reuses the signup-cap
 Worker bundle below and updates static Guide assets. The normal 16-route
 and nine-route guide budgets passed. A protected browser refresh confirmed
@@ -42,8 +42,8 @@ The private v2 manifest preserves the 83 uploaded inputs. Separate v2
 deployment and readback records retain the receipt failure and reconciliation.
 
 The signup-cap update deployed version
-`360e867d-222d-476b-bbd0-3e71f752fea2`, deployment
-`6966cd27-bfaf-41d2-94e1-e5d633dd2d13`, at
+`[id in private provider record]`, deployment
+`[id in private provider record]`, at
 `2026-10-21T09:33:04.870183Z`, with 100% traffic. Its exact Worker bundle
 SHA-256 is `a0693be14624cad21c74dfefa02c98f95a62ccfaa9f440c1f8a87bdd0de230cb`.
 The source-bundle dry run and final `--no-bundle` dry run used identical bytes.
@@ -63,8 +63,8 @@ The approved Keychain token was not printed or saved. Access policies were
 not changed. This remains a stopped protected deployment.
 
 The account-preview update deployed version
-`d3d08dc8-c4d3-44ad-b118-da9a1e3b4a19`, deployment
-`c7ca1b33-7544-4ce4-9c11-8061e5446b18`, at
+`[id in private provider record]`, deployment
+`[id in private provider record]`, at
 `2026-10-21T07:33:25.152722Z`. Fresh provider readback confirmed 100% traffic
 to that version, a 50 ms CPU limit, `NEW_WORK_STOPPED=true`, all game flags
 false, proof profile off with zero allowance, and unchanged 0/20/0
@@ -112,8 +112,8 @@ readback. The earlier failed OAuth attempt remains in its separate v1 record.
 
 The records below describe earlier deployments and their evidence limits.
 
-The mail test deployed version `e86b3bf4-4949-4324-8a50-48cae213ac7f`,
-deployment `edeea0e6-ec12-4ad5-86a8-c95be6b18bc3`, at
+The mail test deployed version `[id in private provider record]`,
+deployment `[id in private provider record]`, at
 `2026-10-21T01:13:08.494998Z`. Its frozen Worker bundle SHA256 was
 `4d84f3382f9a1691d1cc611f447a83fed03419bdb51dcc6b5c695707ecc2596b`.
 The dry run and `--no-bundle` upload used identical bytes. Game and analysis
@@ -127,8 +127,8 @@ verification and password recovery, new-password sign-in, old-session
 revocation and the application-authorized restoration of all persistent stops.
 The aggregate readback recorded two email attempts and control version 3.
 
-Version `f5436f22-cf84-484b-8f79-77bf3c68b066`, deployment
-`f0345b39-0a33-4f56-a262-7a17624174b7`, then restored the global stop at
+Version `[id in private provider record]`, deployment
+`[id in private provider record]`, then restored the global stop at
 `2026-10-21T01:33:00.170369Z`. The same exact Worker bundle was used. The
 production config SHA256 was
 `84442f276ceda7b51adc40b926378781801fb12046de4ee118dab280de480852`.
@@ -138,15 +138,10 @@ flags false and the unchanged 50 ms CPU limit. Persistent games, email and
 analysis stops are separately set. No proof service was deployed by either
 operation. Updated source guides are not yet published.
 
-A temporary narrower deployment credential was created at
-`2026-10-21T01:01:39.613622Z`, expiring at `2026-10-22T02:00:00Z`. Both
-deployments above used it. Its selected-account permissions are Workers
-Scripts Read/Write, D1 Read/Write, Account Settings Read and Email Sending
-Write. Selected-zone permissions are Zone Read and Workers Routes Write.
-It has no Billing, Notifications, DNS or Access permissions. The provider's
-account-level permissions cover those resource families, not only one script.
-Its value stayed in process memory. The owner's broad credential was not
-altered or revoked. Remove the temporary credential after qualification or
+A temporary narrower deployment credential was used for both deployments
+above. Its creation time, expiry and permission set are kept in the private
+provider record. Its value stayed in process memory. The owner's broad
+credential was not altered or revoked. Remove the temporary credential after qualification or
 let its recorded expiry close it.
 
 ## Selected resources, original deployment
@@ -154,14 +149,14 @@ let its recorded expiry close it.
 | Resource | Identity and observed association |
 | --- | --- |
 | Production Worker | `ejm-chess` |
-| Deployed version | `09f7f9dc-f371-4991-a9b6-b143aad112c6`, receiving 100% of the Worker's configured traffic |
-| Deployment record | `a4320795-1edf-48cc-a261-7642beb9d7b3`, created `2026-10-21T00:21:22.842223Z` |
-| D1 binding `DB` | Dedicated database `ejm-chess`, UUID `ebba66c8-3910-4465-a053-426fcb733833` |
-| DO binding `GAME` | Class `Game`, namespace `22831b22f6364e1bb6a5b33a69dbf1a8` |
-| DO binding `COMPETITION` | Class `Competition`, namespace `f1ead0542d9543749e18ec92629bb414` |
-| Custom domain | `chess.ejmlabs.com`, ID `ae5b9a4757996f748aa2d70015b13dc6c9e3ef55`, service `ejm-chess`, environment `production` |
-| Private Access canary | Application `a98401ba-0e92-4c81-b4af-b0b35e95388a`, canonical-host destination |
-| Separate admin Access | Application `1b9d7029-5560-44a2-94d3-3004859301e1`, `/admin` and `/api/admin` destinations |
+| Deployed version | `[id in private provider record]`, receiving 100% of the Worker's configured traffic |
+| Deployment record | `[id in private provider record]`, created `2026-10-21T00:21:22.842223Z` |
+| D1 binding `DB` | Dedicated database `ejm-chess`, UUID `[id in private provider record]` |
+| DO binding `GAME` | Class `Game`, namespace `[id in private provider record]` |
+| DO binding `COMPETITION` | Class `Competition`, namespace `[id in private provider record]` |
+| Custom domain | `chess.ejmlabs.com`, ID `[id in private provider record]`, service `ejm-chess`, environment `production` |
+| Private Access canary | Application `[id in private provider record]`, canonical-host destination |
+| Separate admin Access | Application `[id in private provider record]`, `/admin` and `/api/admin` destinations |
 | Static assets | Worker binding `ASSETS` |
 | Account mail | Binding `EMAIL`, restricted to sender `chess@ejmlabs.com` |
 
@@ -213,7 +208,7 @@ compatibility_flags=nodejs_compat
 The `deployed-worker-subdomain-aliases` record at `00:43:19.040955Z` confirms
 both `enabled=false` and `previews_enabled=false`. These are the provider's
 Worker subdomain settings corresponding to disabled `workers.dev` and version
-preview aliases. The checked-in config also sets `workers_dev=false` and
+preview aliases. The private config also sets `workers_dev=false` and
 `preview_urls=false`. Do not create another hostname to bypass the canary.
 
 `readback-chess-crons` at `00:21:57.973299Z` confirms the minute schedule
@@ -329,7 +324,7 @@ GET /accounts/{account_id}/workers/scripts/ejm-chess/subdomain
 GET /accounts/{account_id}/workers/scripts/ejm-chess/schedules
 GET /accounts/{account_id}/workers/domains
 GET /accounts/{account_id}/workers/durable_objects/namespaces
-GET /accounts/{account_id}/d1/database/ebba66c8-3910-4465-a053-426fcb733833
+GET /accounts/{account_id}/d1/database/[id in private provider record]
 GET /zones/{zone_id}/workers/routes
 GET /zones/{zone_id}/dns_records?name=chess.ejmlabs.com
 ```

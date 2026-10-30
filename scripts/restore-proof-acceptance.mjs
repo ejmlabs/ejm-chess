@@ -81,8 +81,9 @@ try {
     };
     const identity = await call('identity');
     const database = authority.d1_databases.find(item => item.binding === 'DB');
+    const production = new Set(String(authority.vars.PRODUCTION_RESOURCE_IDS ?? '').split(',').map(id => id.trim()).filter(Boolean));
     if (!database || database.database_id !== identity.databaseId
-      || !/^ejm-chess-proof-/.test(database.database_name) || identity.databaseId === 'ebba66c8-3910-4465-a053-426fcb733833'
+      || !/^ejm-chess-proof-/.test(database.database_name) || !production.size || production.has(identity.databaseId)
       || authority.vars.PROOF_ACCEPTANCE_SOURCE_REVISION !== identity.sourceDigest
       || authority.vars.PROOF_ACCEPTANCE_PROVER_NAMESPACE_ID !== identity.proverNamespaceId) throw new Error('Use the exact isolated D1 and selected phase source seal.');
     await save('identity.json', identity);

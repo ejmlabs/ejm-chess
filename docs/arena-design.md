@@ -4,7 +4,7 @@
 timed arenas alongside the existing [round-robin preview](tournaments.md).
 This contract was selected on 2026-10-20. Local source now includes the arena
 authority, DTOs, HTTP API, D1 projections, and Competition hooks. Arenas are
-disabled in the checked-in default configuration. Focused native checks and
+disabled in the private default configuration. Focused native checks and
 the [local qualification workloads](local-qualification.md) cover the contracts
 listed below. Provider measurements and activation belong to the selected
 release record. This design document alone establishes no public capacity,
@@ -28,23 +28,23 @@ retention, recovery, regional behavior, and cost have passed together.
 The later 10,000-entry and 5,000-live-game tier needs separate qualification.
 Passing the first tier cannot establish the later tier. The total chess budget
 is $100 per month. A configured ceiling or a local test does not prove that the
-workload fits this budget. The monthly game work allowance is separate from a
-Cloudflare invoice cap; it cannot guarantee a dollar total.
+workload fits this budget. The Cloudflare budget stop is separate from a
+guaranteed dollar total.
 
 ## Configuration and conservative defaults
 
-The checked-in `wrangler.jsonc` keeps `ARENAS_ENABLED=false`. Only the exact
+The private `wrangler.jsonc` keeps `ARENAS_ENABLED=false`. Only the exact
 value `true` admits new arena work. New entry and pairing close when it is off;
 accepted games, scores, and reservation release continue to drain.
 
 | Setting | Default | Accepted maximum | Meaning |
 | --- | --- | --- | --- |
-| `ARENA_ENTRANT_LIMIT` | 4 | 2,000 | Registered entrants in one event |
-| `ARENA_GAME_LIMIT` | 64 | 1,000 | Shared cap for admitted or pending casual, ranked, preview, and arena games, including when new arenas are disabled |
-| `ARENA_RETAINED_GAME_LIMIT` | 128 | 100,000 | Retained rows in the shared preview and arena tournament game ledger |
-| `ARENA_GAME_ID_LIMIT` | 10,000 | 1,000,000 | All permanent IDs in that shared ledger, including archived games |
-| `ARENA_AUTHORITY_BYTE_LIMIT` | 268,435,456 bytes, or 256 MiB | 4,294,967,296 bytes, or 4 GiB | Competition SQLite byte stop plus space reserved for accepted games |
-| `MONTHLY_GAME_LIMIT` | 5,000 | 10,000 | Shared monthly allowance for new game work |
+| `ARENA_ENTRANT_LIMIT` | No cap | No cap | Registered entrants in one event |
+| `ARENA_GAME_LIMIT` | No cap | No cap | Shared cap for admitted or pending casual, ranked, preview, and arena games, including when new arenas are disabled |
+| `ARENA_RETAINED_GAME_LIMIT` | No cap | No cap | Retained rows in the shared preview and arena tournament game ledger |
+| `ARENA_GAME_ID_LIMIT` | No cap | No cap | All permanent IDs in that shared ledger, including archived games |
+| `ARENA_AUTHORITY_BYTE_LIMIT` | 4,294,967,296 bytes, or 4 GiB | 4,294,967,296 bytes, or 4 GiB | Competition SQLite platform byte stop plus space reserved for accepted games |
+| `MONTHLY_GAME_LIMIT` | Usage counter only | Usage counter only | No admission cap; the Cloudflare budget stop governs |
 
 Numeric arena settings accept unsigned decimal integers, including zero.
 Missing values use the defaults. Malformed values or values above the maximum
@@ -262,8 +262,8 @@ Registration validates its same-origin, empty JSON request at the Worker before
 one Competition call. The global authority admits at most 16 concurrent
 package-auth and account-limit checks; overflow returns `429 ARENA_RETRY`
 without starting primary authentication. Those slots release before the
-separate 64-call fresh eligibility stage. New entries spend the durable
-16-per-second registration bucket, with a burst of 16. Existing entries keep
+separate 256-call fresh eligibility stage. New entries spend the durable
+50-per-second registration bucket, with a burst of 100. Existing entries keep
 fresh session, credential, restriction and budget checks without spending a
 new-entry token. The Worker also keeps its 16-call isolate filter. These bounds
 are local implementation controls; provider qualification remains separate.
@@ -393,7 +393,7 @@ General origin, session, request-size, and account-rate limits also apply.
 Keep the one-hour minimum hold for completed hot Game payloads. At 20 finishes
 per second, that requires at least 72,000 completed payloads before counting
 live games, retry work, and evidence holds. The preview's four retirements per
-minute and 10,000 permanent IDs cannot sustain this workload.
+minute cannot sustain this workload.
 
 Large-tier qualification requires at least 25 successful retirements per second
 after warmup, with bounded concurrency, durable retry cursors, and holds that do

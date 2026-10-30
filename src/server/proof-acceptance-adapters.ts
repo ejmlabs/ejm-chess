@@ -12,10 +12,10 @@ import { type ProofAcceptanceIdentity, PROOF_ACCEPTANCE_SCOPE, proofAcceptanceMa
 import { validateProofCreditLedger, reapplyProofAttempts, type ProofCreditLedger } from './proof-recovery';
 import { ProofAcceptanceBudget } from './proof-acceptance-budget';
 import { readJson } from './security';
+import { isProductionResource } from './production-resources';
 import { initializeProofRestoreAdapter, installProofRestoreAdapter, type ProofRestoreAdapter } from './proof-recovery-drill';
 
 export const ACCEPTANCE_INSTANCE = 'fixed-proof-acceptance-v1';
-const production = new Set(['ebba66c8-3910-4465-a053-426fcb733833', '22831b22f6364e1bb6a5b33a69dbf1a8', 'f1ead0542d9543749e18ec92629bb414']);
 const pairs = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 3], [1, 2], [4, 7], [5, 6]] as const;
 export type AcceptanceScenario = `G${'00' | '01' | '02' | '03' | '04' | '05' | '06' | '07' | '08' | '09' | '10' | '11'}`;
 interface AcceptanceControl {
@@ -51,8 +51,8 @@ export async function acceptanceIdentity(env: AcceptanceAdapterEnv, allowExpired
     || env.PROOF_ACCEPTANCE_PROVER_NAMESPACE_ID !== (env.PROOF_ACCEPTANCE_TIER === 'lite' ? seal.liteProverNamespaceId : seal.basicProverNamespaceId)
     || seal.privateCaller !== manifest.privateCaller || seal.scope !== PROOF_ACCEPTANCE_SCOPE
     || !Number.isSafeInteger(seal.expiresAt) || !allowExpired && seal.expiresAt <= Date.now()
-    || [seal.databaseId, seal.controlNamespaceId, seal.gameNamespaceId, seal.competitionNamespaceId,
-      seal.liteProverNamespaceId, seal.basicProverNamespaceId].some(value => production.has(value))
+    || isProductionResource(env, seal.databaseId, seal.controlNamespaceId, seal.gameNamespaceId, seal.competitionNamespaceId,
+      seal.liteProverNamespaceId, seal.basicProverNamespaceId)
     || !env.DB || !env.GAME || !env.COMPETITION || !env.PROVER || !env.PROOF_ACCEPTANCE
     || env.ASSETS || env.EMAIL || env.ANALYZER || env.ANALYSIS_QUEUE || env.ANALYSIS_DEAD_LETTER_QUEUE
     || env.NEW_WORK_STOPPED !== 'true' || env.RANKED_ENABLED !== 'false' || env.TOURNAMENTS_ENABLED !== 'false'

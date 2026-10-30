@@ -1,125 +1,62 @@
 # Cloudflare budget and admission stops
 
-## Current policy, 2026-10-22
+## Current policy, 2026-10-30
 
-Use one **$100 monthly target**, alerts at $45 and $70, and the existing $85
-automatic stop to leave headroom for active games and recovery. Billing alerts
-can lag; this is not a guaranteed invoice cap. Earlier service allocations and
-dated cost calculations are historical and no longer gate launch.
+The owner set one economic control: Cloudflare budget alerts and the automatic
+stop. The application no longer enforces monthly game, signup, email or
+analysis caps. Usage counters remain for the private Operations page; they do
+not deny new work. Billing alerts can lag, so this is not a guaranteed invoice
+cap.
 
-The configured monthly allowances are 10,000 signup attempts, 10,000 games,
-and 5,000 account emails, plus 100,000 lifetime signup attempts. Operational
-stops remain available. Ranked and tournaments retain their correctness gates.
-The site remains behind Access until launch. These quotas are guardrails, not
-measured capacity or dollar estimates. Adjust them when real traffic warrants it.
-
+The Cloudflare account has saved budget alerts at $10, $45, $70 and $85 account
+usage, plus the $85 stop webhook. The $100 monthly target is the envelope. The
+stop webhook sets the same `gamesStopped` control as the owner form. Existing
+signin, sessions, issued verification/reset links and accepted work continue
+under their normal checks.
 
 ## Approved scope and current evidence
 
-The owner approved a **$100 monthly spending envelope for chess**, with stops
-and alerts. This is an operating limit. It is not a capacity tier, a provider
-invoice cap, or proof that the configured workload costs less than $100.
-Keep server analysis disabled. Ranked correctness and tournament workload checks
-are release gates; repeated per-service financial reviews are not.
+The owner approved a $100 monthly spending envelope for chess. This is an
+operating limit, not a capacity tier, provider invoice cap, or proof that the
+configured workload costs less than $100. Keep server analysis disabled.
+Ranked correctness and tournament checks are separate release decisions.
 
 The approved 2026-10-20 provisioning confirmed the existing Workers Paid
 subscription and enabled the sender domain for `chess@ejmlabs.com`, with body
-previews disabled. Dedicated usage policies at $45, $70 and $85 are enabled
-and address the approved owner inbox. The existing non-chess policies remain
-unchanged. The protected launch deployment uses a 50 ms CPU limit, disabled
-preview URLs and workers.dev, and a persistent private admin policy. The
-October 22 configuration clears the deployment and account/game/email stops
-and installs the monthly allowances above. Feature activation and public
-Access removal follow the release checks. The high-threshold policy has a dedicated
-secret-authenticated stop webhook. Its provider creation/test succeeded after
-the approved exact-path Access and bot-filter exceptions. The approved
-recipient completed real verification and password recovery, followed by
-new-password sign-in and old-session revocation. The normal owner Operations
-form restored persistent stops after exactly two email attempts; the later
-October 22 policy clears account/game and email stops while retaining the
-analysis stop.
+previews disabled. Dedicated usage policies are enabled and address the
+approved owner inbox. The existing non-chess policies remain unchanged. The
+protected launch deployment uses a 50 ms CPU limit, disabled preview URLs and
+workers.dev, and a persistent private admin policy. The high-threshold policy
+has a dedicated secret-authenticated stop webhook. Its provider creation/test
+succeeded after the approved exact-path Access and bot-filter exceptions. The
+approved recipient completed real verification and password recovery, followed
+by new-password sign-in and old-session revocation. The normal owner Operations
+form restored persistent stops after exactly two email attempts.
 See the [account acceptance report](qualification/provider-accounts-20261021.md).
 Never copy another project's sender, database, secret, queue, or allowance into
 chess merely because it is visible in the account.
 
-The remote signup-counter migration passed on 2026-10-21 UTC, counting both
-existing identities and no new attempts. Later protected deployments added
-enforcement and the current settings without resetting counters. The October
-22 guide publication reused the same server bundle. Historical zero caps are
-retained in dated evidence and are not current configuration.
+## Application usage and stops
 
-## Application allowances
+The application records usage but does not enforce monthly category caps.
+`NEW_WORK_STOPPED=true`, or any value other than exact `false` or an absent
+value, closes all new budgeted work. The existing `gamesStopped` control stops
+both new accounts and games; the billing webhook sets that same stop. Existing
+signin, sessions, issued verification/reset links and admitted work remain
+available under their normal checks. Recovery email sends retain their separate
+email stop.
 
-Operations labels the dollar amount as the monthly spending target and its
-table as configured work caps. The table reports the current deployment's
-settings, not estimated capacity available for $100. A cap of zero disables
-new work. On 2026-10-22, the protected deployment was updated to 10,000 signup
-attempts, 10,000 games and 5,000 emails per month. The deployment stop and saved
-account/game and email stops were cleared. Server analysis remains stopped.
-Ranked and tournament qualification and the public launch sequence remain open.
-Clearing a saved stop does not raise a configured cap.
+One atomic D1 transaction admits a stable private work ID and records its
+category. Retries of the same accepted game reservation cost no additional
+units, even after a stop or month change. A reservation that later loses a seat
+race, fails to initialize, or returns an uncertain result stays recorded. Do not
+refund it by deleting records or resetting counters. Usage counters and
+receipts remain for the private Operations page and audit history.
 
-The checked-in canonical settings use UTC calendar months. Defaults apply only
-when a setting is absent:
-
-| Setting | Configured | Default | Hard setting ceiling | Charged work |
-| --- | --- | --- | --- | --- |
-| `MONTHLY_GAME_LIMIT` | 10,000 | 5,000 | 10,000 | New game reservations across casual, browser computer practice, ranked, and tournaments |
-| `MONTHLY_EMAIL_LIMIT` | 5,000 | 1,000 | 5,000 | Account verification/recovery provider send attempts, including failed or uncertain attempts |
-| `MONTHLY_ANALYSIS_LIMIT` | 0, disabled | 100 | 1,000 | Reserved server engine attempts, including retries |
-| `MONTHLY_SIGNUP_LIMIT` | 10,000 | 1,000 | 10,000 | Signup attempts after basic form validation and server Turnstile, before password hashing |
-| `SIGNUP_ATTEMPT_LIMIT` | 100,000 lifetime | 10,000 lifetime | 100,000 | Existing identities plus all later reserved signup attempts; no monthly reset |
-
-These are adjustable safety allowances. They do not imply that
-10,000 games fit a measured latency, memory, regional, or spending envelope.
-The existing concurrent, retained-payload, permanent-ID, queue, daily-analysis,
-and CPU limits remain separate gates. Browser Stockfish uses the player's
-device; the optional server analysis service remains `ANALYSIS_ENABLED=false`.
-The application month may differ from an account's invoice period.
-
-Missing allowance settings use the defaults. A zero, malformed, negative,
-fractional, or above-ceiling setting closes new work in that category. D1
-failure also prevents new budget reservations. `NEW_WORK_STOPPED=true` closes
-all three receipt categories and signup for new work; any value other than exact `false` or an
-absent value also closes them. This switch does not stop ordinary HTTP traffic
-or create an account-wide Cloudflare billing cap.
-
-One atomic D1 transaction admits a stable private work ID and charges its
-category. Concurrent requests cannot spend the same last allowance slot.
-Retries of the same accepted game reservation cost no additional units, even
-after a stop or month change. A preview tournament reserves its complete three
-or six game allowance together. Games already admitted before this migration
-are not charged again. A reservation that later loses a seat race, fails to
-initialize, or returns an uncertain result stays charged. Do not refund it by
-deleting records or resetting counters.
-
-Signup uses one fixed aggregate row and a conditional D1 update, rather than
-per-attempt receipts. The monthly and lifetime check, stop check and charge are
-atomic. Existing user rows count against its lifetime allowance at migration.
-Each later admitted attempt is charged before Better Auth's rate limits and
-hashing, including failed, duplicate or uncertain requests. Every new HTTP
-retry needs another unit. Account closure and failed creation refund none.
-The lifetime counter never resets; an older UTC period cannot reopen work.
-Missing or invalid quota state denies signup.
-
-The existing `gamesStopped` Operations control stops both new accounts and
-games. The billing webhook sets that same stop. Existing signin, sessions,
-issued verification/reset links and admitted work remain available under their
-normal checks. Recovery email sends retain their separate email stop.
-
-An exhausted allowance closes new game IDs and new queue or tournament entry.
-Admitted invitations can still be joined. Existing games, reserved tournament
-rounds, clocks, result outboxes, rating events, corrections, replay, maintenance,
-and private exports retain their normal recovery paths. A budget stop never
-changes an accepted result. A database or provider outage may still delay those
-paths; a stop does not make dependencies available.
-
-Email stops prevent the next verification/recovery send. Username/password
-signin does not depend on that send. Stops do not revoke existing sessions
-or already issued links. An analysis stop prevents the next server engine call;
-an already running call may complete, and a stored summary can still be saved
-as evidence. Pending analysis retains its existing bounded retention, retry,
-and dead-letter policy. Informational analysis is not required to settle a game.
+Signup records an attempt before Better Auth's rate limits and hashing,
+including failed, duplicate or uncertain requests. A stop closes new attempts;
+existing signin remains available. Account closure and failed creation refund
+none. There is no monthly or lifetime application signup cap.
 
 ## Stored budget records
 
@@ -164,9 +101,9 @@ Cloudflare usage alerts are processed daily and exclude monthly subscription
 fees. They can arrive after further charges accrue. They are notifications,
 not spending caps, and they are not connected to the application's D1 counters.
 
-Configured usage thresholds are **$45, $70, and $85**. Workers Paid's existing
-$5 monthly base fee was verified. If that fee is allocated to chess, these
-thresholds are approximately $50, $75, and $90 total. Shared-account usage
+Configured usage thresholds are kept in the private provider record. Workers Paid's existing
+$5 monthly base fee was verified. If that fee is allocated to chess, the
+thresholds are higher by that amount. Shared-account usage
 includes other products and can trigger these
 alerts before chess reaches its own allowance. The included request, CPU, D1,
 Durable Object, queue, email, and storage allowances are also shared where the
@@ -182,9 +119,9 @@ these application counters.
 
 | Signal | Operator action |
 | --- | --- |
-| $45 usage alert, or 50% of an app allowance | Review chess and shared-account usage, growth, oldest work, and remaining days |
-| $70 usage alert, or unexpectedly rising unit cost | Stop server analysis; investigate before allowing more optional work |
-| $85 usage alert | The associated dedicated webhook stops new games, email, and analysis when Cloudflare delivers the notification; reporting and delivery can be delayed |
+| First usage alert, or 50% of an app allowance | Review chess and shared-account usage, growth, oldest work, and remaining days |
+| Second usage alert, or unexpectedly rising unit cost | Stop server analysis; investigate before allowing more optional work |
+| Final usage alert | The associated dedicated webhook stops new games, email, and analysis when Cloudflare delivers the notification; reporting and delivery can be delayed |
 | Spending threatens the $100 envelope before that alert | Use the private stop controls, preserve accepted work, and inspect billing |
 | Exhausted allowance or retained-receipt ceiling | Keep the stop, inspect reservations and cleanup, and reconcile actual spend before resuming |
 | Failed result outbox or correction, or lag above two minutes | Inspect authority status and provider health; run one bounded retry cycle and investigate persistent failures |
@@ -241,7 +178,7 @@ existing rules.
 
 Cloudflare's destination creation/test returned 201 after its initial test was
 blocked by the bot challenge. The destination is associated only with the
-enabled $85 account-usage policy, preserving its email recipient and the two
+enabled highest account-usage policy, preserving its email recipient and the two
 lower email-only policies. During this historical callback test, the application
 control row recorded all three stops at version 1; repeated authenticated
 delivery while stopped added no version. The later mail acceptance restored all
@@ -290,13 +227,14 @@ saved and read back all three usage-alert policies and the high policy's
 webhook association. The successful provider callback test does not prove an
 actual threshold-crossing event or email receipt. Even a working daily billing
 alert can arrive after further charges accrue and cannot enforce a hard invoice
-cap. Application work quotas remain the immediate admission safeguards.
+cap. The Cloudflare stop and versioned feature stops are the immediate admission
+safeguards.
 
 ## Stop and recover
 
 1. Open `/admin/` with both the verified owner account and matching Cloudflare
    Access identity. Refresh Operations. Save its current budget `control.version`,
-   allowance counts, pending work, and cost evidence privately.
+   usage counts, pending work, and cost evidence privately.
 2. Use the versioned stop form under Operations. Its private JSON `POST` goes to
    `/api/admin/operations/budget`. Supply `expectedVersion`, all three boolean
    settings `gamesStopped` (new accounts and games), `emailStopped`, and `analysisStopped`, plus a reason
@@ -318,7 +256,7 @@ cap. Application work quotas remain the immediate admission safeguards.
    and confirm headroom for accepted work and a late bill. Clear only the desired
    D1 stops using the latest version and return `NEW_WORK_STOPPED` to exact
    `false` through the approved configuration path if it was used. Feature gates
-   and exhausted allowance or lifetime-ID ceilings still apply.
+   remain; there is no monthly allowance or lifetime-ID cap.
 
 Example body to stop every new budgeted category:
 
@@ -332,10 +270,10 @@ Example body to stop every new budgeted category:
 }
 ```
 
-Use the actual version from status. Do not reset counters, invent an older
-month, or raise a ceiling to conceal an exhausted budget. A new UTC month resets
-only the monthly allowance. Permanent IDs, game receipts, accepted results,
-pending work, storage costs, and account billing remain.
+Use the actual version from status. Do not reset counters or delete receipts to
+conceal an exhausted budget. Counters are observability only. Permanent IDs,
+game receipts, accepted results, pending work, storage costs, and account
+billing remain.
 
 ## Provider references
 

@@ -11,7 +11,7 @@ import type { Env } from '../src/server/env';
 import { currentActor, type Actor, type AuthEnv } from '../src/server/auth';
 import type { ArenaMe } from '../src/shared/arenas';
 import { capacityAccountId, capacityEventId, capacityIntentStepIndex, capacityStep } from '../src/shared/capacity-corpus';
-import { capacityFixtureManifest } from './capacity-fixtures';
+import { capacityFixtureManifest, capacityFixtureStart } from './capacity-fixtures';
 import { ARENA_POLICY } from '../src/server/arena-policy';
 
 beforeEach(async () => {
@@ -41,7 +41,7 @@ async function fixture<R>(work: (context: {
   return runInDurableObject(stub, async (object, state) => {
     const internal = object as unknown as { env: Env };
     internal.env = { ...internal.env, AUTH_BASE_URL: primaryAuthEnv.AUTH_BASE_URL, LOCAL_DEV: 'false' };
-    const manifest = capacityFixtureManifest(Date.UTC(2026, 9, 25, 17, 50));
+    const manifest = capacityFixtureManifest(capacityFixtureStart());
     vi.spyOn(Date, 'now').mockReturnValue(manifest.earliestArmAt + 5_000);
     const fixtures = new CapacityAccountFixtures(env.DB, state.storage.sql, env, manifest);
     const meter = new CapacityNativeMeter();

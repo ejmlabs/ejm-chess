@@ -40,7 +40,7 @@ describe('persisted private proof identity', () => {
       const privateControl = { idFromName: () => state.id, get: () => ({
         inspect: () => control.inspect(), claimProofDelivery: () => control.claimProofDelivery(),
       }) } as unknown as DurableObjectNamespace;
-      const configured = { PROOF_ACCEPTANCE_SCOPE, PROOF_ACCEPTANCE: privateControl, DB: env.DB,
+      const configured = { PRODUCTION_RESOURCE_IDS: '99999999-9999-9999-9999-999999999999', PROOF_ACCEPTANCE_SCOPE, PROOF_ACCEPTANCE: privateControl, DB: env.DB,
         GAME: env.GAME, COMPETITION: env.COMPETITION, PROVER: env.GAME,
         PROOF_ACCEPTANCE_SOURCE_REVISION: seal.sourceDigest, PROOF_ACCEPTANCE_CONTROL_NAMESPACE_ID: seal.controlNamespaceId,
         PROOF_ACCEPTANCE_MANIFEST_SHA256: seal.manifestDigest, PROOF_ACCEPTANCE_EXECUTION: 'sealed-private',

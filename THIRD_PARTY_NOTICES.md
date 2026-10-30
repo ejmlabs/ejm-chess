@@ -53,7 +53,7 @@ It contains literal `<year>` and `<copyright holders>` placeholders. The
 package metadata names Henri Bourcereau as author; no copyright notice has
 been invented. This attribution uncertainty remains a release review item.
 
-Shared studio marks, names, and artwork remain subject to their owning
+Shared lab marks, names, and artwork remain subject to their owning
 repository’s brand guidance. A code license is not a claim to the ejmlabs name
 or endorsement. The chess knight and outlined wordmark belong to the shared token asset owner, with generator provenance retained there.
 

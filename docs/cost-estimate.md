@@ -8,7 +8,7 @@ monthly and whole-account costs remain unqualified, so these figures are
 neither a forecast nor an invoice cap.
 
 The current policy, adopted October 22, is one $100 monthly spending target,
-alerts at $45 and $70, and the $85 emergency stop. Earlier service allocations,
+usage alerts and an emergency stop (thresholds are kept in the private provider record). Earlier service allocations,
 mandatory reserves and repeated financial reviews are superseded. The dated
 calculations below remain estimates, not launch requirements.
 
@@ -19,13 +19,12 @@ allocate that entire fee to chess; they do not add a second subscription charge.
 Other projects use the same account, and their usage can consume included
 quantities or trigger the account-wide alerts.
 
-The checked-in canonical configuration allows 10,000 signup attempts, 10,000
-new game reservations and 5,000 account email attempts per UTC month, plus
-100,000 lifetime signup attempts. Its deployment stop is clear. Feature gates
-still disable ranked, tournaments, arenas, browser computer games and server
-analysis until the final release. These are work quotas, not measured capacity
-or dollar allowances. The [deployment guide](deployment.md) records actual
-publication and activation state.
+The private canonical configuration no longer enforces monthly application
+caps. Cloudflare budget alerts and the stop webhook are the economic control.
+Feature gates still disable ranked, tournaments, arenas, browser computer games
+and server analysis until the final release. These are usage counters, not
+measured capacity or dollar allowances. The [deployment guide](deployment.md)
+records actual publication and activation state.
 
 The estimate includes Worker traffic, Game and Competition SQLite Durable
 Objects, D1, and account mail. Browser Stockfish runs on the player's device,
@@ -149,7 +148,7 @@ or **$4,150** after the published included quantity and rounding. This is a
 sustained-activity example, not a prediction for hibernating games. Concurrency
 cannot be priced without active time and traffic measurements.
 
-The saved $45/$70/$85 usage alerts exclude the plan fee and are processed daily.
+The saved usage alerts exclude the plan fee and are processed daily.
 The high-threshold webhook association was read back and its provider Save/Test
 callback passed. An actual threshold-crossing event and its email delivery have
 not been observed. Even working alerts can arrive after more charges accrue.

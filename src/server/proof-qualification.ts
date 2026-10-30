@@ -6,6 +6,7 @@ import type { Env } from './env';
 import { ApiError, errorResponse, jsonResponse, readJson } from './security';
 import { reserveProofAdmission } from './proof-budget';
 import { TimeoutProver } from './proof-pool';
+import { isProductionResource } from './production-resources';
 import { PROOF_INSTANCE, PROOF_PROFILE, PROOF_RULES_VERSION, PROOF_RESULT_BYTES, parseProofResult,
   proofDigests, proofHash, transientProof, unknownProof, type TimeoutProofRequest, type TimeoutProofResult } from './proof-contract';
 
@@ -72,7 +73,8 @@ export function assertProofQualification(env: ProofQualificationEnv, now = Date.
   const expiry = Number(env.PROOF_QUALIFICATION_EXPIRES_AT);
   if (!/^ejm-chess-proof-qualification-[a-z0-9-]{1,40}$/.test(env.PROOF_QUALIFICATION_SCOPE ?? '')
     || !uuid.test(env.PROOF_QUALIFICATION_DATABASE_ID ?? '')
-    || ['00000000-0000-0000-0000-000000000000', 'ebba66c8-3910-4465-a053-426fcb733833', 'd149c96d-186a-4bcd-94b7-702dd956b7d9'].includes(env.PROOF_QUALIFICATION_DATABASE_ID)
+    || env.PROOF_QUALIFICATION_DATABASE_ID === '00000000-0000-0000-0000-000000000000'
+    || isProductionResource(env, env.PROOF_QUALIFICATION_DATABASE_ID)
     || !namespace.test(env.PROOF_QUALIFICATION_CONTROL_NAMESPACE_ID ?? '') || !namespace.test(env.PROOF_QUALIFICATION_PROVER_NAMESPACE_ID ?? '')
     || env.PROOF_QUALIFICATION_CONTROL_NAMESPACE_ID === env.PROOF_QUALIFICATION_PROVER_NAMESPACE_ID
     || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(env.PROOF_QUALIFICATION_SOURCE_REVISION ?? '')

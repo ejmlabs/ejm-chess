@@ -296,7 +296,6 @@ describe('once-only private capacity authority', () => {
     const isolated = { ...env, MONTHLY_GAME_LIMIT: '20000' };
     let reservations = 0;
     const arenaStarts = { hourly: T0 + 600_000, daily: T0 + 600_000, weekly: T0 - 6_600_000 };
-    expect(monthlyLimit(isolated, 'games')).toBe(0);
     bindIsolatedGameBudget(isolated, { manifestDigest: 'a'.repeat(64), maximum: 20_000,
       arenaStarts,
       available: async () => true, reserve: async () => { reservations++; return true; } });
@@ -305,8 +304,7 @@ describe('once-only private capacity authority', () => {
     expect(Object.isFrozen(isolatedGameBudget(isolated)?.arenaStarts)).toBe(true);
     expect(isolatedGameBudget({ ...isolated })).toBeUndefined();
     expect(monthlyLimit(isolated, 'games')).toBe(20_000);
-    expect(monthlyLimit({ ...isolated }, 'games')).toBe(0);
-    expect(monthlyLimit(isolated, 'email')).toBe(1_000);
+    expect(monthlyLimit(isolated, 'email')).toBe(Number.MAX_SAFE_INTEGER);
     expect(await newWorkAllowed(isolated, 'games')).toBe(true);
     expect(await reserveMonthlyWork(isolated, 'games', id)).toBe(true);
     expect(await reserveMonthlyWork(isolated, 'games', id)).toBe(true);

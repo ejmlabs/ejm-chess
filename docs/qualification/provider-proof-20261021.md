@@ -23,7 +23,7 @@ receipts must not be reset, rearmed or replaced to obtain more work.
 | Native image | `sha256:4e66a8b70f12948e091815d7443001d629a97e90c98e6043736bf5935e0cc93f` |
 | Architecture and tier | Linux amd64, basic: 0.25 vCPU, 1 GiB memory, 4 GB disk |
 | Instance / active native job limits | One / one |
-| Uploaded Worker version | `91df582c-b298-40f0-b145-799e5da0be19` |
+| Uploaded Worker version | `[id in private provider record]` |
 
 The [sanitized measurement record](../../proof/measurements/provider-basic-20261021.json)
 contains individual fixed-case outcomes, aggregate native measurements, usage

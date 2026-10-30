@@ -16,7 +16,7 @@ as passing capacity or latency claims. Optional server analysis stays disabled.
 
 The product owns each fixture, driver, native adapter and report. Use the
 public Game, Competition, account, receipt, replay and cache contracts. Keep
-shared UI, studio and harness packages outside these measurements. Production
+shared UI, lab and harness packages outside these measurements. Production
 limits, routes and data stay separate.
 
 Each proposed run needs its own reviewed planning update, exact sealed source,
@@ -32,7 +32,7 @@ cleanup and retained evidence. Assume no shared included allowance. The
 [dated price model](cost-estimate.md) is an estimate, not a fresh tariff check.
 Unpriced services, missing metrics or inadequate headroom must remain visible
 in the review. The October 22 policy uses one $100 monthly spending target,
-alerts at $45 and $70, and the $85 emergency stop. Earlier service allocations
+usage alerts and an emergency stop (thresholds are kept in the private provider record). Earlier service allocations
 and mandatory recovery reserves no longer apply. Each future run still needs
 an explicit finite spending ceiling within available monthly headroom. The
 first-tier run keeps its approved $25 incremental ceiling. These proposals
@@ -65,7 +65,7 @@ second, held evidence, retry progress and permanent history at the first tier.
 
 | Proposed finite boundary | Maximum or required target |
 | --- | --- |
-| Proposed run spending ceiling | $45, within available monthly headroom |
+| Proposed run spending ceiling | kept in the private provider record, within available monthly headroom |
 | Total interval | 150 elapsed minutes |
 | Synthetic accounts / events | 6,000 / three 2,000-entry rapid arenas |
 | Permanently charged game IDs | 96,000 |
@@ -115,7 +115,7 @@ driver schedules or shutdown evidence fails the relevant target.
 The maximum duration envelope is 1,769,472 GB-seconds using the dated 0.128 GB
 allocation model. It spans two excess duration units, before all other costs.
 Local calibration must prove that the remaining dimensions and uncertainty fit
-available headroom within the proposed $45 run ceiling. These ceilings deliberately permit a failed qualification rather than an
+available headroom within the proposed run ceiling. These ceilings deliberately permit a failed qualification rather than an
 automatic budget increase.
 
 The 3 GiB storage ceiling is a known feasibility blocker, not evidence that
@@ -252,7 +252,7 @@ fifteen for shutdown and verification. Stop admission at minute 30 and all new
 dispatch at minute 35. Keep raw work and expiry controls independent of the
 driver. No production cap changes are authorized.
 
-The proposed run spending ceiling is $45 within available monthly headroom.
+The proposed run spending ceiling is kept in the private provider record and sits within available monthly headroom.
 Initial calibration ceilings are 6,144 simultaneous nonhibernatable
 objects, 1,200,000 Worker requests, 60,000,000 Worker CPU ms, 1,000,000 DO request
 equivalents, 5,000,000 DO writes, 500,000,000 DO reads, 1,000,000 D1 writes,

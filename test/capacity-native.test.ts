@@ -15,7 +15,7 @@ import { Competition } from '../src/server/competition';
 import type { Actor } from '../src/server/auth';
 import type { GameSnapshot } from '../src/shared/protocol';
 import { activeGame, admitGameFixture, player } from './authority-helpers';
-import { capacityFixtureManifest } from './capacity-fixtures';
+import { capacityFixtureManifest, capacityFixtureStart } from './capacity-fixtures';
 import { capacityAccountId, capacityEventId, capacityIntent, capacityIntentStepIndex, capacityStep,
   CAPACITY_PREPARATION_BATCH_SIZE, CAPACITY_REGISTRATION_DIAGNOSTIC,
   capacityRegistrationDiagnosticSchedule, type CapacityStepReply } from '../src/shared/capacity-corpus';
@@ -144,7 +144,7 @@ describe('private native capacity adapter', () => {
   it('keeps cold registration claims ahead of overlapping warm blocks across clean reincarnation', async ({ task }) => {
     const game = env.GAME.get(env.GAME.idFromName(crypto.randomUUID()));
     const observed = await runInDurableObject(game, async (_instance, state) => {
-      const start = Date.UTC(2026, 9, 25, 17, 50);
+      const start = capacityFixtureStart();
       vi.spyOn(Date, 'now').mockReturnValue(start + 8_000);
       const manifest = capacityFixtureManifest(start), control = fixtureControl(manifest);
       const create = () => new CapacityNativeHost<Competition>(state, fixtureEnv(), 'Competition', manifest, control,
@@ -206,7 +206,7 @@ describe('private native capacity adapter', () => {
   it('replays the five failed provider account confirmations after native busy denials', async ({ task }) => {
     const game = env.GAME.get(env.GAME.idFromName(crypto.randomUUID()));
     const observed = await runInDurableObject(game, async (_instance, state) => {
-      const start = Date.UTC(2026, 9, 25, 17, 50);
+      const start = capacityFixtureStart();
       vi.spyOn(Date, 'now').mockReturnValue(start + 8_000);
       const manifest = capacityFixtureManifest(start), control = fixtureControl(manifest);
       const host = new CapacityNativeHost<Competition>(state, fixtureEnv(), 'Competition', manifest, control,
@@ -257,7 +257,7 @@ describe('private native capacity adapter', () => {
   it('meters native registration cookie auth and account limits inside the unchanged warm envelope', async ({ task }) => {
     const game = env.GAME.get(env.GAME.idFromName(crypto.randomUUID()));
     const observed = await runInDurableObject(game, async (_instance, state) => {
-      const start = Date.UTC(2026, 9, 25, 17, 50);
+      const start = capacityFixtureStart();
       const now = vi.spyOn(Date, 'now').mockReturnValue(start + 8_000);
       const manifest = capacityFixtureManifest(start), control = fixtureControl(manifest);
       const host = new CapacityNativeHost<Competition>(state, fixtureEnv(), 'Competition', manifest, control,
@@ -267,11 +267,14 @@ describe('private native capacity adapter', () => {
         manifestDigest: manifest.digest, id: crypto.randomUUID(), objectKey: 'competition', generation: 1,
         operation: 'Competition.workflow', mode: 'workflow' });
       await host.invoke(ticket, 'prepareQualificationAccount', [0]);
-      const prepared = await host.invoke<CapacityAccountCredential[]>(ticket, 'prepareQualificationAccounts', [0]);
+      const prepared: CapacityAccountCredential[] = [];
+      for (let first = 0; first <= ARENA_POLICY.registrationBurst; first += CAPACITY_PREPARATION_BATCH_SIZE) {
+        prepared.push(...(await host.invoke<CapacityAccountCredential[]>(ticket, 'prepareQualificationAccounts', [first])).value);
+      }
       const replies: CapacityNativeReply<CapacityStepReply>[] = [];
       for (let index = 0; index <= ARENA_POLICY.registrationBurst; index++) {
         const request = new Request(`https://${manifest.host}/capacity/step/${index}`,
-          { headers: { Cookie: prepared.value[index].cookie } });
+          { headers: { Cookie: prepared[index].cookie } });
         const reply = await host.invoke<CapacityStepReply>(ticket, 'qualificationStep', [request, index, null]);
         expect(reply.value).toMatchObject(index < ARENA_POLICY.registrationBurst ? { accepted: true }
           : { accepted: false, httpStatus: 429, code: 'ARENA_RETRY' });
@@ -290,7 +293,7 @@ describe('private native capacity adapter', () => {
       now.mockReturnValue(Date.now() + Math.ceil(1_000 / ARENA_POLICY.registrationRate));
       const index = ARENA_POLICY.registrationBurst + 1;
       const request = new Request(`https://${manifest.host}/capacity/step/${index}`,
-        { headers: { Cookie: prepared.value[index].cookie } });
+        { headers: { Cookie: prepared[index].cookie } });
       expect((await host.invoke<CapacityStepReply>(ticket, 'qualificationStep', [request, index, null])).value.accepted).toBe(true);
       return replies.map(reply => ({ accepted: reply.value.accepted, usage: reply.usage }));
     });
@@ -301,7 +304,7 @@ describe('private native capacity adapter', () => {
   it('prepays a real retry burst once and retains its slots after a lost reply and cold restart', async ({ task }) => {
     const game = env.GAME.get(env.GAME.idFromName(crypto.randomUUID()));
     const result = await runInDurableObject(game, async (_instance, state) => {
-      const start = Date.UTC(2026, 9, 25, 17, 50);
+      const start = capacityFixtureStart();
       vi.spyOn(Date, 'now').mockReturnValue(start + 8_000);
       const manifest = capacityFixtureManifest(start), control = fixtureControl(manifest);
       const create = () => new CapacityNativeHost<Competition>(state, fixtureEnv(), 'Competition', manifest, control,
@@ -327,7 +330,7 @@ describe('private native capacity adapter', () => {
       const retryWrites: number[] = [];
       for (let index = 0; index < 160; index++) {
         const reply = await offer(index);
-        expect(reply.value).toMatchObject(index < 100 ? { accepted: true } : {
+        expect(reply.value).toMatchObject(index < ARENA_POLICY.registrationBurst ? { accepted: true } : {
           accepted: false, httpStatus: 429, code: 'ARENA_RETRY' });
         expect(reply.usage).toMatchObject({ uncertain: false, unresolvedD1: 0 });
         if (index >= 128) retryWrites.push(reply.usage.doRowsWritten);
@@ -341,7 +344,7 @@ describe('private native capacity adapter', () => {
         await original.apply(this, args);
         throw new Error('native_registration_reply_lost');
       });
-      await expect(offer(160)).rejects.toThrow('native_registration_reply_lost');
+      await expect(offer(160)).rejects.toThrow('"stage":"arena-register"');
       expect((await offer(160)).value).toMatchObject({ accepted: false, code: 'capacity_step_already_issued' });
       expect(register).toHaveBeenCalledTimes(161);
       const held = state.storage.sql.exec('SELECT events,unresolved,reserved,observed FROM capacity_wrapper_workflow').one();
@@ -350,7 +353,8 @@ describe('private native capacity adapter', () => {
       await expect(create().invoke(ticket, 'maintenance')).rejects.toThrow('capacity_workflow_unresolved');
       expect(state.storage.sql.exec('SELECT events,unresolved,reserved,observed FROM capacity_wrapper_workflow').one()).toEqual(held);
       await state.storage.deleteAlarm();
-      return { accepted: 100, retryReplies: 60, measuredRetryBlock: { slots: 32, eventWrites: retryWrites,
+      return { accepted: ARENA_POLICY.registrationBurst, retryReplies: 160 - ARENA_POLICY.registrationBurst,
+        measuredRetryBlock: { slots: 32, eventWrites: retryWrites,
         totalGuardWrites: retryWrites.reduce((sum, writes) => sum + writes, 0) }, heldSlots: held.unresolved };
     });
     (task.meta as Record<string, unknown>).registrationGuard = { ...result,
@@ -372,6 +376,7 @@ describe('private native capacity adapter', () => {
         CAPACITY_NATIVE_CANDIDATE_ENVELOPES, plans.workflows);
       await host.invoke(ticket, 'prepareQualificationAccount', [0]);
       const batch = await host.invoke<CapacityAccountCredential[]>(ticket, 'prepareQualificationAccounts', [0]);
+      const accounts = batch.value.slice(0, ARENA_POLICY.registrationAuthConcurrency);
       const internal = Competition.prototype as unknown as {
         schedule(): Promise<void>; updateAlarm(completedThrough: number | null): Promise<void>;
       };
@@ -385,17 +390,17 @@ describe('private native capacity adapter', () => {
       });
       now.mockReturnValue(start + 30_000);
       const began = performance.now();
-      const pending = batch.value.map(async (account, index) => {
+      const pending = accounts.map(async (account, index) => {
         const request = new Request(`https://${manifest.host}/capacity/step/${index}`, { headers: { Cookie: account.cookie } });
         const actor = await authenticateCapacitySession(env.DB, env, manifest, request, index);
         return host.invoke<CapacityStepReply>(ticket, 'qualificationStep', [request, index, actor]);
       });
       try {
         await reading;
-        for (let wait = 0; schedules.mock.calls.length < batch.value.length && wait < 2_000; wait++) {
+        for (let wait = 0; schedules.mock.calls.length < accounts.length && wait < 2_000; wait++) {
           await new Promise(resolve => setTimeout(resolve, 1));
         }
-        expect(schedules.mock.calls.length).toBe(batch.value.length);
+        expect(schedules.mock.calls.length).toBe(accounts.length);
         release();
         const replies = await Promise.all(pending);
         expect(passes).toHaveBeenCalledTimes(2);
@@ -413,7 +418,8 @@ describe('private native capacity adapter', () => {
       }
     });
     expect(result.closed).toMatchObject({ closed: 1, unresolved: 0 });
-    expect(result.shutdown.registration).toEqual({ fixtures: 32, entrants: 32, steps: 32, queues: 0 });
+    expect(result.shutdown.registration).toEqual({ fixtures: 32, entrants: ARENA_POLICY.registrationAuthConcurrency,
+      steps: ARENA_POLICY.registrationAuthConcurrency, queues: 0 });
     (task.meta as Record<string, unknown>).registrationAlarmBurst = result;
   });
 
@@ -788,9 +794,9 @@ describe('private native capacity adapter', () => {
       const ticket = await fixtureTicket(control, `game:${state.id.name}`, 'Game.status');
       const first = await host.invoke(ticket, 'status');
       expect(first.value).toBeNull();
-      await expect(host.invoke(ticket, 'status')).rejects.toThrow('UNIQUE constraint failed');
+      await expect(host.invoke(ticket, 'status')).rejects.toThrow('SQLITE_CONSTRAINT');
       const reconstructed = new CapacityNativeHost<Game>(state, fixtureEnv(), 'Game', manifest, control, { 'Game.status': probeEnvelope() });
-      await expect(reconstructed.invoke(ticket, 'status')).rejects.toThrow('UNIQUE constraint failed');
+      await expect(reconstructed.invoke(ticket, 'status')).rejects.toThrow('SQLITE_CONSTRAINT');
       expect(state.storage.sql.exec('SELECT id FROM capacity_wrapper_dispatches ORDER BY id').toArray()).toEqual(
         [...(schema === 'retained' ? [{ id: 'retained-dispatch' }] : []), { id: ticket.id }].sort((a, b) => a.id < b.id ? -1 : 1));
       if (schema === 'retained') expect(state.storage.sql.exec('SELECT rowid FROM capacity_wrapper_dispatches').toArray()).toHaveLength(2);

@@ -354,7 +354,7 @@ describe('competitive authority', () => {
       internal.env = { ...internal.env, RANKED_GAME_LIMIT: '10000', RANKED_QUEUE_LIMIT: 'invalid', RANKED_RETAINED_GAME_LIMIT: '1' };
     });
     expect(await competition.joinQueue(e, 'rapid')).toMatchObject({ status: 'closed' });
-    expect(await competition.health()).toMatchObject({ limits: { unsettledGames: 1_000, queuedPerPool: 128, retainedGames: 1 } });
+    expect(await competition.health()).toMatchObject({ limits: { unsettledGames: 10_000, queuedPerPool: Number.MAX_SAFE_INTEGER, retainedGames: 1 } });
     expect(await competition.queueStatus(a)).toMatchObject({ status: 'reserved' });
   });
 

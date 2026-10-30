@@ -507,5 +507,5 @@ it('reuses retired casual payload capacity while retaining a separate permanent 
   expect(await acquireSeatGuard(limited, actor, second)).toBe(true);
   await env.DB.prepare("UPDATE casual_game_admissions SET storage_state='archived',archived_at=? WHERE game_id=?").bind(Date.now(), second).run();
   expect(await acquireSeatGuard(limited, actor, crypto.randomUUID())).toBe(false);
-  expect(await acquireSeatGuard({ ...limited, CASUAL_GAME_ID_LIMIT: '100001' }, actor, crypto.randomUUID())).toBe(false);
+  expect(await acquireSeatGuard({ ...limited, CASUAL_GAME_ID_LIMIT: '-1' }, actor, crypto.randomUUID())).toBe(false);
 });

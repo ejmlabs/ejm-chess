@@ -616,7 +616,7 @@ Evidence: `chess-launch-20261020-v1/operations-cap-labels-20261021-v1`.
 ### Operations wording publication, 2026-10-21 UTC
 
 The owner explicitly approved publishing the prepared wording and budget guide.
-Production version `e78aab7c-f58a-4f78-8293-13213e6dad17` now serves those assets.
+Production version `[id in private provider record]` now serves those assets.
 Signed-in browser readback confirmed "Spending target and work caps" on the
 Operations page, the $100 monthly target, and the explanation that zero closes
 new work. The server module, bindings, variables, limits, stops and private
@@ -683,7 +683,7 @@ unrelated application was preserved. Evidence:
 The separately reviewed one-use private constructor diagnostic completed. Its
 fixed marker confirmed the expected class, singleton and native container
 handle before product wrapping. The original module and native metadata were
-restored and read back at version `f2981fed-8caa-40cb-8df2-cfe7dedaa229`.
+restored and read back at version `[id in private provider record]`.
 The app cap, active instances and assigned instances remained zero, with no
 native application writes or solver jobs. The proxy was disposed. The consumed
 candidate stayed closed. Evidence:
@@ -738,7 +738,7 @@ players, requests, arming or Games. Evidence:
 `chess-launch-20261020-v1/capacity-registration-stage-review-20261021-v1`.
 
 The separately authorized stopped proof bootstrap created one new isolated D1
-database, `ca440e3d-be86-46dc-9838-e5d79a7324c7`. Its first metadata action
+database, `[id in private provider record]`. Its first metadata action
 halted on a local append-mode ledger error. One claimed GET is permanently
 consumed with unknown read outcome. The successful create is retained and must
 not repeat. No migration, Worker upload, proof runtime or native job followed.
@@ -850,11 +850,11 @@ target and practical adjustable caps. The current decision in proposal/design
 and both affected specs supersedes older mandatory dollar allocations and
 repeated financial reviews. Correctness and provider qualification remain open.
 
-Deployed version `bc95b733-1f09-4823-8fd5-8fc28dcfac4a` raised monthly signup and
+Deployed version `[id in private provider record]` raised monthly signup and
 game caps to 10,000 each, email to 5,000 and lifetime signup attempts to 100,000.
 The deployment stop is false. The normal owner Operations form saved account/
 game and email stops false; browser readback showed all three Available.
-Analysis remains stopped. The three $45/$70/$85 usage policies were read back
+Analysis remains stopped. The three usage policies were read back
 as enabled. The existing server bundle hash was unchanged. No public Access
 policy or ranked/tournament feature gate was changed. Billing remains delayed
 and account-wide, so the target is not a guaranteed invoice cap.
@@ -865,7 +865,7 @@ test or chess regression rerun was needed for these settings and guide edits.
 No outstanding qualification task is marked complete by this change.
 
 The generated developer guide was published and read back on the canonical
-host in version `592cb559-a9ad-4072-a6e5-c5a17ed34edf`. Its current policy,
+host in version `[id in private provider record]`. Its current policy,
 cleared stops and removed per-service allocation gates match this decision.
 Other route HTML and the server bundle were preserved. The owner Operations
 confirmation is retained as `simple-budget-20261022-v1/live-caps.png`.

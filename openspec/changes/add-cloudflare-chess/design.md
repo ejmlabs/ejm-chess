@@ -2,15 +2,14 @@
 
 ## Current spending decision, 2026-10-22
 
-The owner directs one $100 monthly chess spending target, existing $45/$70
-usage alerts, and the $85 emergency stop to leave headroom for accepted work.
+The owner directs one $100 monthly chess spending target, existing
+usage alerts and emergency stop to leave headroom for accepted work.
 This supersedes the earlier mandatory per-service dollar allocations, tax and
 unknown-cost reserves, and repeated financial-review gates in this change.
 Those dated calculations are historical estimates, not launch requirements.
-Use supported monthly caps of 10,000 signup attempts, 10,000 games and 5,000
-account emails, with 100,000 lifetime signup attempts. Clear deployment and
-account/game/email stops for protected-host use. Preserve abuse rate limits,
-authentication and accepted-work recovery. Keep optional server analysis disabled.
+The 2026-10-30 demand policy removes monthly application caps. Use Cloudflare
+budget alerts and the stop webhook. Preserve abuse rate limits, authentication
+and accepted-work recovery. Keep optional server analysis disabled.
 Ranked correctness and tournament qualification still apply. Public Access is
 removed only through the existing launch sequence. The $100 target is not a
 hard provider invoice cap: alerts can lag and accepted work continues.
@@ -383,13 +382,13 @@ Use the existing maintained Container lifecycle and subprocess facilities. A job
 
 Persist an attempt receipt keyed by `(requestId,attempt)` before execution, and persist its bounded result before acknowledgement. Duplicate delivery reads the same receipt without rerunning or charging work. Reconcile a lost reply before using another credit. An interrupted in-flight attempt is consumed and can yield unknown; at most one further attempt is allowed for transient start/delivery interruption when credit and original time remain. Native unknown, resource exhaustion, malformed output and failed witness validation do not trigger another search. Bound receipt retention through the existing retained-game/storage admission ceiling and preserve the permanent game/result identity after detailed receipt expiry.
 
-Game retains the pending request identity and original expiry. A private result may finalize that exact still-pending version once only after every version, side, reservation and digest agrees and its deadline remains open. `winnable` awards the survivor a timeout win; supported `unwinnable` records a timeout draw. Stale, mismatched, duplicate, late, expired or failed work cannot overwrite a terminal result or change ratings. Unknown freezes play and settlement, then the existing alarm records one unrated technical void at the original 30-second deadline unless a supported proof already won arbitration. Retries and restarts never extend it. Tournament cutoffs retain their earlier published deadline and existing unrated policy.
+Game retains the pending request identity and original expiry. A private result may finalize that exact still-pending version once only after every version, side, reservation and digest agrees and its deadline remains open. `winnable` awards the survivor a timeout win; supported `unwinnable` records a timeout draw. Stale, mismatched, duplicate, late, expired or failed work cannot overwrite a terminal result or change ratings. Unknown freezes play and settlement, then the existing alarm applies the material timeout rule at the original 30-second deadline unless a supported proof already won arbitration: a rated loss for the flagged player when the survivor has mating material, otherwise a draw. Retries and restarts never extend it. Tournament cutoffs retain their earlier published deadline and existing unrated policy.
 
 #### Qualification before enabling the profile
 
-Use a licensed or authorized difficult corpus with full histories and both surviving sides. Cover ordinary starting/middlegame/endgame flags; bare king, two knights, bishop versus knight, asymmetric and blocked walls; castling, en passant, promotions; repeated positions, 50-move boundaries and checkmate precedence. Include invalid, wrong-side and overlong witnesses, real native-process unknowns, killed children, memory/output limits, failed startup, restart, lost replies, duplicates, stale results, timeout/technical-void races and exhausted admission budgets. Preserve expected supported answers; ordinary flagging fixtures must resolve correctly within the stated limits rather than all falling through to technical void.
+Use a licensed or authorized difficult corpus with full histories and both surviving sides. Cover ordinary starting/middlegame/endgame flags; bare king, two knights, bishop versus knight, asymmetric and blocked walls; castling, en passant, promotions; repeated positions, 50-move boundaries and checkmate precedence. Include invalid, wrong-side and overlong witnesses, real native-process unknowns, killed children, memory/output limits, failed startup, restart, lost replies, duplicates, stale results, timeout/fallback races and exhausted admission budgets. Preserve expected supported answers; ordinary flagging fixtures must resolve correctly within the stated limits rather than all falling through to the material timeout rule.
 
-Use existing C14/C15 to require real native witnesses rejected by independent online-draw validation as `unknown`/`invalid-witness`. Require G07 to retain both exact solver-child kill evidence and its native attempt receipt showing `unknown`/`resource-limit`; a kill or technical void alone does not establish that reason. Preserve synthetic native `undetermined` parser coverage and the production `solver-undetermined` mapping, without counting them as native observations. Pinned upstream reports no known legal position its full search cannot resolve, but does not prove completeness. No genuine native `undetermined` fixture is retained or claimed executed. Record that observation gap and add a genuine fixture if found. Do not inject results as real native evidence or relabel invalid input, rejected witnesses or resource limits as `solver-undetermined`. All ordinary-answer, original-deadline, no-rating technical-void, once-only settlement, slot-release, resource, cost, failure and recovery gates remain required.
+Use existing C14/C15 to require real native witnesses rejected by independent online-draw validation as `unknown`/`invalid-witness`. Require G07 to retain both exact solver-child kill evidence and its native attempt receipt showing `unknown`/`resource-limit`; a kill or material fallback alone does not establish that reason. Preserve synthetic native `undetermined` parser coverage and the production `solver-undetermined` mapping, without counting them as native observations. Pinned upstream reports no known legal position its full search cannot resolve, but does not prove completeness. No genuine native `undetermined` fixture is retained or claimed executed. Record that observation gap and add a genuine fixture if found. Do not inject results as real native evidence or relabel invalid input, rejected witnesses or resource limits as `solver-undetermined`. All ordinary-answer, original-deadline, material-fallback, once-only settlement, slot-release, resource, cost, failure and recovery gates remain required.
 
 Run the corpus locally and through the private provider binding, including four simultaneous cold timeout requests and their allowed retries. Every required ordinary flag must finish before its original 30-second deadline with correct once-only settlement, and every failed/unknown proof must preserve the fallback. Measure total provider and child CPU, peak memory, cold start, queue age, wall time, failure/unknown rates, retry/storage overhead and cost per 1,000 attempts. Use the pinned passing provider tier within the current single $100 target and existing stops. Retain measured quantities and common-cycle billing units counted once. Do not reopen superseded service-allocation or financial-review gates. Unknown costs remain unknown; a reviewed estimate is not a measured invoice ceiling. The existing 16-query feasibility result, a Node WASM probe, or local Container tests do not complete this gate. Update player rules, privacy, operations, package notices and developer reproduction guidance in the product change, clearly separating local, deployed and released evidence.
 
@@ -579,7 +578,7 @@ absent. Existing reserved attempts remain funded through stops and month
 rollover; optional Stockfish screening may stop first. These workload controls
 do not remove the account-wide invoice exposure described below.
 
-Configure Cloudflare billing alerts at $45, $70, and $85 of account-wide usage
+Configure Cloudflare billing tiered alerts on account-wide usage
 charges, which approximate $50, $75, and $90 when adding one $5 Workers base
 fee. Record the actual billing cycle, existing subscriptions, account usage,
 recipients, and successful readback. Preserve existing alerts and other products.

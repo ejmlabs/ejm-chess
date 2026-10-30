@@ -11,7 +11,7 @@ import { PROOF_PROFILE, PROOF_RULES_VERSION } from '../src/server/proof-contract
 import { activeGame, player } from './authority-helpers';
 
 function isolatedConfig(): DrillEnv {
-  return { ...env, RECOVERY_DRILL_TOKEN: 'test-private-recovery-drill-token-with-32-bytes',
+  return { ...env, PRODUCTION_RESOURCE_IDS: '99999999-9999-9999-9999-999999999999', RECOVERY_DRILL_TOKEN: 'test-private-recovery-drill-token-with-32-bytes',
     RECOVERY_DRILL_SCOPE: 'ejm-chess-recovery-drill-local-test', RECOVERY_DATABASE_ID: '11111111-1111-1111-1111-111111111111',
     RECOVERY_GAME_NAMESPACE_ID: '1'.repeat(32), RECOVERY_COMPETITION_NAMESPACE_ID: '2'.repeat(32), RECOVERY_SOURCE_REVISION: 'a'.repeat(40),
     NEW_WORK_STOPPED: 'true', RANKED_ENABLED: 'false', TOURNAMENTS_ENABLED: 'false', ARENAS_ENABLED: 'false', ANALYSIS_ENABLED: 'false',
@@ -130,7 +130,7 @@ describe('isolated native restore controls', () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"operation":"inspect"}',
     }), config);
     expect(response.status).toBe(403);
-    expect(() => assertDrillConfiguration({ ...config, RECOVERY_DATABASE_ID: 'ebba66c8-3910-4465-a053-426fcb733833' })).toThrow();
+    expect(() => assertDrillConfiguration({ ...config, RECOVERY_DATABASE_ID: '99999999-9999-9999-9999-999999999999' })).toThrow();
     expect(() => assertDrillConfiguration({ ...config, RECOVERY_GAME_NAMESPACE_ID: '' })).toThrow();
     expect(() => assertDrillConfiguration({ ...config, NEW_WORK_STOPPED: 'false' })).toThrow();
     expect(() => assertDrillConfiguration({ ...config, TIMEOUT_PROOF_PROFILE: PROOF_PROFILE })).toThrow();

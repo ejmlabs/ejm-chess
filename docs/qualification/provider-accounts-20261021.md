@@ -7,7 +7,7 @@ account and security-email test with the owner-approved recipient. Full-host
 Cloudflare Access and separate admin Access remained in force. The exact-path
 budget webhook exception did not grant player or admin access.
 
-The mail test used Worker version `e86b3bf4-4949-4324-8a50-48cae213ac7f`.
+The mail test used Worker version `[id in private provider record]`.
 The frozen Worker bundle SHA256 was
 `4d84f3382f9a1691d1cc611f447a83fed03419bdb51dcc6b5c695707ecc2596b`.
 Wrangler deployed that bundle with `--no-bundle`; its prior dry run was
@@ -49,7 +49,7 @@ After verification, the application performed the subsequent stop change.
 ## Restored state
 
 After the two sends, Worker version
-`f5436f22-cf84-484b-8f79-77bf3c68b066` restored the deployment-wide
+`[id in private provider record]` restored the deployment-wide
 `NEW_WORK_STOPPED=true` using the same exact Worker bundle. The provider
 readback confirmed:
 

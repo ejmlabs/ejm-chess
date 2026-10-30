@@ -40,7 +40,7 @@ describe('private proof predispatch permits', () => {
         const local = { DB: budget.d1(env.DB), GAME: {}, COMPETITION: {}, PROVER: {},
           PROOF_ACCEPTANCE: { idFromName: (name: string) => name, get: () => ({ inspect: async () => ({
             manifestMatches: true, identityMatches: true, armed: true, closed: false, expiresAt: seal.expiresAt }) }) },
-          PROOF_ACCEPTANCE_SCOPE: manifest.scope, PROOF_ACCEPTANCE_EXECUTION: 'sealed-private',
+          PRODUCTION_RESOURCE_IDS: '99999999-9999-9999-9999-999999999999', PROOF_ACCEPTANCE_SCOPE: manifest.scope, PROOF_ACCEPTANCE_EXECUTION: 'sealed-private',
           PROOF_ACCEPTANCE_SOURCE_REVISION: seal.sourceDigest, PROOF_ACCEPTANCE_CONTROL_NAMESPACE_ID: seal.controlNamespaceId,
           PROOF_ACCEPTANCE_MANIFEST_SHA256: seal.manifestDigest, PROOF_ACCEPTANCE_TIER: 'basic',
           PROOF_ACCEPTANCE_PROVER_NAMESPACE_ID: seal.basicProverNamespaceId, NEW_WORK_STOPPED: 'true', RANKED_ENABLED: 'false',

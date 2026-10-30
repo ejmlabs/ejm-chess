@@ -45,11 +45,11 @@ describe('budget stops preserve accepted work', () => {
     expect(await env.DB.prepare('SELECT 1 FROM active_game_seats WHERE game_id=? AND released_at IS NULL').bind(id).first()).toBeNull();
   });
 
-  it('charges an uncertain email provider attempt and stops another send when its monthly allowance is spent', async () => {
+  it('charges uncertain email provider attempts without a monthly cap', async () => {
     const actor = await player();
     await env.DB.prepare('UPDATE user SET emailVerified=0 WHERE id=?').bind(actor.id).run();
     const send = vi.fn(async () => { throw new Error('provider timeout'); });
-    const config = { ...env, AUTH_BASE_URL: 'https://chess.ejmlabs.com', LOCAL_DEV: undefined, MONTHLY_EMAIL_LIMIT: '1',
+    const config = { ...env, AUTH_BASE_URL: 'https://chess.ejmlabs.com', LOCAL_DEV: undefined,
       EMAIL_FROM: 'chess@ejmlabs.com', EMAIL: { send } };
     const auth = createAuth(config);
     const request = () => new Request('https://chess.ejmlabs.com/api/auth/send-verification-email', { method: 'POST',
@@ -57,7 +57,7 @@ describe('budget stops preserve accepted work', () => {
       body: JSON.stringify({ email: `${actor.id}@example.test`, callbackURL: '/play/' }) });
     expect((await auth.handler(request())).ok).toBe(false);
     expect((await auth.handler(request())).ok).toBe(false);
-    expect(send).toHaveBeenCalledOnce();
-    expect((await budgetStatus(config)).allowances.find(row => row.kind === 'email')).toMatchObject({ used: 1, accepting: false });
+    expect(send).toHaveBeenCalledTimes(2);
+    expect((await budgetStatus(config)).allowances.find(row => row.kind === 'email')).toMatchObject({ used: 2, accepting: true });
   });
 });

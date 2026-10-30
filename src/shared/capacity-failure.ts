@@ -55,6 +55,8 @@ const PREFIX = 'capacity-native-failure:';
 const MAX_AUDIT_BYTES = 3072;
 type Usage = Record<typeof USAGE_FIELDS[number], number> & { uncertain: boolean };
 type Work = Record<typeof WORK_FIELDS[number], number>;
+const pick = <K extends string>(keys: readonly K[], source: Record<K, number>): Record<K, number> =>
+  Object.fromEntries(keys.map(key => [key, source[key]])) as Record<K, number>;
 export interface CapacityFailureAudit {
   version: 1; kind: 'Game' | 'Competition'; stage: CapacityFailureStage; index: number | null;
   code: string; errorName: string; causeCode: string | null;
@@ -106,8 +108,7 @@ export function capacityNativeFailure(error: unknown,
     ?? CAUSE_CODES.find(value => cause?.message.includes(value)) ?? null;
   const audit: CapacityFailureAudit = { version: 1, ...values, code,
     errorName: original && ERROR_NAMES.has(original.name) ? original.name : 'Error', causeCode,
-    usage: { ...Object.fromEntries(USAGE_FIELDS.map(key => [key, values.usage[key]])) as Usage,
-      uncertain: values.usage.uncertain },
-    envelope: values.envelope ? Object.fromEntries(WORK_FIELDS.map(key => [key, values.envelope![key]])) as Work : null };
+    usage: { ...pick(USAGE_FIELDS, values.usage), uncertain: values.usage.uncertain },
+    envelope: values.envelope ? pick(WORK_FIELDS, values.envelope) : null };
   return new Error(PREFIX + JSON.stringify(audit));
 }

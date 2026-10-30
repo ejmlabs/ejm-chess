@@ -7,7 +7,7 @@ configuration before using deployment commands. See [source handoff](source-hand
 
 ## Status and scope
 
-The recorded protected baseline at `https://chess.ejmlabs.com` used version `592cb559-a9ad-4072-a6e5-c5a17ed34edf`, read back on
+The recorded protected baseline at `https://chess.ejmlabs.com` used version `[id in private provider record]`, read back on
 2026-10-22 at 10:17 UTC. It retains the redesign, 8-character password minimum,
 single account-form submit action and signup-attempt enforcement. Its server
 bundle is unchanged from the preceding protected revision. The
@@ -21,8 +21,9 @@ proof bookkeeping, account-closure fences and the signup-attempt counter.
 Migration `0015_signup_budget.sql` passed on 2026-10-21 UTC after a native
 Time Travel bookmark was saved. On October 22, the owner enabled 10,000 signup
 attempts and games and 5,000 account emails per UTC month, with 100,000 lifetime
-signup attempts. `NEW_WORK_STOPPED=false`; saved account/game and email stops
-are clear. Server analysis remains stopped. The recorded protected version
+signup attempts. The 2026-10-30 demand policy later removed those application
+caps; the settings are usage counters only. `NEW_WORK_STOPPED=false`; saved
+account/game and email stops are clear. Server analysis remains stopped. The recorded protected version
 keeps ranked, tournaments, arenas and browser Stockfish disabled until the final
 release. Both `workers_dev` and preview URLs are disabled. The public Worker
 CPU limit is 50 ms. Minute and daily cron expressions are configured. Keep
@@ -38,7 +39,7 @@ password recovery and new-password sign-in passed an approved-recipient test.
 The old browser session was revoked. The test recorded two email attempts.
 Its temporary stops were later cleared under the October 22 policy. See the
 [account acceptance boundary](qualification/provider-accounts-20261021.md).
-The $45 and $70 alerts and $85 automatic stop remain enabled. Existing unrelated
+The usage alerts and automatic stop remain enabled. Existing unrelated
 resources and alert policies are preserved.
 
 Production `wrangler.jsonc` now binds the dedicated D1 database, restricted
@@ -332,10 +333,10 @@ real trigger evidence; a saved cron expression is not execution evidence.
 
 The initial global stop also prevents verification and password-recovery sends. A later approved mail
 canary must preserve game and analysis denial while allowing a small number of
-email attempts. One configuration can set `MONTHLY_GAME_LIMIT=0` and
-`MONTHLY_ANALYSIS_LIMIT=0`, keep every feature gate false, choose the approved
-small email allowance, then set `NEW_WORK_STOPPED=false` for that protected
-test. Zero category allowances close their work paths. Record this separate
+email attempts. Set the versioned game and analysis stops, or
+`NEW_WORK_STOPPED=true`, keep every feature gate false, choose the approved
+small email allowance, then clear the global stop for that protected test.
+Monthly limit settings are usage counters only. Record this separate
 configuration change and restore the global stop afterward.
 
 Use only the approved canary inboxes. Create explicit username/password accounts

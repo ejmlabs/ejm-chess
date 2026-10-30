@@ -37,17 +37,17 @@ const guides: Record<string, GuideContent> = server ? {
         A ranked timeout waits at most 30 seconds for a private proof and does not change ratings until it is settled.</p>
       <AppHeading as="h2">Accounts and competition</AppHeading>
       <p>Create an account with a unique username and a password of 8 to 128 characters. Sign in with your username and password. Password managers and pasted passwords work. A private recovery email is optional for signup, play, ranked eligibility and tournaments. Email is used only for verification and recovery. We send no marketing.</p>
-      <p>Signup pauses when its safety allowance is full. Existing accounts can still sign in.</p>
+      <p>Signup pauses only when the owner sets a stop. Existing accounts can still sign in.</p>
       <p>If you skip recovery email, email password reset is unavailable. Keep your password in a password manager. Adding or changing a recovery email is unavailable. If you supplied an email, you can request password reset with it before verification. Verification confirms the mailbox; it does not affect player eligibility.</p>
       <p>Choose Ranked to find an opponent and compete in the blitz or rapid rating pool. Casual invitations and computer games remain unrated.</p>
-      <p>The beta allows four ranked games at once and 1,000 new ranked games per UTC month across both formats. When those slots are full, wait for a game to finish.</p>
+      <p>Ranked admission remains closed until the owner opens it. When open, the Cloudflare budget stop is the limit; there is no monthly game cap.</p>
       <p>Use <Link href="/account/">Account</Link> to sign out or view recovery options. Finish active games before changing sign-in. Legacy guests can finish their existing games and replay their records; new guest games are closed. Signing up does not transfer a guest's history or ratings.</p>
       <AppHeading as="h2">When new games pause</AppHeading>
-      <p>The service has monthly work allowances and separate safety stops. A pause can close new games or account-security emails.
-        Accepted games keep their clocks, results, and private replays. A new month renews the work allowance; it does not clear an explicit stop or free retained storage.</p>
+      <p>The service pauses new work only when the owner sets a stop or the Cloudflare budget stop fires. There are no monthly game, signup or email caps.
+        Accepted games keep their clocks, results, and private replays. Clearing a stop resumes new work; it does not free retained storage.</p>
       <AppHeading as="h2">Automatic tournaments</AppHeading>
       <p>Visit <Link href="/tournaments/">Tournaments</Link> for automatic schedules, entry, and standings. Timed arenas use a queue between games. The small round-robin format runs with three or four players over three rounds. Both formats are unrated, and their points stay within the event.</p>
-      <p>Arenas accept up to 2,000 entrants per event and share a limit of 1,000 unfinished games. They pair for one hour in blitz or two hours in rapid. Register with a username and password account, then choose Queue when play opens. Recovery email is optional. After each game, queue again when ready, or pause. A no-show pauses your entry until you resume. One account can hold only one ranked or tournament reservation at a time.</p>
+      <p>Arenas have no product entrant or unfinished-game cap. The Cloudflare budget stop and platform limits are the only bounds. They pair for one hour in blitz or two hours in rapid. Register with a username and password account, then choose Queue when play opens. Recovery email is optional. After each game, queue again when ready, or pause. A no-show pauses your entry until you resume. One account can hold only one ranked or tournament reservation at a time.</p>
       <p>An arena win earns one point and a draw half a point. Losses, no-shows, and technical voids earn zero; there are no bye or streak points. Equal points share a rank. A pair may meet twice only with a different opponent between meetings.</p>
       <p>New pairings stop at the cutoff. Accepted games finish within their 18-minute blitz or 40-minute rapid wall deadline. Standings remain provisional while games or updates are pending. Public pages show their update time and use bounded pages, so a refresh may briefly show an older complete snapshot.</p>
       <AppHeading as="h2">Play Stockfish</AppHeading>
@@ -107,7 +107,7 @@ const guides: Record<string, GuideContent> = server ? {
         Results already accepted remain recorded, and the corrected rankings appear when a full generation is ready.</p>
       <p>Computer games are always unrated. Browser Stockfish strength depends on the device and search budget;
         the selected difficulty is not an audited engine result or Elo rating. Human-game assistance rules still apply.</p>
-      <p>Ranked play pauses when its shared game slots or monthly allowance are full.
+      <p>Ranked play pauses only when the owner sets a stop or the Cloudflare budget stop fires.
         See <Link href="/fair-play/">fair play</Link> for review and appeal limits.</p>
     </>,
   },
@@ -210,7 +210,7 @@ const guides: Record<string, GuideContent> = server ? {
       <p>Minute and daily triggers recover saved work. Longer calendar, full-hour endurance and regional measurements remain separate qualification; configured ceilings do not prove worldwide performance.</p>
       <AppHeading as="h2">Owners</AppHeading>
       <p>ejm-chess owns chess rules, game state, matchmaking, ratings, account policy, and fair play composition.
-        ejm-ui owns shared visuals and site infrastructure. The studio owns project discovery.
+        ejm-ui owns shared visuals and site infrastructure. The lab owns project discovery.
         The product does not depend on the agent harness.</p>
       <AppHeading as="h2">Player accounts</AppHeading>
       <p>Better Auth owns username and password authentication in native D1. Recovery email is optional. Private account state returns accountReady and hasRecoveryEmail without exposing an address. New game seats require a completed username and password account. Player ranked and tournament eligibility uses credentials, restrictions and launch gates, not email verification. Owner administration still requires a real verified email and Cloudflare Access.</p>
@@ -245,17 +245,17 @@ const guides: Record<string, GuideContent> = server ? {
         Tests must protect a real rule or failure risk.</p>
       <AppHeading as="h2">Automatic operation</AppHeading>
       <p>Competition schedules bounded hourly, daily, and weekly tournaments. Durable game identities and result receipts prevent duplicate pairings or event points. Cron recovers scheduled work and retries outboxes. Timeouts end with a win or a draw under the material rule.</p>
-      <p>Settled casual game payloads retire after at least one hour, at most four per minute, only after matching terminal version, rules version, and digest checks. Durable tombstones prevent ID reuse; D1 keeps completed replays. Permanent game and rating records still grow. Safety ceilings can pause new admission.</p>
-      <p>CASUAL_GAME_LIMIT defaults to 128 retained payloads, with a maximum of 1,000. CASUAL_GAME_ID_LIMIT separately defaults to 10,000 permanent admission IDs, with a maximum of 100,000. Retirement frees a payload slot and keeps the old ID reserved.</p>
+      <p>Settled casual game payloads retire after at least one hour, at most four per minute, only after matching terminal version, rules version, and digest checks. Durable tombstones prevent ID reuse; D1 keeps completed replays. Permanent game and rating records still grow. A stop can pause new admission; there is no product retention cap.</p>
+      <p>CASUAL_GAME_LIMIT and CASUAL_GAME_ID_LIMIT are optional. Both default to no cap. Retirement frees a payload slot and keeps the old ID reserved.</p>
       <AppHeading as="h2">Budget controls</AppHeading>
-      <p>The monthly spending target is $100. Alerts at $45 and $70 give notice. When delivered, the $85 alert stops new work and leaves headroom for active games and recovery. Billing alerts can lag, so this is not a guaranteed invoice cap.</p>
-      <p>The configured monthly caps are 10,000 signup attempts, 10,000 new games and 5,000 account emails, with 100,000 lifetime signup attempts. These are adjustable guardrails, not measured capacity. Earlier per-service dollar allocations no longer gate launch. Server analysis stays off.</p>
-      <p>Signup has a separate atomic allowance, including existing identities at migration. Each request passing basic validation and Turnstile spends one attempt before password hashing. Failures and retries stay charged; a new month never refunds lifetime use. The new-game stop also stops signup, while existing signin remains available.</p>
-      <p>D1 reserves game, email and analysis operations through stable receipts. A retry reuses its receipt, including after a month changes or a stop is set.
-        Invalid settings or an unavailable quota authority close new work. Explicit game, email, and analysis stops persist across monthly allowance resets.</p>
-      <p>The private Operations page separates the monthly spending target from configured work caps and versioned stop controls. The caps show the current deployment, not estimated capacity for $100. A deployment-wide NEW_WORK_STOPPED setting closes all new budgeted work.
+      <p>The monthly spending target is $100. Cloudflare budget alerts give notice. When delivered, the final alert stops new work and leaves headroom for active games and recovery. Billing alerts can lag, so this is not a guaranteed invoice cap.</p>
+      <p>There are no monthly game, signup, email or analysis caps in the application. Usage counters remain for the private Operations page. The Cloudflare budget stop and versioned feature stops are the admission controls.</p>
+      <p>Signup spends an attempt after basic validation and Turnstile, before password hashing. Failures and retries stay counted for visibility. A stop closes new signup attempts; existing signin remains available.</p>
+      <p>D1 records game, email and analysis operations through stable receipts. A retry reuses its receipt, including after a month changes or a stop is set.
+        Explicit game, email, and analysis stops persist across months.</p>
+      <p>The private Operations page shows spending target, usage and versioned stop controls. A deployment-wide NEW_WORK_STOPPED setting closes all new budgeted work.
         Active games, accepted result delivery, replay, and required recovery continue. An analysis stop blocks the next Container call; already saved evidence can finish without another engine call.</p>
-      <p>Three enabled usage-alert policies at $45, $70 and $85 have been saved and read back for the approved inbox. The high policy also targets a dedicated secret-authenticated stop webhook whose provider creation/test succeeded. The existing $5 monthly Workers Paid subscription and sending-domain setup are verified. The approved recipient completed real verification and password recovery, then signed in with the new password. The earlier browser session was revoked. Two email attempts were recorded in that test. Account/game and email stops were cleared on October 22 after the owner approved practical quotas. No actual threshold-crossing billing event has been observed. Cloudflare budget alerts cover account-wide usage, exclude subscription fees, and can arrive late.
+      <p>Three enabled usage-alert policies have been saved and read back for the approved inbox. The high policy also targets a dedicated secret-authenticated stop webhook whose provider creation/test succeeded. The existing $5 monthly Workers Paid subscription and sending-domain setup are verified. The approved recipient completed real verification and password recovery, then signed in with the new password. The earlier browser session was revoked. Two email attempts were recorded in that test. Account/game and email stops were cleared on October 22 after the owner approved practical quotas. No actual threshold-crossing billing event has been observed. Cloudflare budget alerts cover account-wide usage, exclude subscription fees, and can arrive late.
         Retained storage and rejected traffic can still incur charges after admission stops. Consult the repository budget and operations guides for live setup, alert verification, and recovery requirements.</p>
       <AppHeading as="h2">Feature gates and failures</AppHeading>
       <p>RANKED_ENABLED, TOURNAMENTS_ENABLED and ARENAS_ENABLED control new admission to their modes. Existing admitted work continues through a stop.
