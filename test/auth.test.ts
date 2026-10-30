@@ -435,7 +435,7 @@ describe('native D1 player accounts', () => {
   });
 
   it('atomically bounds retained admissions while allowing retry and join at capacity', async () => {
-    expect(casualGameLimit({})).toBe(1_000);
+    expect(casualGameLimit({})).toBe(Number.MAX_SAFE_INTEGER);
     const baseline = (await env.DB.prepare('SELECT COUNT(*) AS count FROM casual_game_admissions').first<{ count: number }>())!.count;
     const limited = { ...env, CASUAL_GAME_LIMIT: String(baseline + 2) };
     const players = await Promise.all(Array.from({ length: 6 }, () => account()));
@@ -449,7 +449,7 @@ describe('native D1 player accounts', () => {
     expect(await acquireSeatGuard(limited, players[deniedIndex].actor, ids[creatorIndex])).toBe(true);
     expect(await knownGame(env, ids[creatorIndex])).toBe(true);
     expect(await knownGame(env, ids[deniedIndex])).toBe(false);
-    expect(await acquireSeatGuard({ ...env, CASUAL_GAME_LIMIT: '1001' }, players[deniedIndex].actor, crypto.randomUUID())).toBe(false);
+    expect(await acquireSeatGuard({ ...env, CASUAL_GAME_LIMIT: '-1' }, players[deniedIndex].actor, crypto.randomUUID())).toBe(false);
     const rankedId = crypto.randomUUID();
     expect(await acquireSeatGuard({ ...env, CASUAL_GAME_LIMIT: '0', RANKED_ENABLED: 'true' }, players[deniedIndex].actor, rankedId, true)).toBe(true);
     expect(await env.DB.prepare('SELECT 1 FROM casual_game_admissions WHERE game_id=?').bind(rankedId).first()).toBeNull();

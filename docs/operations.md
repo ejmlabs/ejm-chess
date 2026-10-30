@@ -71,11 +71,11 @@ origin in each.
 | `GAME_RETIREMENT_MODE` | Missing or `preview` keeps four archive attempts per minute; exact `scaled` enables the bounded shared coordinator described below; other values close retirement |
 | `TOURNAMENTS_ENABLED` | Enables new automatic unrated round-robin events and entry; accepted events drain when disabled |
 | `ARENAS_ENABLED` | Enables timed arenas; their release settings require the corresponding capacity qualification |
-| `ARENA_ENTRANT_LIMIT` | 2,000 entrants per arena event; hard setting ceiling 2,000 |
-| `ARENA_GAME_LIMIT` | 1,000 combined unfinished game admissions globally by default, including arena, preview, ranked, and other active D1 seats; hard setting ceiling 1,000 |
-| `ARENA_RETAINED_GAME_LIMIT` | 100,000 retained Game payloads in the shared preview/arena tournament ledger; hard setting ceiling 100,000 |
-| `ARENA_GAME_ID_LIMIT` | 1,000,000 permanent IDs in the shared preview/arena tournament ledger; hard setting ceiling 1,000,000 |
-| `ARENA_AUTHORITY_BYTE_LIMIT` | 4 GiB Competition authority admission budget, including reserved unfinished-game headroom; hard setting ceiling 4 GiB; accepted results still drain |
+| `ARENA_ENTRANT_LIMIT` | No product cap by default; a positive integer may set one. Platform storage and the monthly budget apply |
+| `ARENA_GAME_LIMIT` | No product cap by default; a positive integer may set one. Platform storage and the monthly budget apply |
+| `ARENA_RETAINED_GAME_LIMIT` | No product cap by default; a positive integer may set one. Retirement and the monthly budget bound growth |
+| `ARENA_GAME_ID_LIMIT` | No product cap by default; a positive integer may set one. The monthly budget bounds new IDs |
+| `ARENA_AUTHORITY_BYTE_LIMIT` | 4 GiB Competition SQLite platform safety stop, including reserved unfinished-game headroom; accepted results still drain |
 | `RANKED_ENABLED` | Closed by default; credential-backed accounts still need eligibility checks; recovery email is optional |
 | `TIMEOUT_PROOF_PROFILE` | `off`; only exact `cha-native-3484c7e6-v1` with qualified private binding and positive proof limit permits new ranked games |
 | `MONTHLY_PROOF_LIMIT` | `0`; positive settings capped at 1,000 games per UTC month, with two credits per accepted game and 1,000 permanent receipts total |
@@ -86,11 +86,11 @@ origin in each.
 | `MONTHLY_ANALYSIS_LIMIT` | 1,000 reserved server engine attempts per UTC month; hard setting ceiling 1,000; analysis remains disabled |
 | `MONTHLY_SIGNUP_LIMIT` | 10,000 signup attempts per UTC month; 0..10,000; invalid settings close signup before hashing |
 | `SIGNUP_ATTEMPT_LIMIT` | 100,000 lifetime signup attempts including existing identities at migration; 0..100,000; no reset or refund |
-| `CASUAL_GAME_LIMIT` | 1,000 retained casual Game payloads globally by default; 0..1000; invalid config denies new IDs |
-| `CASUAL_GAME_ID_LIMIT` | 100,000 permanent casual IDs by default; 0..100,000; retained and archived IDs both count, and invalid config denies new IDs |
-| `RANKED_GAME_LIMIT` | 10,000 unsettled ranked games by default; positive values capped at 100,000 |
-| `RANKED_QUEUE_LIMIT` | 10,000 queued players per format by default; positive values capped at 100,000 |
-| `RANKED_RETAINED_GAME_LIMIT` | 100,000 retained ranked game IDs; configurable downward; hard ceiling 100,000 |
+| `CASUAL_GAME_LIMIT` | No product cap by default; a positive integer may set one. Retirement and the monthly budget bound growth |
+| `CASUAL_GAME_ID_LIMIT` | No product cap by default; a positive integer may set one. The monthly budget bounds new IDs |
+| `RANKED_GAME_LIMIT` | No product cap by default; a positive integer may set one |
+| `RANKED_QUEUE_LIMIT` | No product cap by default; a positive integer may set one |
+| `RANKED_RETAINED_GAME_LIMIT` | No product cap by default; a positive integer may set one |
 | `AI_ENABLED` | Browser Stockfish practice gate; enabled in local config and set explicitly in the public release. No provider key or token quota; see [computer practice](ai-opponents.md). |
 | `TURNSTILE_SITE_KEY` | Public challenge key for the configured hostname and actions |
 | `TURNSTILE_SECRET_KEY` | Private server verification secret |
@@ -144,9 +144,9 @@ threshold event, its email delivery and complete deployed costs remain
 unverified. The webhook can only stop new work; a successful test does not
 establish a dollar ceiling.
 
-The per-feature ceilings below are safety limits for storage and
-single-object overload, not demand targets. The monthly budget stop is the
-economic governor. Do not lower a ceiling to shape demand.
+The per-feature ceilings default to off. The monthly budget stop is the
+economic governor; only the platform byte bound and security/rate controls
+remain. Do not lower a ceiling to shape demand.
 
 The existing new-game stop also stops signup. Operations shows monthly and
 lifetime signup use. One D1 update reserves an attempt after server Turnstileand basic validation, before Better Auth's rate limits and hashing. Failed,

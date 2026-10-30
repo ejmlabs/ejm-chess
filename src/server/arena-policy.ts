@@ -10,20 +10,20 @@ export const ARENA_POLICY = {
   entryReserveBytes: 32 * 1024, eventReserveBytes: 16 * 1024,
 } as const;
 
-function limit(value: string | undefined, fallback: number, maximum: number): number {
+function limit(value: string | undefined, fallback: number, maximum = Number.MAX_SAFE_INTEGER): number {
   if (value === undefined) return fallback;
   if (!/^\d{1,10}$/.test(value)) return 0;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed <= maximum ? parsed : 0;
 }
 
-/** Larger settings are qualification inputs, not evidence of measured capacity. */
+/** Product ceilings are off by default; keep only the platform byte bound. */
 export function arenaLimits(env: Pick<Env, 'ARENA_ENTRANT_LIMIT' | 'ARENA_GAME_LIMIT' | 'ARENA_RETAINED_GAME_LIMIT' | 'ARENA_GAME_ID_LIMIT' | 'ARENA_AUTHORITY_BYTE_LIMIT'>) {
   return {
-    maxEntrants: limit(env.ARENA_ENTRANT_LIMIT, 2_000, 2_000),
-    liveGames: limit(env.ARENA_GAME_LIMIT, 1_000, 1_000),
-    retainedGames: limit(env.ARENA_RETAINED_GAME_LIMIT, 100_000, 100_000),
-    permanentGameIds: limit(env.ARENA_GAME_ID_LIMIT, 1_000_000, 1_000_000),
+    maxEntrants: limit(env.ARENA_ENTRANT_LIMIT, Number.MAX_SAFE_INTEGER),
+    liveGames: limit(env.ARENA_GAME_LIMIT, Number.MAX_SAFE_INTEGER),
+    retainedGames: limit(env.ARENA_RETAINED_GAME_LIMIT, Number.MAX_SAFE_INTEGER),
+    permanentGameIds: limit(env.ARENA_GAME_ID_LIMIT, Number.MAX_SAFE_INTEGER),
     authorityBytes: limit(env.ARENA_AUTHORITY_BYTE_LIMIT, 4 * 1024 * 1024 * 1024, 4 * 1024 * 1024 * 1024),
   };
 }

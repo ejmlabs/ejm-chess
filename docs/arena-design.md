@@ -39,11 +39,11 @@ accepted games, scores, and reservation release continue to drain.
 
 | Setting | Default | Accepted maximum | Meaning |
 | --- | --- | --- | --- |
-| `ARENA_ENTRANT_LIMIT` | 2,000 | 2,000 | Registered entrants in one event |
-| `ARENA_GAME_LIMIT` | 1,000 | 1,000 | Shared cap for admitted or pending casual, ranked, preview, and arena games, including when new arenas are disabled |
-| `ARENA_RETAINED_GAME_LIMIT` | 100,000 | 100,000 | Retained rows in the shared preview and arena tournament game ledger |
-| `ARENA_GAME_ID_LIMIT` | 1,000,000 | 1,000,000 | All permanent IDs in that shared ledger, including archived games |
-| `ARENA_AUTHORITY_BYTE_LIMIT` | 4,294,967,296 bytes, or 4 GiB | 4,294,967,296 bytes, or 4 GiB | Competition SQLite byte stop plus space reserved for accepted games |
+| `ARENA_ENTRANT_LIMIT` | No cap | No cap | Registered entrants in one event |
+| `ARENA_GAME_LIMIT` | No cap | No cap | Shared cap for admitted or pending casual, ranked, preview, and arena games, including when new arenas are disabled |
+| `ARENA_RETAINED_GAME_LIMIT` | No cap | No cap | Retained rows in the shared preview and arena tournament game ledger |
+| `ARENA_GAME_ID_LIMIT` | No cap | No cap | All permanent IDs in that shared ledger, including archived games |
+| `ARENA_AUTHORITY_BYTE_LIMIT` | 4,294,967,296 bytes, or 4 GiB | 4,294,967,296 bytes, or 4 GiB | Competition SQLite platform byte stop plus space reserved for accepted games |
 | `MONTHLY_GAME_LIMIT` | 10,000 | 10,000 | Shared monthly allowance for new game work |
 
 Numeric arena settings accept unsigned decimal integers, including zero.

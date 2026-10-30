@@ -765,7 +765,7 @@ describe('timed arena authority', () => {
   });
 
   it('fails closed on unqualified configuration and byte exhaustion without losing registrations', async () => {
-    expect(arenaLimits({ ARENA_ENTRANT_LIMIT: '2001', ARENA_GAME_LIMIT: '-1', ARENA_AUTHORITY_BYTE_LIMIT: 'nan' }))
+    expect(arenaLimits({ ARENA_ENTRANT_LIMIT: '-1', ARENA_GAME_LIMIT: '-1', ARENA_AUTHORITY_BYTE_LIMIT: 'nan' }))
       .toMatchObject({ maxEntrants: 0, liveGames: 0, authorityBytes: 0 });
     const { competition, actors, id, startsAt, clock } = await prepare(2);
     await authority({ ARENA_AUTHORITY_BYTE_LIMIT: '1' }, competition);
