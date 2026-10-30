@@ -285,13 +285,13 @@ export async function hasActiveSeat(db: D1Database, userId: string): Promise<boo
 
 /** Hot payload admission is independent from permanent game identity retention. */
 export function casualGameLimit(env: Pick<AuthEnv, 'CASUAL_GAME_LIMIT'>): number {
-  const value = Number(env.CASUAL_GAME_LIMIT ?? '128');
+  const value = Number(env.CASUAL_GAME_LIMIT ?? '1000');
   return Number.isInteger(value) && value >= 0 && value <= 1000 ? value : 0;
 }
 
 /** Archived tombstones still count. Invalid configuration closes new game admission. */
 export function casualGameIdLimit(env: Pick<AuthEnv, 'CASUAL_GAME_ID_LIMIT'>): number {
-  const value = Number(env.CASUAL_GAME_ID_LIMIT ?? '10000');
+  const value = Number(env.CASUAL_GAME_ID_LIMIT ?? '100000');
   return Number.isInteger(value) && value >= 0 && value <= 100_000 ? value : 0;
 }
 

@@ -62,7 +62,7 @@ export interface AuthorityExportPage {
 
 function admissionLimit(value: string | undefined, fallback: number): number {
   const limit = Number(value);
-  return Number.isSafeInteger(limit) && limit > 0 ? Math.min(limit, 1_000) : fallback;
+  return Number.isSafeInteger(limit) && limit > 0 ? Math.min(limit, 100_000) : fallback;
 }
 
 async function sha256(value: string): Promise<string> {
@@ -437,10 +437,10 @@ export class Competition extends DurableObject<Env> {
 
   private admissionLimits(): { unsettledGames: number; retainedGames: number; queuedPerPool: number; hardMaximum: number } {
     return {
-      unsettledGames: admissionLimit(this.env.RANKED_GAME_LIMIT, 64),
-      retainedGames: admissionLimit(this.env.RANKED_RETAINED_GAME_LIMIT, 1_000),
-      queuedPerPool: admissionLimit(this.env.RANKED_QUEUE_LIMIT, 128),
-      hardMaximum: 1_000,
+      unsettledGames: admissionLimit(this.env.RANKED_GAME_LIMIT, 10_000),
+      retainedGames: admissionLimit(this.env.RANKED_RETAINED_GAME_LIMIT, 100_000),
+      queuedPerPool: admissionLimit(this.env.RANKED_QUEUE_LIMIT, 10_000),
+      hardMaximum: 100_000,
     };
   }
 

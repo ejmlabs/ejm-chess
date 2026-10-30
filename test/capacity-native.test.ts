@@ -267,11 +267,14 @@ describe('private native capacity adapter', () => {
         manifestDigest: manifest.digest, id: crypto.randomUUID(), objectKey: 'competition', generation: 1,
         operation: 'Competition.workflow', mode: 'workflow' });
       await host.invoke(ticket, 'prepareQualificationAccount', [0]);
-      const prepared = await host.invoke<CapacityAccountCredential[]>(ticket, 'prepareQualificationAccounts', [0]);
+      const prepared: CapacityAccountCredential[] = [];
+      for (let first = 0; first <= ARENA_POLICY.registrationBurst; first += CAPACITY_PREPARATION_BATCH_SIZE) {
+        prepared.push(...(await host.invoke<CapacityAccountCredential[]>(ticket, 'prepareQualificationAccounts', [first])).value);
+      }
       const replies: CapacityNativeReply<CapacityStepReply>[] = [];
       for (let index = 0; index <= ARENA_POLICY.registrationBurst; index++) {
         const request = new Request(`https://${manifest.host}/capacity/step/${index}`,
-          { headers: { Cookie: prepared.value[index].cookie } });
+          { headers: { Cookie: prepared[index].cookie } });
         const reply = await host.invoke<CapacityStepReply>(ticket, 'qualificationStep', [request, index, null]);
         expect(reply.value).toMatchObject(index < ARENA_POLICY.registrationBurst ? { accepted: true }
           : { accepted: false, httpStatus: 429, code: 'ARENA_RETRY' });

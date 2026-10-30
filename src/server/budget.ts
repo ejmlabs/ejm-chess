@@ -13,9 +13,9 @@ export interface BudgetEnv {
 }
 
 const policies = {
-  games: { setting: 'MONTHLY_GAME_LIMIT', default: 5_000, maximum: 10_000, receipts: 111_000, stop: 'games_stopped' },
-  email: { setting: 'MONTHLY_EMAIL_LIMIT', default: 1_000, maximum: 5_000, receipts: 15_000, stop: 'email_stopped' },
-  analysis: { setting: 'MONTHLY_ANALYSIS_LIMIT', default: 100, maximum: 1_000, receipts: 3_000, stop: 'analysis_stopped' },
+  games: { setting: 'MONTHLY_GAME_LIMIT', default: 10_000, maximum: 10_000, receipts: 111_000, stop: 'games_stopped' },
+  email: { setting: 'MONTHLY_EMAIL_LIMIT', default: 5_000, maximum: 5_000, receipts: 15_000, stop: 'email_stopped' },
+  analysis: { setting: 'MONTHLY_ANALYSIS_LIMIT', default: 1_000, maximum: 1_000, receipts: 3_000, stop: 'analysis_stopped' },
 } as const;
 const kinds: BudgetKind[] = ['games', 'email', 'analysis'];
 const RECEIPT_RETENTION_MS = 62 * 86_400_000;
@@ -60,8 +60,8 @@ function signupLimits(env: BudgetEnv) {
     return /^\d{1,6}$/.test(raw) && Number(raw) <= maximum ? Number(raw) : 0;
   };
   return {
-    monthly: limit(env.MONTHLY_SIGNUP_LIMIT, 1_000, 10_000),
-    lifetime: limit(env.SIGNUP_ATTEMPT_LIMIT, 10_000, 100_000),
+    monthly: limit(env.MONTHLY_SIGNUP_LIMIT, 10_000, 10_000),
+    lifetime: limit(env.SIGNUP_ATTEMPT_LIMIT, 100_000, 100_000),
   };
 }
 

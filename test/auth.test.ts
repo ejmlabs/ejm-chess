@@ -435,7 +435,7 @@ describe('native D1 player accounts', () => {
   });
 
   it('atomically bounds retained admissions while allowing retry and join at capacity', async () => {
-    expect(casualGameLimit({})).toBe(128);
+    expect(casualGameLimit({})).toBe(1_000);
     const baseline = (await env.DB.prepare('SELECT COUNT(*) AS count FROM casual_game_admissions').first<{ count: number }>())!.count;
     const limited = { ...env, CASUAL_GAME_LIMIT: String(baseline + 2) };
     const players = await Promise.all(Array.from({ length: 6 }, () => account()));

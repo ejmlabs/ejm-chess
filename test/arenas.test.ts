@@ -188,6 +188,7 @@ describe('timed arena authority', () => {
         expect(state.storage.sql.exec<{ tokens: number }>("SELECT tokens FROM arena_tokens WHERE kind='registration'").one().tokens)
           .toBe(63 * ARENA_POLICY.registrationRate - 1_000);
         const afterRefill = state.storage.sql.exec<{ value: number }>('SELECT total_changes() AS value').one().value;
+        state.storage.sql.exec("UPDATE arena_tokens SET tokens=0,updated_at=? WHERE kind='registration'", lastAcceptedAt + 63);
         expect(await instance.registerArena(waiting, id)).toMatchObject({ ok: false, error: { status: 429, code: 'ARENA_RETRY' } });
         clock.mockReturnValue(lastAcceptedAt + 10);
         expect(await instance.registerArena(waiting, id)).toMatchObject({ ok: false, error: { status: 429, code: 'ARENA_RETRY' } });
@@ -306,13 +307,13 @@ describe('timed arena authority', () => {
         const sync = vi.spyOn(state.storage, 'sync');
         if (mode === 'sync-failure') sync.mockRejectedValueOnce(databaseError);
         const schedule = vi.spyOn(internal, 'schedule').mockResolvedValue();
-        const pending = Array.from({ length: ARENA_POLICY.registrationConcurrency }, (_, index) => {
+        const pending = Array.from({ length: ARENA_POLICY.registrationAuthConcurrency }, (_, index) => {
           clock.mockReturnValue(firstAt + index * 67);
           return instance.registerArena(actor, id).then(value => ({ value }), error => ({ error }));
         });
         let results: Awaited<typeof pending[number]>[];
         try {
-          await vi.waitFor(() => expect(readEligibility).toHaveBeenCalledTimes(ARENA_POLICY.registrationConcurrency),
+          await vi.waitFor(() => expect(readEligibility).toHaveBeenCalledTimes(ARENA_POLICY.registrationAuthConcurrency),
             { timeout: 500, interval: 1 });
           const reads = prepare.mock.calls.length;
           const changes = state.storage.sql.exec<{ value: number }>('SELECT total_changes() AS value').one().value;
@@ -330,7 +331,7 @@ describe('timed arena authority', () => {
           prepare.mockRestore(); sync.mockRestore(); schedule.mockRestore();
         }
         const failures = results.filter(result => 'error' in result);
-        expect(failures).toHaveLength(mode === 'eligibility-failure' ? ARENA_POLICY.registrationConcurrency : mode === 'sync-failure' ? 1 : 0);
+        expect(failures).toHaveLength(mode === 'eligibility-failure' ? ARENA_POLICY.registrationAuthConcurrency : mode === 'sync-failure' ? 1 : 0);
         for (const result of failures) expect(result).toEqual({ error: databaseError });
         for (const result of results) if ('value' in result) expect(result.value.ok).toBe(true);
       }
@@ -340,7 +341,8 @@ describe('timed arena authority', () => {
 
   it('sheds a registration burst and admits fixed 67 ms confirmations through a 3200 ms eligibility stall', async () => {
     const { competition, id, startsAt, clock } = await prepare(0, { ARENA_ENTRANT_LIMIT: '2000' });
-    const actors = await Promise.all(Array.from({ length: 96 }, () => player(false, { recoveryEmail: false })));
+    const actors = await Promise.all(Array.from({ length: ARENA_POLICY.registrationBurst + 80 },
+      () => player(false, { recoveryEmail: false })));
     clock.mockRestore();
     await runInDurableObject<Competition, void>(competition, async (instance, state) => {
       const internal = instance as unknown as { env: Env };
@@ -366,10 +368,11 @@ describe('timed arena authority', () => {
         const burst = actors.map(actor => instance.registerArena(actor, id));
         await vi.runAllTimersAsync();
         const burstReplies = await Promise.all(burst);
-        expect(burstReplies.filter(reply => reply.ok)).toHaveLength(16);
+        expect(burstReplies.filter(reply => reply.ok)).toHaveLength(ARENA_POLICY.registrationBurst);
         expect(burstReplies.filter(reply => !reply.ok))
-          .toEqual(Array.from({ length: 80 }, () => expect.objectContaining({ error: expect.objectContaining({ code: 'ARENA_RETRY' }) })));
-        expect(maximum).toBe(16);
+          .toEqual(Array.from({ length: actors.length - ARENA_POLICY.registrationBurst },
+            () => expect.objectContaining({ error: expect.objectContaining({ code: 'ARENA_RETRY' }) })));
+        expect(maximum).toBe(ARENA_POLICY.registrationAuthConcurrency);
         maximum = 0;
         await vi.advanceTimersByTimeAsync(35_000 - 3_200);
         const elapsed: number[] = [];
@@ -383,7 +386,7 @@ describe('timed arena authority', () => {
         expect((await Promise.all(replies)).every(reply => reply.ok)).toBe(true);
         expect(Math.max(...elapsed)).toBeLessThan(5_000);
         expect(maximum).toBe(48);
-        expect(state.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM arena_entries').one().count).toBe(96);
+        expect(state.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM arena_entries').one().count).toBe(actors.length);
       } finally {
         prepare.mockRestore(); sync.mockRestore(); vi.useRealTimers();
       }
