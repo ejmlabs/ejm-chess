@@ -4,8 +4,12 @@
 
 The owner rejected further pre-qualified demand caps. The monthly billing stop
 is the economic limit. Keep security, correctness and platform-safety ceilings;
-do not gate public opening on a pre-run 2,000-player workload. Measure demand
-after opening. The capacity tasks remain follow-up evidence, not launch gates.
+do not gate casual public opening on a pre-run 2,000-player workload. Measure
+demand after opening. Tasks 6.4, 10.4 and 18.3–18.5 remain follow-up evidence,
+not launch gates. Task 6.3 no longer requires enforced monthly application
+caps; it still requires privacy, recovery, stops, counters and alert readback.
+Task 7.2 still requires the full first-tier provider run before opening public
+ranked play and first-tier arenas.
 
 ## Current spending decision, 2026-10-22
 

@@ -132,6 +132,9 @@ function PlaySession({ search }: { search: string }) {
 
   useEffect(() => {
     if (!id || !me || joinedId === id) return;
+    // Account holders must click Join before claiming a seat from an invitation URL.
+    // Legacy guests without accountReady still resume owned games with GET.
+    if (me.accountReady && joinAttempt === 0) return;
     let cancelled = false;
     setBusy(true);
     setArchived(false);
@@ -150,11 +153,12 @@ function PlaySession({ search }: { search: string }) {
     return () => { cancelled = true; };
   }, [id, me, joinedId, joinAttempt]);
 
-  const openGame = useCallback((gameId: string) => {
+  const openGame = useCallback((gameId: string, enter = false) => {
     const url = new URL('/play/', location.origin);
     url.searchParams.set('game', gameId);
     history.replaceState(null, '', url);
     setId(gameId);
+    if (enter) setJoinedId(gameId);
     setArchived(false);
     setInvitationUnavailable(false);
     setMessage('');
@@ -182,7 +186,7 @@ function PlaySession({ search }: { search: string }) {
             }
             throw reason;
           }
-          if (!cancelled) openGame(next.gameId);
+          if (!cancelled) openGame(next.gameId, true);
         }
         if (!cancelled && ['queued', 'reserved', 'settling', 'live'].includes(next.status)) timer = setTimeout(poll, 2000);
       } catch (reason) {
@@ -234,7 +238,7 @@ function PlaySession({ search }: { search: string }) {
       createId.current ??= crypto.randomUUID();
       const created = await api<GameSnapshot>('/api/games', { id: createId.current, format, ...(mode === 'ai' ? { ai: { modelId: STOCKFISH_BUILD, level: engineLevel } } : {}) });
       createId.current = null;
-      openGame(created.id);
+      openGame(created.id, true);
     });
   }
   function move(value: Move) {
@@ -245,7 +249,7 @@ function PlaySession({ search }: { search: string }) {
   }
   function newInvitation() {
     createId.current = null;
-    setId(null); setJoinedId(null); setQueue({ status: 'idle' }); setPremove(null);
+    setId(null); setJoinedId(null); setJoinAttempt(0); setQueue({ status: 'idle' }); setPremove(null);
     setReportOpen(false); setReportDetails(''); setReportToken(''); setReportKey(value => value + 1);
     setArchived(false); setInvitationUnavailable(false); setError(''); setMessage('');
     history.replaceState(null, '', '/play/');
@@ -258,7 +262,7 @@ function PlaySession({ search }: { search: string }) {
   return <Page variant="application">
     {!state && <AppSection>
       <SectionHead purpose="application" as="h1" title={invitationUnavailable ? 'Invitation unavailable' : archived ? 'Completed game' : id ? 'Join game' : 'Play chess'}>
-        <Text as="p" variant="muted">{invitationUnavailable ? 'Unused invitations expire after ten minutes.' : archived ? 'Open your completed game in Replay.' : id ? me?.accountReady ? 'The first opponent to join takes Black.' : 'Sign in to join this invitation. The first opponent to join takes Black.' : 'Choose a time control and invite a friend.'}</Text>
+        <Text as="p" variant="muted">{invitationUnavailable ? 'Unused invitations expire after ten minutes.' : archived ? 'Open your completed game in Replay.' : id ? me?.accountReady ? 'Click Join game to take Black. The first player to join claims the open seat.' : 'Sign in to join this invitation. The first opponent to join takes Black.' : 'Choose a time control and invite a friend.'}</Text>
       </SectionHead>
       {!loaded && <StateBlock kind="loading" message="Opening the board…" density="compact" />}
       {loaded && !id && <AppFlow>

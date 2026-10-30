@@ -900,3 +900,15 @@ The site remains behind Cloudflare Access. An unauthenticated HTTP probe
 received a Cloudflare challenge, so the owner browser is still required for
 player-flow, accessibility and public-launch checks. This deployment is a
 protected canary, not a public launch or capacity claim.
+
+## Explicit casual Join UX, 2026-10-30
+
+Protected canary Worker version `3e8dae6b-ae1d-4aca-a665-a0f27b78048a` shipped
+the client change from OpenSpec `fix-explicit-casual-join`. A signed-in invitee
+on `/play/?game=` now stays on the Join screen until they click **Join game**;
+the seat is not claimed by auto-admission. After **Create invitation**, the
+creator enters the waiting board immediately without a Join screen. Owner
+browser retest on the Access-protected host passed: invite → explicit Join →
+both Ready → one move each, with no auto-dump through Join. Worker admission
+API behavior was unchanged; focused admission/worker tests still passed before
+deploy. This is a protected canary UX check, not a public-launch claim.
