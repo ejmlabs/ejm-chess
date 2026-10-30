@@ -176,6 +176,10 @@ this unattended evaluation supplies no review-capacity plan.
 
 - Tested objective abuse controls, private report access, expiry, and recovery.
 - An accepted timeout policy, including the blocked-position limit of the material timeout rule.
+  Casual and unattended flags use that material rule (loss with mating material, otherwise draw).
+  Ranked proof games may wait up to 30 seconds for a private proof, then fall back to the same
+  rule, rated. Technical voids remain for unfinished tournament/arena wall-clock cases and for
+  an owner admin void of a still-pending proof game; they are not the ordinary timeout outcome.
 - Verified production retention and recovery under the published
   [privacy policy](privacy.md), including saved later-closure reapplication.
   Password-confirmed export and closure replace a staffed account-request

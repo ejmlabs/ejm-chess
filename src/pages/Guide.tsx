@@ -93,6 +93,8 @@ const guides: Record<string, GuideContent> = server ? {
       <p>Choose one format. A queue ticket lasts two minutes; refresh it to keep waiting. Your account can reserve one game across both formats and tournaments.</p>
       <p>Matching starts within 100 rating points. The window widens by five points per second, up to 800, using the shorter wait of the two players.
         For example, a pair who have both waited 20 seconds can match within 200 points. Broad region preferences relax after both have waited 30 seconds; this does not guarantee network latency.</p>
+      <p>When two players match, the account with the lower White-balance gets White. Equal balances choose White at random.
+        Starting a ranked game adds one to White’s balance and subtracts one from Black’s, so colors even out over time.</p>
       <p>The same two accounts may start at most two ranked games in a rolling 24 hours across blitz and rapid.
         Choose another opponent while that limit applies. Computer games never use a ranked slot or rating pool.</p>
       <AppHeading as="h2">Getting onto the leaderboard</AppHeading>

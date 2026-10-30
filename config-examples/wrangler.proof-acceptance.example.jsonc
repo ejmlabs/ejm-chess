@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ejm-chess-proof-acceptance-unarmed",
+  "account_id": "00000000000000000000000000000000",
+  "main": "src/server/proof-acceptance.ts",
+  "compatibility_date": "2026-10-19",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [],
+  "limits": { "cpu_ms": 50 },
+  "durable_objects": {
+    "bindings": [
+      { "name": "PROOF_ACCEPTANCE", "class_name": "ProofAcceptance" }
+    ]
+  },
+  "migrations": [{
+    "tag": "proof-acceptance-v1",
+    "new_sqlite_classes": ["ProofAcceptance"]
+  }],
+  "vars": {
+    "TIMEOUT_PROOF_PROFILE": "off",
+    "MONTHLY_PROOF_LIMIT": "0",
+    "NEW_WORK_STOPPED": "true",
+    "RANKED_ENABLED": "false",
+    "TOURNAMENTS_ENABLED": "false",
+    "ARENAS_ENABLED": "false",
+    "ANALYSIS_ENABLED": "false",
+    "AI_ENABLED": "false",
+    "MONTHLY_GAME_LIMIT": "0",
+    "MONTHLY_EMAIL_LIMIT": "0",
+    "MONTHLY_ANALYSIS_LIMIT": "0",
+    "PROOF_ACCEPTANCE_SCOPE": "ejm-chess-proof-acceptance-v1",
+    "PROOF_ACCEPTANCE_SOURCE_REVISION": "unconfigured",
+    "PROOF_ACCEPTANCE_CONTROL_NAMESPACE_ID": "unconfigured",
+    "PROOF_ACCEPTANCE_MANIFEST_SHA256": "unconfigured",
+    "PROOF_ACCEPTANCE_EXECUTION": "disabled"
+  }
+}

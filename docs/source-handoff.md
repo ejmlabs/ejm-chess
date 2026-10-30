@@ -72,11 +72,13 @@ or the provider secret store.
 
 Status on 2026-10-30: a reviewed local `wrangler.jsonc` (gitignored) exists with
 production bindings plus `env.local` for Worker tests and the protected canary
-deploy. The five specialty configs remain absent in this checkout. Rebuild each
-from private records before capacity, proof-acceptance, proof-qualification,
-proof-service or recovery-drill commands. Matching shared UI source for chess
-contracts is the sibling `ejm-ui` branch `wip/preserve-all-20261025`; keep
-discovery publication behind an approved public opening.
+deploy. The five specialty configs remain absent as private copies in this
+checkout. Non-secret templates live under [`config-examples/`](../config-examples/README.md);
+copy an example to the matching gitignored filename, then fill IDs from private
+records before capacity, proof-acceptance, proof-qualification, proof-service or
+recovery-drill commands. Matching shared UI source for chess contracts is the
+sibling `ejm-ui` branch `wip/preserve-all-20261025`; keep discovery publication
+behind an approved public opening. See [live-ready prep](live-ready-prep.md).
 
 Worker tests read `wrangler.jsonc` in the local environment. Recovery tests also
 read `wrangler.recovery-drill.jsonc`. Worker dry-run packaging and preview need

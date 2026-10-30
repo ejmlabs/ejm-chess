@@ -1,0 +1,36 @@
+{
+  "schema": "ejm-chess-timeout-proofs-public-status-v1",
+  "updatedAtUtc": "2026-10-30T21:30:00Z",
+  "profile": "cha-native-3484c7e6-v1",
+  "rulesVersion": "online-2026-10-v3-proof",
+  "casualRulesVersion": "online-2026-10-v4-unattended",
+  "productionAdmission": {
+    "TIMEOUT_PROOF_PROFILE": "off",
+    "MONTHLY_PROOF_LIMIT": 0,
+    "RANKED_ENABLED": false,
+    "PROVER_bound": false
+  },
+  "status": "implemented-default-off",
+  "summary": "Source implements the private timeout-proof path. The protected canary keeps the profile and ranked admission off. Native provider tier selection, proof-acceptance re-run against the material timeout fallback, and public ranked enablement remain unfinished.",
+  "historicalEvidence": [
+    {
+      "id": "provider-proof-20261021",
+      "path": "/docs/qualification/provider-proof-20261021.md",
+      "note": "Historical provider report. Does not establish the final release result."
+    },
+    {
+      "id": "adjudication-feasibility",
+      "path": "/docs/adjudication-feasibility.md",
+      "note": "Completed package feasibility probe. Does not qualify a Container tier."
+    }
+  ],
+  "operationsGuide": "/docs/timeout-proofs.md",
+  "limits": {
+    "sharedRankedSlots": 4,
+    "attemptCreditsPerGame": 2,
+    "nativeJobs": 1,
+    "flagDeadlineSeconds": 30,
+    "claimsPublicCapacity": false,
+    "claimsRankedOpen": false
+  }
+}

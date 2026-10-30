@@ -328,6 +328,11 @@ Queue status renews a 120-second ticket lease. Rating preference starts within
 30 seconds. A pair may start at most two ranked games in a rolling 24 hours.
 Cancelled unstarted games and AI games do not earn competitive credit.
 
+Color assignment prefers the queued player with the lower White balance. Equal
+balances flip a coin. When the ranked game starts, White’s balance increases by
+one and Black’s decreases by one. The balance is per account across blitz and
+rapid; it is not a rating input.
+
 The versioned Glicko-2 policy starts at rating 1500, deviation 350, volatility
 0.06, and tau 0.5. Each settled game is one active period. Whole empty weeks
 since Monday UTC increase uncertainty lazily through the maintained package.

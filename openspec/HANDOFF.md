@@ -18,7 +18,7 @@ before using older references to Studio as the planning home.
 
 | Change and tasks | Checked | Next work |
 | --- | ---: | --- |
-| [add-cloudflare-chess](changes/add-cloudflare-chess/tasks.md) | 58/71 | Capacity diagnostic, ranked proof/recovery, tournament workload, and remaining player checks (canary checklist steps 8+ paused). Policy reconcile (PR #6) and explicit Join (PR #7) are on `main`. |
+| [add-cloudflare-chess](changes/add-cloudflare-chess/tasks.md) | 58/71 | Critical path includes ranked. Canary checklist 8+ paused. Offline prep in [live-ready prep](../docs/live-ready-prep.md); leave task boxes unchecked until live verify. |
 | [archive/2026-10-30-reconcile-chess-planning-baseline](changes/archive/2026-10-30-reconcile-chess-planning-baseline/tasks.md) | 4/4 | Archived; addition-only prerequisite evidence only. Does not prove runtime correctness or release readiness. |
 | [archive/2026-10-30-fix-explicit-casual-join](changes/archive/2026-10-30-fix-explicit-casual-join/tasks.md) | 6/6 | Archived after canary Join retest; main spec at [specs/chess-play](specs/chess-play/spec.md). |
 

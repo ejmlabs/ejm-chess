@@ -522,8 +522,9 @@ uses one $100 monthly target, usage alerts and an emergency stop (thresholds are
 Earlier service allocations and mandatory reserves no longer gate launch.
 The isolated capacity run retains its approved $25 incremental ceiling.
 See [proof qualification](timeout-proofs.md),
-[the fixed capacity run](capacity-qualification.md), and
-[spending controls](cloudflare-budget.md).
+[the fixed capacity run](capacity-qualification.md),
+[spending controls](cloudflare-budget.md), and
+[live-ready prep](live-ready-prep.md) for offline prep versus live verify rows.
 
 The nine-day calendar observation, full-hour retention/endurance workload,
 six-region WAN benchmarks and later capacity tier remain unfinished
@@ -535,7 +536,8 @@ requires the separate approval recorded in its run plan.
 
 | Gate | Required evidence |
 | --- | --- |
-| Legal rules | Versioned online rules, tested legal moves, clocks, restart recovery, and a complete timeout adjudication path |
+| Legal rules | Versioned online rules, tested legal moves, clocks, restart recovery, material timeout rule, and ranked proof fallback when enabled |
+| Ranked docs vs code | Player Guide and architecture match implemented matchmaking, color balance, Glicko starts (1500 / RD 350 / vol 0.06), pair limit (2/24h), and correction batches of 20; two-session verify still required |
 | Accounts | Canonical host, secure cookies, real email delivery, session expiry/revocation, and active-seat identity checks |
 | Fair play | Tested objective abuse controls, private reports with honest review availability, no statistical sanctions, expiry, and accepted cheating limits; optional reviewed mode needs corroboration and appeal/correction checks |
 | Abuse controls | Turnstile host/action checks, bounded requests, rate limits, queue limits, and reconnect admission |

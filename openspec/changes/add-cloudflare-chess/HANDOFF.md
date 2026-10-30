@@ -160,6 +160,12 @@ closed to the public:
   unexecuted and still gates ranked proof enablement.
 - Protected canary player checklist steps 1–7 plus the explicit Join retest are
   done. **Steps 8+ are paused** by owner request; they are not abandoned.
+- Offline ranked-inclusive prep (no OpenSpec checkoffs): specialty Wrangler
+  examples under `config-examples/`, honest
+  `public/qualification/timeout-proofs.json`, ranked color-balance docs,
+  provisioning checklist in [live-ready prep](../../../docs/live-ready-prep.md).
+  Live player proof, specialty private configs, proof-acceptance re-run, and
+  ranked enablement remain unfinished.
 
 ### Configuration and shared UI notes
 

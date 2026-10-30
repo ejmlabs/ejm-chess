@@ -400,8 +400,9 @@ enablement follows from the code or this document alone.
 
 ### Isolated provider harness
 
-`wrangler.proof-qualification.jsonc` is an unarmed source template for a
-separate qualification Worker. It has no canonical route, `workers.dev` alias,
+Start from `config-examples/wrangler.proof-qualification.example.jsonc` when
+reconstructing the gitignored private copy. `wrangler.proof-qualification.jsonc`
+is an unarmed source template for a separate qualification Worker. It has no canonical route, `workers.dev` alias,
 preview URL, cron, assets, mail, gameplay, competition, or analysis binding.
 Its D1 ID is an invalid all-zero placeholder, its tier is `unset`, its expiry
 is zero, and no Container resource is declared. The main Worker never imports
