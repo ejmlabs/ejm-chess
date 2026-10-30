@@ -64,11 +64,11 @@ when a setting is absent:
 
 | Setting | Configured | Default | Hard setting ceiling | Charged work |
 | --- | --- | --- | --- | --- |
-| `MONTHLY_GAME_LIMIT` | 10,000 | 5,000 | 10,000 | New game reservations across casual, browser computer practice, ranked, and tournaments |
-| `MONTHLY_EMAIL_LIMIT` | 5,000 | 1,000 | 5,000 | Account verification/recovery provider send attempts, including failed or uncertain attempts |
-| `MONTHLY_ANALYSIS_LIMIT` | 0, disabled | 100 | 1,000 | Reserved server engine attempts, including retries |
-| `MONTHLY_SIGNUP_LIMIT` | 10,000 | 1,000 | 10,000 | Signup attempts after basic form validation and server Turnstile, before password hashing |
-| `SIGNUP_ATTEMPT_LIMIT` | 100,000 lifetime | 10,000 lifetime | 100,000 | Existing identities plus all later reserved signup attempts; no monthly reset |
+| `MONTHLY_GAME_LIMIT` | 10,000 | 10,000 | 10,000 | New game reservations across casual, browser computer practice, ranked, and tournaments |
+| `MONTHLY_EMAIL_LIMIT` | 5,000 | 5,000 | 5,000 | Account verification/recovery provider send attempts, including failed or uncertain attempts |
+| `MONTHLY_ANALYSIS_LIMIT` | 0, disabled | 1,000 | 1,000 | Reserved server engine attempts, including retries |
+| `MONTHLY_SIGNUP_LIMIT` | 10,000 | 10,000 | 10,000 | Signup attempts after basic form validation and server Turnstile, before password hashing |
+| `SIGNUP_ATTEMPT_LIMIT` | 100,000 lifetime | 100,000 lifetime | 100,000 | Existing identities plus all later reserved signup attempts; no monthly reset |
 
 These are adjustable safety allowances. They do not imply that
 10,000 games fit a measured latency, memory, regional, or spending envelope.

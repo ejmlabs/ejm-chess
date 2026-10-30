@@ -249,8 +249,8 @@ authentication, account request limits, and all durable entry checks. Slots
 release after success or failure. This outer gate also applies to registration
 confirmations; clients may retry a busy confirmation without losing entry.
 
-New arena registrations also use a nonqueued 64-preflight limit across the authority's
-events, then spend a durable 16-per-second, burst-16 bucket before
+New arena registrations also use a nonqueued 256-preflight limit across the authority's
+events, then spend a durable 50-per-second, burst-100 bucket before
 external checks. Overflow returns `ARENA_RETRY` without spending a token or
 starting native D1 or controller calls. Every admitted slot releases after
 success or failure. Current entries bypass the new-entry limit and token charge
@@ -279,7 +279,7 @@ ready player receives one event point for a no-show, without a played win.
 Alarms and the existing minute trigger recover pending work. Recovery creates
 only bounded current/next events, with a five-minute start grace after outages.
 It never replays every missed cadence. Caps are three active events, 256 retained
-events, 128 retained tournament payloads, 10,000 permanent tournament game IDs,
+events, 100,000 retained tournament payloads, 1,000,000 permanent tournament game IDs,
 and seven days of public event history. See [tournaments](tournaments.md).
 
 ### Unattended operation and retained records
@@ -314,8 +314,8 @@ initial burst. Physical page reclamation and the 72,000-payload steady state
 remain unproved. This does not establish production capacity or cost. See
 the [qualification methods and evidence](local-qualification.md).
 
-`CASUAL_GAME_LIMIT` caps retained payloads at 128 by default, with a maximum of
-1,000. `CASUAL_GAME_ID_LIMIT` caps permanent admission IDs at 10,000 by default,
+`CASUAL_GAME_LIMIT` caps retained payloads at 1,000 by default, with a maximum of
+1,000. `CASUAL_GAME_ID_LIMIT` caps permanent admission IDs at 100,000 by default,
 with a maximum of 100,000. Retirement frees a payload slot, never an ID. Permanent
 records still grow, so reaching a journal ceiling closes admission. Local checks
 do not establish unlimited unattended capacity. See [operations](operations.md).

@@ -6,6 +6,11 @@ measurements, failures and shutdown evidence. The implementation alone does
 not qualify public arena capacity or authorize a load test. The release record
 must identify the actual passing run before enabling its capacity tier.
 
+> **Current policy, 2026-10-30:** New arena entries use a 50-per-second
+> registration bucket with a burst of 100 and a 256-call fresh eligibility
+> stage. Dated evidence below that names 16 per second, burst 16 or 64 calls is
+> historical and is not the current implementation.
+
 ## Scope and owner
 
 The product owns this harness. It composes the real `Game` and `Competition`

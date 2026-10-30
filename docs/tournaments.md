@@ -154,9 +154,9 @@ requires a measured storage plan. No live load or worldwide cost guarantee has
 been established.
 
 Casual play also uses its own configurable limits. `CASUAL_GAME_LIMIT` counts only
-retained payload rows, defaults to 128, and accepts integers from 0 to 1,000.
+retained payload rows, defaults to 1,000, and accepts integers from 0 to 1,000.
 `CASUAL_GAME_ID_LIMIT` counts all casual IDs, including archived tombstones,
-defaults to 10,000, and accepts integers from 0 to 100,000. Invalid values close
+defaults to 100,000, and accepts integers from 0 to 100,000. Invalid values close
 new casual admission. Retirement can free payload capacity but never frees a
 permanent ID. These limits apply alongside the shared combined game and byte
 caps; they do not admit or rate a tournament game.

@@ -1,5 +1,12 @@
 # Proposal
 
+## Demand policy, 2026-10-30
+
+The owner rejected further pre-qualified demand caps. The monthly billing stop
+is the economic limit. Keep security, correctness and platform-safety ceilings;
+do not gate public opening on a pre-run 2,000-player workload. Measure demand
+after opening. The capacity tasks remain follow-up evidence, not launch gates.
+
 ## Current spending decision, 2026-10-22
 
 The owner directs one $100 monthly chess spending target, existing

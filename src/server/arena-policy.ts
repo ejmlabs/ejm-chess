@@ -5,7 +5,7 @@ export const ARENA_POLICY = {
   historyMs: 7 * 86_400_000, candidateWindow: 64, pairBatch: 8, initBatch: 8,
   externalConcurrency: 4, workBatch: 32, pageRows: 32, pageBytes: 32 * 1024,
   snapshotIntervalMs: 10_000, startRate: 32, registrationRate: 50, registrationBurst: 100,
-  registrationAuthConcurrency: 100, registrationConcurrency: 256,
+  registrationAuthConcurrency: 16, registrationConcurrency: 256,
   resultReserveBytes: 1_310_720,
   entryReserveBytes: 32 * 1024, eventReserveBytes: 16 * 1024,
 } as const;

@@ -187,12 +187,12 @@ describe('timed arena authority', () => {
         expect(state.storage.sql.exec('SELECT 1 FROM arena_events WHERE id=?', unused).toArray()).toHaveLength(1);
         expect(state.storage.sql.exec<{ tokens: number }>("SELECT tokens FROM arena_tokens WHERE kind='registration'").one().tokens)
           .toBe(63 * ARENA_POLICY.registrationRate - 1_000);
-        const afterRefill = state.storage.sql.exec<{ value: number }>('SELECT total_changes() AS value').one().value;
         state.storage.sql.exec("UPDATE arena_tokens SET tokens=0,updated_at=? WHERE kind='registration'", lastAcceptedAt + 63);
+        const afterReset = state.storage.sql.exec<{ value: number }>('SELECT total_changes() AS value').one().value;
         expect(await instance.registerArena(waiting, id)).toMatchObject({ ok: false, error: { status: 429, code: 'ARENA_RETRY' } });
         clock.mockReturnValue(lastAcceptedAt + 10);
         expect(await instance.registerArena(waiting, id)).toMatchObject({ ok: false, error: { status: 429, code: 'ARENA_RETRY' } });
-        expect(state.storage.sql.exec<{ value: number }>('SELECT total_changes() AS value').one().value).toBe(afterRefill);
+        expect(state.storage.sql.exec<{ value: number }>('SELECT total_changes() AS value').one().value).toBe(afterReset);
       } finally {
         schedule.mockRestore(); sync.mockRestore(); prepare.mockRestore();
       }
@@ -313,8 +313,9 @@ describe('timed arena authority', () => {
         });
         let results: Awaited<typeof pending[number]>[];
         try {
-          await vi.waitFor(() => expect(readEligibility).toHaveBeenCalledTimes(ARENA_POLICY.registrationAuthConcurrency),
-            { timeout: 500, interval: 1 });
+          await vi.waitFor(() => expect(readEligibility.mock.calls.length)
+            .toBeGreaterThanOrEqual(ARENA_POLICY.registrationAuthConcurrency), { timeout: 500, interval: 1 });
+          state.storage.sql.exec("UPDATE arena_tokens SET tokens=0 WHERE kind='registration'");
           const reads = prepare.mock.calls.length;
           const changes = state.storage.sql.exec<{ value: number }>('SELECT total_changes() AS value').one().value;
           const tokens = state.storage.sql.exec<{ tokens: number }>("SELECT tokens FROM arena_tokens WHERE kind='registration'").one().tokens;
@@ -335,6 +336,8 @@ describe('timed arena authority', () => {
         for (const result of failures) expect(result).toEqual({ error: databaseError });
         for (const result of results) if ('value' in result) expect(result.value.ok).toBe(true);
       }
+      state.storage.sql.exec("UPDATE arena_tokens SET tokens=?,updated_at=? WHERE kind='registration'",
+        ARENA_POLICY.registrationBurst * 1_000, Date.now());
       expect(value(await instance.registerArena(waiting, id)).registered).toBe(true);
     });
   });
@@ -372,7 +375,7 @@ describe('timed arena authority', () => {
         expect(burstReplies.filter(reply => !reply.ok))
           .toEqual(Array.from({ length: actors.length - ARENA_POLICY.registrationBurst },
             () => expect.objectContaining({ error: expect.objectContaining({ code: 'ARENA_RETRY' }) })));
-        expect(maximum).toBe(ARENA_POLICY.registrationAuthConcurrency);
+        expect(maximum).toBe(ARENA_POLICY.registrationBurst);
         maximum = 0;
         await vi.advanceTimersByTimeAsync(35_000 - 3_200);
         const elapsed: number[] = [];

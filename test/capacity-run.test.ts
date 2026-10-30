@@ -306,7 +306,7 @@ describe('once-only private capacity authority', () => {
     expect(isolatedGameBudget({ ...isolated })).toBeUndefined();
     expect(monthlyLimit(isolated, 'games')).toBe(20_000);
     expect(monthlyLimit({ ...isolated }, 'games')).toBe(0);
-    expect(monthlyLimit(isolated, 'email')).toBe(1_000);
+    expect(monthlyLimit(isolated, 'email')).toBe(5_000);
     expect(await newWorkAllowed(isolated, 'games')).toBe(true);
     expect(await reserveMonthlyWork(isolated, 'games', id)).toBe(true);
     expect(await reserveMonthlyWork(isolated, 'games', id)).toBe(true);

@@ -293,7 +293,7 @@ describe('private native capacity adapter', () => {
       now.mockReturnValue(Date.now() + Math.ceil(1_000 / ARENA_POLICY.registrationRate));
       const index = ARENA_POLICY.registrationBurst + 1;
       const request = new Request(`https://${manifest.host}/capacity/step/${index}`,
-        { headers: { Cookie: prepared.value[index].cookie } });
+        { headers: { Cookie: prepared[index].cookie } });
       expect((await host.invoke<CapacityStepReply>(ticket, 'qualificationStep', [request, index, null])).value.accepted).toBe(true);
       return replies.map(reply => ({ accepted: reply.value.accepted, usage: reply.usage }));
     });
@@ -376,6 +376,7 @@ describe('private native capacity adapter', () => {
         CAPACITY_NATIVE_CANDIDATE_ENVELOPES, plans.workflows);
       await host.invoke(ticket, 'prepareQualificationAccount', [0]);
       const batch = await host.invoke<CapacityAccountCredential[]>(ticket, 'prepareQualificationAccounts', [0]);
+      const accounts = batch.value.slice(0, ARENA_POLICY.registrationAuthConcurrency);
       const internal = Competition.prototype as unknown as {
         schedule(): Promise<void>; updateAlarm(completedThrough: number | null): Promise<void>;
       };
@@ -389,17 +390,17 @@ describe('private native capacity adapter', () => {
       });
       now.mockReturnValue(start + 30_000);
       const began = performance.now();
-      const pending = batch.value.map(async (account, index) => {
+      const pending = accounts.map(async (account, index) => {
         const request = new Request(`https://${manifest.host}/capacity/step/${index}`, { headers: { Cookie: account.cookie } });
         const actor = await authenticateCapacitySession(env.DB, env, manifest, request, index);
         return host.invoke<CapacityStepReply>(ticket, 'qualificationStep', [request, index, actor]);
       });
       try {
         await reading;
-        for (let wait = 0; schedules.mock.calls.length < batch.value.length && wait < 2_000; wait++) {
+        for (let wait = 0; schedules.mock.calls.length < accounts.length && wait < 2_000; wait++) {
           await new Promise(resolve => setTimeout(resolve, 1));
         }
-        expect(schedules.mock.calls.length).toBe(batch.value.length);
+        expect(schedules.mock.calls.length).toBe(accounts.length);
         release();
         const replies = await Promise.all(pending);
         expect(passes).toHaveBeenCalledTimes(2);
@@ -417,7 +418,8 @@ describe('private native capacity adapter', () => {
       }
     });
     expect(result.closed).toMatchObject({ closed: 1, unresolved: 0 });
-    expect(result.shutdown.registration).toEqual({ fixtures: 32, entrants: 32, steps: 32, queues: 0 });
+    expect(result.shutdown.registration).toEqual({ fixtures: 32, entrants: ARENA_POLICY.registrationAuthConcurrency,
+      steps: ARENA_POLICY.registrationAuthConcurrency, queues: 0 });
     (task.meta as Record<string, unknown>).registrationAlarmBurst = result;
   });
 

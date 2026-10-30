@@ -39,12 +39,12 @@ accepted games, scores, and reservation release continue to drain.
 
 | Setting | Default | Accepted maximum | Meaning |
 | --- | --- | --- | --- |
-| `ARENA_ENTRANT_LIMIT` | 4 | 2,000 | Registered entrants in one event |
-| `ARENA_GAME_LIMIT` | 64 | 1,000 | Shared cap for admitted or pending casual, ranked, preview, and arena games, including when new arenas are disabled |
-| `ARENA_RETAINED_GAME_LIMIT` | 128 | 100,000 | Retained rows in the shared preview and arena tournament game ledger |
-| `ARENA_GAME_ID_LIMIT` | 10,000 | 1,000,000 | All permanent IDs in that shared ledger, including archived games |
-| `ARENA_AUTHORITY_BYTE_LIMIT` | 268,435,456 bytes, or 256 MiB | 4,294,967,296 bytes, or 4 GiB | Competition SQLite byte stop plus space reserved for accepted games |
-| `MONTHLY_GAME_LIMIT` | 5,000 | 10,000 | Shared monthly allowance for new game work |
+| `ARENA_ENTRANT_LIMIT` | 2,000 | 2,000 | Registered entrants in one event |
+| `ARENA_GAME_LIMIT` | 1,000 | 1,000 | Shared cap for admitted or pending casual, ranked, preview, and arena games, including when new arenas are disabled |
+| `ARENA_RETAINED_GAME_LIMIT` | 100,000 | 100,000 | Retained rows in the shared preview and arena tournament game ledger |
+| `ARENA_GAME_ID_LIMIT` | 1,000,000 | 1,000,000 | All permanent IDs in that shared ledger, including archived games |
+| `ARENA_AUTHORITY_BYTE_LIMIT` | 4,294,967,296 bytes, or 4 GiB | 4,294,967,296 bytes, or 4 GiB | Competition SQLite byte stop plus space reserved for accepted games |
+| `MONTHLY_GAME_LIMIT` | 10,000 | 10,000 | Shared monthly allowance for new game work |
 
 Numeric arena settings accept unsigned decimal integers, including zero.
 Missing values use the defaults. Malformed values or values above the maximum
@@ -260,8 +260,8 @@ Registration validates its same-origin, empty JSON request at the Worker before
 one Competition call. The global authority admits at most 16 concurrent
 package-auth and account-limit checks; overflow returns `429 ARENA_RETRY`
 without starting primary authentication. Those slots release before the
-separate 64-call fresh eligibility stage. New entries spend the durable
-16-per-second registration bucket, with a burst of 16. Existing entries keep
+separate 256-call fresh eligibility stage. New entries spend the durable
+50-per-second registration bucket, with a burst of 100. Existing entries keep
 fresh session, credential, restriction and budget checks without spending a
 new-entry token. The Worker also keeps its 16-call isolate filter. These bounds
 are local implementation controls; provider qualification remains separate.
@@ -391,7 +391,7 @@ General origin, session, request-size, and account-rate limits also apply.
 Keep the one-hour minimum hold for completed hot Game payloads. At 20 finishes
 per second, that requires at least 72,000 completed payloads before counting
 live games, retry work, and evidence holds. The preview's four retirements per
-minute and 10,000 permanent IDs cannot sustain this workload.
+minute cannot sustain this workload.
 
 Large-tier qualification requires at least 25 successful retirements per second
 after warmup, with bounded concurrency, durable retry cursors, and holds that do
