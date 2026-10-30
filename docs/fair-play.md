@@ -175,7 +175,7 @@ this unattended evaluation supplies no review-capacity plan.
 ## Competitive launch evidence still needed
 
 - Tested objective abuse controls, private report access, expiry, and recovery.
-- An accepted timeout policy, including the exploitable technical-void limit.
+- An accepted timeout policy, including the blocked-position limit of the material timeout rule.
 - Verified production retention and recovery under the published
   [privacy policy](privacy.md), including saved later-closure reapplication.
   Password-confirmed export and closure replace a staffed account-request
@@ -241,7 +241,7 @@ Proved payload retirement clears temporary Game protocol buckets and counters.
 ## Informational rating-farming checks
 
 Every newly accepted finished rated human result receives one durable check
-under `informational-2026-10-v2`, including results waiting for rating repair.
+under `informational-2026-10-v3`, including results waiting for rating repair.
 Pending adjudications wait for a final result. Casual and computer games do
 not enter these checks. A duplicate terminal delivery reuses the existing
 check. Results that make both seats the same account are rejected.
@@ -254,7 +254,7 @@ ply count, end time, check time, coverage, and these factual patterns:
   within 24 hours, across both rated formats and either color assignment.
 - `reciprocal-wins`: this game and another result in that window show a win
   for each account.
-- `early-resignation`: a scored resignation occurred before ten plies.
+- `early-resignation`: a scored resignation or timeout win occurred before ten plies.
 - `account-cluster`: scored ranked human results connect all three unordered
   pairs of three distinct accounts within a single 24-hour span. Every game
   that participates in such a triangle receives the pattern. Draws can connect
@@ -262,7 +262,7 @@ ply count, end time, check time, coverage, and these factual patterns:
   claim that the accounts share an owner.
 - `rating-transfer-candidate`: one account wins at least three ranked games
   from at least two distinct opponents in a single 24-hour span, including at
-  least two scored resignations before ten plies. The participating wins
+  least two scored resignations or timeout wins before ten plies. The participating wins
   receive the pattern. This describes concentrated score flow, not a calculated
   transfer of Glicko rating points or proof of arranged play.
 
@@ -271,7 +271,7 @@ arrives, both it and its matching earlier records receive the relevant pattern.
 All windows include their exact 24-hour boundary. Flags use positive motifs
 and a fixed pattern order, so duplicate and delayed deliveries do not change
 which games qualify. Draws and voids have no invented winner. One early
-resignation is a recorded fact, not proof of arranged play. The queue still
+resignation or timeout win is a recorded fact, not proof of arranged play. The queue still
 permits at most two started games for an unordered pair in a rolling 24 hours.
 
 `authority.farming` in the private operations response includes the policy,

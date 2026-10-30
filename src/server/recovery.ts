@@ -2,7 +2,7 @@ import type { Env } from './env';
 import { knownGame } from './auth';
 import { isGameId } from '../shared/gamePath';
 import { ApiError } from './security';
-import { RULES_VERSION, RATING_VERSION } from '../shared/protocol';
+import { PRIOR_RULES_VERSIONS, RULES_VERSION, RATING_VERSION } from '../shared/protocol';
 import { PROOF_RULES_VERSION } from './proof-contract';
 
 export const RECOVERY_SCHEMA = 'ejm-chess-native-recovery-v1';
@@ -32,7 +32,7 @@ export interface RecoveryPoint {
 
 /** Recognition is additive. The stored policy and authority hash remain exact. */
 export function recognizedRecoveryPolicies(policies: RecoveryPoint['policies'] | undefined): boolean {
-  return Boolean(policies && [RULES_VERSION, PROOF_RULES_VERSION].includes(policies.rules) && policies.ratings === RATING_VERSION);
+  return Boolean(policies && [RULES_VERSION, PRIOR_RULES_VERSIONS[1], PROOF_RULES_VERSION].includes(policies.rules) && policies.ratings === RATING_VERSION);
 }
 
 export async function recoverySha256(value: string): Promise<string> {

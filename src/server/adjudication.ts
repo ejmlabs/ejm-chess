@@ -14,17 +14,23 @@ export function positionOutcome(chess: Chess): GameOutcome | null {
   return null;
 }
 
+/**
+ * Final result when `flagged` runs out of time. The other side wins when it
+ * has mating material and otherwise the game is a draw. A material test cannot
+ * see a fully blocked position where no mate is reachable; ranked proof games
+ * ask the private proof service first and fall back to this rule.
+ */
 export function timeoutOutcome(chess: Chess, flagged: Color): GameOutcome {
   const survivor: Color = flagged === 'w' ? 'b' : 'w';
   const survivorHasOnlyKing = chess.board().flat().every(piece => !piece || piece.color !== survivor || piece.type === 'k');
   if (chess.isInsufficientMaterial() || survivorHasOnlyKing) {
     return { winner: null, score: 0.5, reason: 'timeout-insufficient-material' };
   }
-  // chess.js cannot prove possible mate for one side in every blocked position.
-  // Bounded private proof work may resolve new ranked-policy games. Otherwise
-  // the saved pending deadline produces an unrated technical void.
-  return { winner: null, score: null, reason: 'timeout-needs-review' };
+  return { winner: survivor, score: survivor === 'w' ? 1 : 0, reason: 'timeout-win' };
 }
+
+/** Holds a flagged proof-policy game while the private service looks for a draw the material rule cannot see. */
+export const TIMEOUT_AWAITING_PROOF: GameOutcome = { winner: null, score: null, reason: 'timeout-needs-review' };
 
 /** Call only after the Game matched a private validated receipt to its request. */
 export function provedTimeoutOutcome(proof: TimeoutProofResult): GameOutcome | null {

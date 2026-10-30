@@ -149,7 +149,8 @@ economic governor; only the platform byte bound and security/rate controls
 remain. Do not lower a ceiling to shape demand.
 
 The existing new-game stop also stops signup. Operations shows monthly and
-lifetime signup use. One D1 update reserves an attempt after server Turnstileand basic validation, before Better Auth's rate limits and hashing. Failed,
+lifetime signup use. One D1 update reserves an attempt after server Turnstile
+and basic validation, before Better Auth's rate limits and hashing. Failed,
 uncertain and retried requests stay charged. One fixed aggregate row keeps
 this accounting bounded. Signin and existing games continue. Exhaustion pauses
 signup; do not reset counters or delete accounts to conceal it. These caps
@@ -352,12 +353,14 @@ Investigate the competition owner’s reservation and receipt before retrying.
 Use the existing idempotent delivery path. Do not replay a browser-supplied
 result or apply ad hoc updates to one player’s rating.
 
-An unknown timeout pauses for 30 seconds, then becomes one versioned unrated
-technical void. The durable result outbox releases seats through accepted
-settlement. A tournament cutoff may end the wait sooner. Late or repeated
-alarms, maintenance, and result delivery cannot award a winner or duplicate a
-terminal event. This policy can be exploited to avoid a loss; ranked play stays
-closed until the policy and recovery limits are accepted and verified.
+A timeout ends the game at its deadline with a loss for the player who ran out
+when the other side has mating material, otherwise a draw. Only a ranked v3
+proof game waits up to 30 seconds for a private proof and then applies the same
+rule, rated. The durable result outbox releases seats through accepted
+settlement. Late or repeated alarms, maintenance, and result delivery cannot
+duplicate a terminal event. A fully blocked position with no possible mate
+scores as a loss; ranked play stays closed until the policy and recovery limits
+are accepted and verified.
 Recovery preserves a stored game's original rules version. The settlement
 boundary accepts known v1, v2 and the default-off v3 proof policy and still
 requires exact authority data. Historical automatic void decisions name the v2

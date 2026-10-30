@@ -7,7 +7,9 @@ import { parseReplay } from '../src/client/replay';
 import { STOCKFISH_BUILD } from '../src/shared/engine';
 import type { Env } from '../src/server/env';
 import type { Actor, GameSnapshot } from '../src/shared/protocol';
+import type { Competition } from '../src/server/competition';
 import type { Game } from '../src/server/game';
+import { enableRanked } from './authority-helpers';
 
 const origin = 'http://localhost:8787';
 let address = 1;
@@ -75,9 +77,35 @@ async function humanGame() {
   return { id, game, white, black, snapshot };
 }
 
-async function project(game: DurableObjectStub<Game>) {
+/** Ranked proof-policy games are the only path that still enters pending-adjudication. */
+async function proofGame() {
+  const [first, second] = await Promise.all([user(true), user(true)]);
+  const competition = env.COMPETITION.get(env.COMPETITION.idFromName('global'));
+  await runInDurableObject(competition, async (instance, state) => {
+    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
+    internal.env = { ...env, TOURNAMENTS_ENABLED: 'false', ARENAS_ENABLED: 'false' };
+    internal.schedule = async () => {};
+    await state.storage.deleteAlarm();
+    for (const table of ['ranked_proof_slots', 'matches', 'slots', 'queue']) state.storage.sql.exec(`DELETE FROM ${table}`);
+  });
+  await enableRanked(competition);
+  await competition.joinQueue(first.actor, 'blitz');
+  const queue = await competition.joinQueue(second.actor, 'blitz');
+  expect(['reserved', 'live']).toContain(queue.status);
+  const id = queue.gameId;
+  const game = env.GAME.get(env.GAME.idFromName(id));
+  await enableRanked(game);
+  await quiet(game);
+  const initial = await game.snapshot(first.actor);
+  const white = initial.white.id === first.actor.id ? first : second;
+  const black = initial.white.id === first.actor.id ? second : first;
+  const snapshot = await ready(game, white.actor, black.actor, initial);
+  return { id, game, white, black, snapshot, competition };
+}
+
+async function project(game: DurableObjectStub<Game>, competition?: DurableObjectStub<Competition>) {
   await game.flush();
-  await env.COMPETITION.get(env.COMPETITION.idFromName('global')).flush();
+  await (competition ?? env.COMPETITION.get(env.COMPETITION.idFromName('global'))).flush();
 }
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -120,8 +148,8 @@ describe('participant replay exports', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it('keeps active and pending-adjudication records out of replay and history downloads', async () => {
-    const { id, game, white, snapshot } = await humanGame();
+  it('keeps active and pending-adjudication proof records out of replay and history downloads', async () => {
+    const { id, game, white, snapshot, competition } = await proofGame();
     expect((await http(request(`/api/games/${id}/pgn`, white.cookie))).status).toBe(404);
     await runInDurableObject(game, (_instance, state) => {
       const row = state.storage.sql.exec<{ value: string }>('SELECT value FROM game_state').one();
@@ -131,7 +159,7 @@ describe('participant replay exports', () => {
     });
     const late = await game.command(white.actor, { type: 'resign', id: crypto.randomUUID(), expectedVersion: snapshot.version });
     expect(late.snapshot.status).toBe('pending-adjudication');
-    await project(game);
+    await project(game, competition);
     const denied = await http(request(`/api/games/${id}/pgn`, white.cookie));
     expect(denied.status).toBe(404);
     expect(denied.headers.get('Cache-Control')).toBe('no-store');

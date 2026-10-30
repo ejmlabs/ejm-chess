@@ -60,7 +60,7 @@ export type AiFailure = 'AI_UNAVAILABLE' | 'AI_MODEL_UNAVAILABLE' | 'AI_QUOTA' |
 export type GameStatus = 'waiting' | 'ready' | 'active' | 'finished' | 'pending-adjudication';
 export type ResultReason = 'checkmate' | 'stalemate' | 'threefold-repetition' | 'fifty-move-rule'
   | 'insufficient-material' | 'resignation' | 'draw-agreement' | 'readiness-expired'
-  | 'eligibility-revoked' | 'timeout-insufficient-material' | 'timeout-needs-review' | 'timeout-proof-win' | 'timeout-proof-draw'
+  | 'eligibility-revoked' | 'timeout-insufficient-material' | 'timeout-win' | 'timeout-needs-review' | 'timeout-proof-win' | 'timeout-proof-draw'
   | 'technical-void' | 'ai-unavailable';
 
 export interface GameOutcome {
@@ -190,5 +190,7 @@ export interface PublicProfile {
   pools: PublicRating[];
 }
 
-export const RULES_VERSION = 'online-2026-10-v2-unattended';
+export const RULES_VERSION = 'online-2026-10-v4-unattended';
+/** Earlier casual, tournament and arena policies. Stored games keep their saved version. */
+export const PRIOR_RULES_VERSIONS = ['online-2026-10-v1', 'online-2026-10-v2-unattended'] as const;
 export const RATING_VERSION = 'glicko2-online-2026-10-v1';

@@ -193,9 +193,8 @@ describe('durable game authority', () => {
     const reply = await game.command(white, type === 'move' ? { ...base, type, from: 'e2', to: 'e4' } : { ...base, type });
     clock.mockRestore();
     expect(reply.ok).toBe(false);
-    expect(reply.snapshot.status).toBe('pending-adjudication');
-    expect(reply.snapshot.outcome?.reason).toBe('timeout-needs-review');
-    expect(reply.snapshot.outcome?.score).toBeNull();
+    expect(reply.snapshot.status).toBe('finished');
+    expect(reply.snapshot.outcome).toEqual({ winner: 'b', score: 0, reason: 'timeout-win' });
     expect(reply.snapshot.moves).toHaveLength(0);
   });
 
@@ -268,6 +267,19 @@ describe('durable game authority', () => {
     replacement.close(1000, 'Test complete');
   });
 
+  it('keeps the clock running through a disconnect and scores the flag as a loss for the disconnected player', async () => {
+    const { game, white, snapshot } = await activeGame();
+    const response = await game.fetch(new Request('https://internal/connect', { headers: { Upgrade: 'websocket', 'x-chess-actor': JSON.stringify(white) } }));
+    const socket = response.webSocket!;
+    socket.accept();
+    await runInDurableObject(game, (instance, state) => instance.webSocketClose(state.getWebSockets()[0], 1006, 'gone'));
+    const deadline = snapshot.clocks.deadline!;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(deadline - 1);
+    expect((await game.status())?.status).toBe('active');
+    clock.mockReturnValue(deadline);
+    expect(await game.status()).toMatchObject({ status: 'finished', result: { outcome: { winner: 'b', score: 0, reason: 'timeout-win' } } });
+  });
+
   it('normalizes abnormal peer closure without echoing its invalid code or long reason', async () => {
     const { game, white } = await activeGame();
     const response = await game.fetch(new Request('https://internal/connect', { headers: { Upgrade: 'websocket', 'x-chess-actor': JSON.stringify(white) } }));
@@ -300,11 +312,21 @@ describe('online adjudication boundary', () => {
     expect(positionOutcome(final)).toEqual({ winner: 'b', score: 0, reason: 'checkmate' });
   });
 
-  it('does not invent a timeout win in blocked or two-knight positions', () => {
+  it('gives the timeout win to a side with mating material and a draw otherwise', () => {
+    expect(timeoutOutcome(new Chess(), 'w')).toEqual({ winner: 'b', score: 0, reason: 'timeout-win' });
+    expect(timeoutOutcome(new Chess('rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1'), 'b'))
+      .toEqual({ winner: 'w', score: 1, reason: 'timeout-win' });
+    // Two knights cannot force mate but can mate with the defender's help, so they still win on time.
+    expect(timeoutOutcome(new Chess('7k/8/5KNN/8/8/8/8/8 b - - 0 1'), 'b')).toEqual({ winner: 'w', score: 1, reason: 'timeout-win' });
+    expect(timeoutOutcome(new Chess('7k/8/5K2/8/8/8/6p1/8 w - - 0 1'), 'w')).toEqual({ winner: 'b', score: 0, reason: 'timeout-win' });
+    expect(timeoutOutcome(new Chess('7k/8/5KB1/8/8/8/8/8 b - - 0 1'), 'b')).toMatchObject({ winner: null, score: 0.5 });
+    expect(timeoutOutcome(new Chess('7k/8/5KB1/8/8/8/8/8 w - - 0 1'), 'w')).toMatchObject({ winner: null, score: 0.5 });
+    expect(timeoutOutcome(new Chess('3k4/8/3K4/8/8/8/8/R7 w - - 0 1'), 'b')).toMatchObject({ winner: 'w', score: 1 });
+    expect(timeoutOutcome(new Chess('3k4/8/3K4/8/8/8/8/R7 b - - 0 1'), 'w')).toMatchObject({ winner: null, score: 0.5, reason: 'timeout-insufficient-material' });
+  });
+
+  it('scores a fully blocked position as a loss on time because only the proof service can see the draw', () => {
     const blocked = new Chess('5b2/p7/Pp3k2/1Pp1pBp1/2P1P1P1/5K2/8/8 w - - 0 1');
-    expect(timeoutOutcome(blocked, 'w').reason).toBe('timeout-needs-review');
-    const twoKnights = new Chess('7k/8/5KNN/8/8/8/8/8 b - - 0 1');
-    expect(timeoutOutcome(twoKnights, 'b').reason).toBe('timeout-needs-review');
-    expect(timeoutOutcome(new Chess('7k/8/5KB1/8/8/8/8/8 b - - 0 1'), 'b').score).toBe(0.5);
+    expect(timeoutOutcome(blocked, 'w')).toEqual({ winner: 'b', score: 0, reason: 'timeout-win' });
   });
 });

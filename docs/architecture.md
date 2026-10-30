@@ -149,18 +149,18 @@ This differs from over-the-board claim procedures. The public `/rules/` page
 states the version and these choices.
 
 Timeout handling draws positions where insufficient material is proven or the
-side with time left has only a king. Other timeout positions enter pending
-adjudication, then become unrated technical voids after 30 seconds. No process
-may infer a win from a positive displayed clock. Pending results do not affect
-ratings. This bounded online policy does not prove all possible mating paths.
+side with time left has only a king. Otherwise the player who ran out loses. A
+disconnect does not stop the clock. No process may infer a win from a positive
+displayed clock. This bounded online policy does not prove all possible mating
+paths, so a fully blocked position with no possible mate scores as a loss.
 
 New ranked games may use the separate default-off `online-2026-10-v3-proof`
 profile only after qualification. Competition holds four shared proof slots and
 reserves two finite native credits per permanent game before initialization.
 One private Container runs unchanged pinned CHA-Solver with independent
 complete-history/witness validation. Only an exact, timely supported proof can
-settle a pending v3 result. Unknown keeps the original 30-second void deadline;
-historical and unrated games retain their saved rules. There is no public proof
+settle a pending v3 result. Unknown keeps the original 30-second deadline and
+then applies the same material timeout rule, which is rated; historical and unrated games retain their saved rules. There is no public proof
 API or engine-score substitute. See [timeout proofs](timeout-proofs.md) for the
 private contract, per-process limits, retention and unrun provider gates.
 

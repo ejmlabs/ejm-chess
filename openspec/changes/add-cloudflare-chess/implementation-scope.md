@@ -187,7 +187,7 @@ This closes the recorded shared full-check failure without claiming release.
 
 Task 5.1 is complete. Request counters are atomic, and private aggregate reads
 require the owner session plus verified Cloudflare Access. Farming policy
-`informational-2026-10-v2` covers accepted final ranked human results, including
+`informational-2026-10-v3` covers accepted final ranked human results, including
 pending rating-repair results. The five documented patterns remain informational
 with no sanctions or rating changes. Indexed 1,001-row guards bound each
 neighborhood; the 1,000-check fixture measured 4,002 actual SQLite row reads and

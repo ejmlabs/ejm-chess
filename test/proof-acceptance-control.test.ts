@@ -73,7 +73,7 @@ const g07Cases: { name: string; passed?: boolean; change: (evidence: G07Evidence
   { name: 'unconfirmed child stop', change: saved => { saved.watcher.stopConfirmed = false; } },
   { name: 'unreleased proof slot', change: saved => { saved.settlement.slots[0].released_at = null; } },
   { name: 'duplicate settlement', change: saved => { saved.settlement.results.push({}); } },
-  { name: 'rating update for technical void', change: saved => { saved.settlement.ratings.push({}); } },
+  { name: 'missing rating update for a material timeout', change: saved => { saved.settlement.ratings.pop(); } },
 ];
 
 describe('unarmed proof acceptance control', () => {
@@ -88,7 +88,7 @@ describe('unarmed proof acceptance control', () => {
     const saved: G07Evidence = { replies: [{ attempt: 1, request, result }],
       receipts: [{ id: `${request.requestId}:1`, game_id: gameId, attempt: 1, result: JSON.stringify(result) }],
       watcher: { exitCode: 0, stopConfirmed: true, killed: true, pid: 123, group: 123 },
-      settlement: { results: [{}], slots: [{ released_at: T0 }], ratings: [] } };
+      settlement: { results: [{}], slots: [{ released_at: T0 }], ratings: [{}] } };
     change(saved);
     const carrier = env.GAME.get(env.GAME.idFromName(crypto.randomUUID()));
     await runInDurableObject(carrier, async (_instance, state) => {
@@ -97,7 +97,7 @@ describe('unarmed proof acceptance control', () => {
       state.storage.sql.exec("INSERT INTO proof_acceptance_jobs(id) VALUES('G07')");
       state.storage.sql.exec('INSERT INTO proof_acceptance_runtime(id) VALUES(1)');
       const game = { acceptanceInspect: vi.fn(async () => ({ game: { status: 'finished',
-        result: { status: 'finished', outcome: { reason: 'technical-void' } } }, replies: saved.replies })), flush: vi.fn(async () => {}) };
+        result: { status: 'finished', outcome: { reason: 'timeout-win' } } }, replies: saved.replies })), flush: vi.fn(async () => {}) };
       const competition = { flush: vi.fn(async () => {}), acceptanceInspect: vi.fn(async () => saved.settlement) };
       const prover = { acceptanceInspect: vi.fn(async () => ({ receipts: saved.receipts, diagnostic: { watcher: JSON.stringify(saved.watcher) } })) };
       // Call the actual observer. Only its fixed inspection/flush RPCs exist in this local harness.

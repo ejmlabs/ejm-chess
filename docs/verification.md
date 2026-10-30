@@ -479,7 +479,7 @@ unverified. Source and local checks do not establish a hard invoice cap.
 - Durable tournament start and round recovery, account locks, current
   eligibility checks, fixed round cutoffs, exact shared ranks, no-show points,
   and cancellation when too few eligible players remain.
-- Automatic technical voids for unknown adjudication after 30 seconds, honest
+- Timeouts decided by the material rule at the flag (a ranked proof game waits up to 30 seconds for a proof first), honest
   no-review report receipts, bounded legacy appeal expiry, and safe retirement
   of proved settled casual/tournament payloads while preserving private replay.
 - Timed `arena-v1` events with explicit queue/pause/resume, shared account
@@ -489,7 +489,7 @@ unverified. Source and local checks do not establish a hard invoice cap.
 - Combined casual/computer admission with durable reservations, bounded
   recovery, and a shared 32-attempts-per-second initialization bucket. Atomic
   account and aggregate request counters roll back together on storage failure.
-- Informational farming policy `informational-2026-10-v2` covers every accepted
+- Informational farming policy `informational-2026-10-v3` covers every accepted
   final ranked human result, including results waiting for rating repair.
   Indexed neighborhoods detect the five documented patterns without sanctions.
   Versioned historical catch-up advances at most eight checks per alarm.
@@ -841,8 +841,9 @@ launch and ranked-admission limits remain in force.
 
 ## Limits and remaining release work
 
-- Unknown timeout voids are conservative and can be exploited to avoid losses.
-  This is not full FIDE timeout adjudication. Ranked admission stays closed.
+- The material timeout rule scores a fully blocked position with no possible
+  mate as a loss for the player who ran out. This is not full FIDE timeout
+  adjudication. Ranked admission stays closed.
 - Reports and engine signals are informational without a human reviewer.
   Browser chess cannot fully prevent outside engine assistance. No automatic
   accuracy, IP, focus, or report-count conviction is implemented.

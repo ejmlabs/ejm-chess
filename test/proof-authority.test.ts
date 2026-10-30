@@ -103,7 +103,7 @@ describe('ranked timeout proof admission', () => {
     await matches[0].game.flush();
     expect((await competition.health()).timeoutProof.reserved).toBe(4);
     flag.mockReturnValue(active.clocks.deadline! + 30_000);
-    expect((await matches[0].game.snapshot(matches[0].white)).outcome?.reason).toBe('technical-void');
+    expect((await matches[0].game.snapshot(matches[0].white)).outcome?.reason).toBe('timeout-win');
     await matches[0].game.flush();
     expect((await competition.health()).timeoutProof.reserved).toBe(3);
     flag.mockRestore();
@@ -139,7 +139,7 @@ describe('ranked timeout proof admission', () => {
 });
 
 describe('timeout proof result arbitration', () => {
-  it('sends complete authoritative history once and preserves the original fallback after a deterministic unknown', async () => {
+  it('sends complete authoritative history once and rates the material timeout rule at the original deadline after a deterministic unknown', async () => {
     const match = await pair();
     let current = await ready(match);
     const moves = ['e2e4', 'e7e5', 'g1f3', 'b8c6'];
@@ -166,11 +166,26 @@ describe('timeout proof result arbitration', () => {
     expect(fetcher).toHaveBeenCalledOnce();
     clock.mockReturnValue(flagAt + 30_000);
     const ended = await match.game.snapshot(match.black);
-    expect(ended).toMatchObject({ status: 'finished', endedAt: flagAt + 30_000, outcome: { score: null, reason: 'technical-void' } });
+    expect(ended).toMatchObject({ status: 'finished', endedAt: flagAt + 30_000, outcome: { winner: 'b', score: 0, reason: 'timeout-win' } });
     await match.game.flush();
     const ratings = await runInDurableObject(competition, (_instance, state) =>
       state.storage.sql.exec('SELECT 1 FROM rating_events WHERE game_id=?', ended.id).toArray());
-    expect(ratings).toEqual([]);
+    expect(ratings).toHaveLength(1);
+  });
+
+  it('finishes a ranked proof game with insufficient material at the flag without starting proof work', async () => {
+    const match = await pair();
+    const active = await ready(match);
+    await runInDurableObject(match.game, (_instance, state) => {
+      const stored = JSON.parse(state.storage.sql.exec<{ value: string }>('SELECT value FROM game_state').one().value);
+      stored.initialFen = '7k/8/5KB1/8/8/8/8/8 w - - 0 1';
+      stored.moves = [];
+      state.storage.sql.exec('UPDATE game_state SET value=?', JSON.stringify(stored));
+    });
+    vi.spyOn(Date, 'now').mockReturnValue(active.clocks.deadline!);
+    expect(await match.game.snapshot(match.white)).toMatchObject({ status: 'finished',
+      outcome: { winner: null, score: 0.5, reason: 'timeout-insufficient-material' } });
+    expect(await runInDurableObject(match.game, (_instance, state) => state.storage.sql.exec('SELECT 1 FROM timeout_proof_work').toArray())).toEqual([]);
   });
 
   it('accepts one exact private proof, rejects mismatches and duplicates, and rates only its final event', async () => {
@@ -210,7 +225,7 @@ describe('timeout proof result arbitration', () => {
     clock.mockReturnValue(flagAt + 30_000);
     expect(await match.game.acceptTimeoutProof(proof)).toBe(false);
     const final = (await match.game.status())!.result!;
-    expect(final.outcome).toMatchObject({ score: null, reason: 'technical-void' });
+    expect(final.outcome).toMatchObject({ winner: 'b', score: 0, reason: 'timeout-win' });
     await match.game.flush();
     expect(await match.game.acceptTimeoutProof(proof)).toBe(false);
     expect((await match.game.status())!.result).toEqual(final);
@@ -248,7 +263,7 @@ describe('timeout proof result arbitration', () => {
     expect(requests.map(input => input.expiresAt)).toEqual([flagAt + 30_000, flagAt + 30_000]);
     expect(requests[1].requestId).toBe(requests[0].requestId);
     clock.mockReturnValue(flagAt + 30_000);
-    expect((await match.game.snapshot(match.white)).outcome?.reason).toBe('technical-void');
+    expect((await match.game.snapshot(match.white)).outcome?.reason).toBe('timeout-win');
   });
 
   it('reconciles a lost proof reply after restart using the same request and credit', async () => {

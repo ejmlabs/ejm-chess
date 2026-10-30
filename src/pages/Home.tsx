@@ -21,7 +21,7 @@ export default function Home() {
     <Text as="p" variant="muted">Minutes to start. Seconds added after each move.</Text>
     <Prose>
       <p>New games require an account. Read <Link href="/help/">how to play</Link> and the{' '}
-        <Link href="/rules/">online rules</Link>, including the timeout review limit.</p>
+        <Link href="/rules/">online rules</Link>, including how a timeout is scored.</p>
     </Prose>
   </AppSection></Page>;
 }

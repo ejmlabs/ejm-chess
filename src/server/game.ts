@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { Chess } from 'chess.js';
 import { passwordAccountReady, rankedEligibility, revalidateActor, competitiveAccountEligibility } from './auth';
-import { positionOutcome, timeoutOutcome, provedTimeoutOutcome } from './adjudication';
+import { positionOutcome, timeoutOutcome, provedTimeoutOutcome, TIMEOUT_AWAITING_PROOF } from './adjudication';
 import { aiEnabled, type Env } from './env';
 import { consumeGameProtocol, countProtocolEvent, gameProtocolStatus, initializeProtocolLimits } from './abuse';
 import { getEngineLevel, STOCKFISH_BUILD } from '../shared/engine';
@@ -11,7 +11,7 @@ import { hasProofAdmission } from './proof-budget';
 import { parseProofResult, proofDigests, transientProof, PROOF_PROFILE, PROOF_RULES_VERSION, PROOF_INSTANCE, PROOF_RESULT_BYTES,
   type TimeoutProofRequest } from './proof-contract';
 import {
-  FORMATS, RULES_VERSION, RATING_VERSION,
+  FORMATS, PRIOR_RULES_VERSIONS, RULES_VERSION, RATING_VERSION,
   type Actor, type AiOpponent, type Color, type CommandReceipt, type CommandReply, type GameCommand,
   type GameOutcome, type GameResult, type GameSnapshot, type InitGame, type MoveEvent,
   type Seat, type ServerMessage,
@@ -164,7 +164,7 @@ export class Game extends DurableObject<Env> {
       throw new ApiError(409, 'RECOVERY_TARGET_MISMATCH', 'The game name does not identify this object.');
     }
     const savedRules = this.load()?.rulesVersion ?? this.archived()?.rulesVersion;
-    const rules = savedRules === PROOF_RULES_VERSION ? PROOF_RULES_VERSION : RULES_VERSION;
+    const rules = savedRules === PROOF_RULES_VERSION || savedRules === PRIOR_RULES_VERSIONS[1] ? savedRules : RULES_VERSION;
     return captureNativePoint(this.ctx, { kind: 'Game', name, policies: { rules, ratings: RATING_VERSION } }, () => {
       const state = this.load();
       const archived = this.archived();
@@ -284,7 +284,9 @@ export class Game extends DurableObject<Env> {
     const roundDeadline = state.tournament?.deadlineAt ?? Number.POSITIVE_INFINITY;
     if (state.status === 'active' && state.deadline !== null && now >= state.deadline && state.deadline <= roundDeadline) {
       state.version++;
-      this.finish(state, timeoutOutcome(this.engine(state), this.engine(state).turn()), state.deadline);
+      const flagged = timeoutOutcome(this.engine(state), this.engine(state).turn());
+      const awaitingProof = flagged.reason === 'timeout-win' && state.rulesVersion === PROOF_RULES_VERSION && state.timeoutProof;
+      this.finish(state, awaitingProof ? TIMEOUT_AWAITING_PROOF : flagged, state.deadline);
       changed = true;
     }
     if ((state.status === 'waiting' || state.status === 'ready') && state.readinessDeadline !== null && now >= state.readinessDeadline && state.readinessDeadline <= roundDeadline) {
@@ -302,7 +304,8 @@ export class Game extends DurableObject<Env> {
     if (adjudicationDeadline !== null && now >= adjudicationDeadline && adjudicationDeadline <= roundDeadline) {
       state.version++;
       const policy = state.rulesVersion === PROOF_RULES_VERSION ? PROOF_RULES_VERSION : RULES_VERSION;
-      this.finish(state, { winner: null, score: null, reason: 'technical-void', decisionId: `automatic:${policy}:adjudication:${state.id}:${state.version}` }, adjudicationDeadline);
+      const decisionId = `automatic:${policy}:adjudication:${state.id}:${state.version}`;
+      this.finish(state, { ...timeoutOutcome(this.engine(state), this.engine(state).turn()), decisionId }, adjudicationDeadline);
       return true;
     }
     if (state.tournament && state.status !== 'finished' && now >= roundDeadline) {

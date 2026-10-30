@@ -34,7 +34,7 @@ const guides: Record<string, GuideContent> = server ? {
         Wait for the server position before trying another move. Sign in to the same account to return to your seat. Legacy guest seats still require their original browser cookie.</p>
       <AppHeading as="h2">After the game</AppHeading>
       <p>Open <Link href="/history/">Your games</Link> and choose Replay. Step through moves, select a move, flip the board, or download PGN. The focused replay accepts Left, Right, Home, and End. Records stay private to the players and are limited to 1 MiB and 12,700 half-moves.
-        A pending adjudication result does not change ratings. Under the current unattended policy, an unknown result becomes a technical void after 30 seconds.</p>
+        A ranked timeout waits at most 30 seconds for a private proof and does not change ratings until it is settled.</p>
       <AppHeading as="h2">Accounts and competition</AppHeading>
       <p>Create an account with a unique username and a password of 8 to 128 characters. Sign in with your username and password. Password managers and pasted passwords work. A private recovery email is optional for signup, play, ranked eligibility and tournaments. Email is used only for verification and recovery. We send no marketing.</p>
       <p>Signup pauses only when the owner sets a stop. Existing accounts can still sign in.</p>
@@ -78,13 +78,12 @@ const guides: Record<string, GuideContent> = server ? {
         The clock continues through a disconnect. The displayed clock is an estimate of the server deadline.</p>
       <AppHeading as="h2">Timeouts need care</AppHeading>
       <p>A timeout is a draw when the rules library proves insufficient material, or when the player with time left has only a king.
-        Other timeout positions are marked pending adjudication. They do not award an automatic win or settle a rating.</p>
-      <p>The current rules library cannot decide every position where a side could or could not eventually mate.
-        After a 30-second wait, the service automatically voids an unresolved game without awarding a win or changing ratings.</p>
+        Otherwise the player who ran out of time loses. This applies to casual, tournament, arena and ranked games, and a disconnect does not stop the clock.</p>
+      <p>The current rules library cannot recognise a fully blocked position where no side could ever mate, so a timeout there is scored as a loss unless a ranked proof shows a draw.</p>
       <p>Ranked games use the <code>online-2026-10-v3-proof</code> policy and reserve bounded proof capacity before they start.
         For a timeout, a private service can prove a win by finding and independently checking a legal path to checkmate for the player with time left.
         A supported no-mate proof gives a draw. The check includes the saved game history and this site's automatic draw rules.
-        An unknown, failed, or late proof keeps the original 30-second technical-void deadline. Existing games retain their original policy.</p>
+        An unknown, failed, or late proof keeps the original 30-second deadline and the game then follows the material timeout rule. Games that started under an earlier policy keep its recorded version, but a clock that runs out in a game still unfinished follows this rule.</p>
       <AppHeading as="h2">Ratings and leaderboards</AppHeading>
       <p>Blitz and rapid use separate Glicko-2 pools. Casual invitations do not affect ratings.
         A ranked game changes ratings only after the server accepts its final result.</p>
@@ -235,7 +234,7 @@ const guides: Record<string, GuideContent> = server ? {
         It has fixed inputs, compute caps, durable retries, and bounded summaries. It cannot sanction players.
         Ranked timeout proofs use a separate private native CHA-Solver service. Neither private engine runs during live move processing or sends solver code to the browser.</p>
       <p>Ranked games reserve one of four shared slots before they start, with at most two proof attempts per game and 1,000 admissions per UTC month.
-        A slot stays reserved through proof and rating settlement. Unknown, failed, exhausted or late proofs cannot invent a winner or extend the original 30-second technical-void deadline. Existing games keep their recorded rules.</p>
+        A slot stays reserved through proof and rating settlement. Unknown, failed, exhausted or late proofs cannot extend the original 30-second deadline. Existing games keep their recorded rules.</p>
       <p>See the <a href="/qualification/timeout-proofs.json">technical qualification report</a> for source pins, native checks and measured limits.</p>
       <AppHeading as="h2">Local development</AppHeading>
       <p>Use Node 24, install the sibling public ejm-ui packages, then install this product’s dependencies.
@@ -245,7 +244,7 @@ const guides: Record<string, GuideContent> = server ? {
         The test command runs native workerd tests and then the Node load-driver tests. The driver tests use local fixtures and a loopback connection, without provider load.
         Tests must protect a real rule or failure risk.</p>
       <AppHeading as="h2">Automatic operation</AppHeading>
-      <p>Competition schedules bounded hourly, daily, and weekly tournaments. Durable game identities and result receipts prevent duplicate pairings or event points. Cron recovers scheduled work and retries outboxes. Uncertain timeout outcomes become technical voids after 30 seconds.</p>
+      <p>Competition schedules bounded hourly, daily, and weekly tournaments. Durable game identities and result receipts prevent duplicate pairings or event points. Cron recovers scheduled work and retries outboxes. Timeouts end with a win or a draw under the material rule.</p>
       <p>Settled casual game payloads retire after at least one hour, at most four per minute, only after matching terminal version, rules version, and digest checks. Durable tombstones prevent ID reuse; D1 keeps completed replays. Permanent game and rating records still grow. A stop can pause new admission; there is no product retention cap.</p>
       <p>CASUAL_GAME_LIMIT and CASUAL_GAME_ID_LIMIT are optional. Both default to no cap. Retirement frees a payload slot and keeps the old ID reserved.</p>
       <AppHeading as="h2">Budget controls</AppHeading>

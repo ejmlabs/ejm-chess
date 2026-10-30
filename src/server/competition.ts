@@ -19,7 +19,7 @@ import { proofBudgetAvailable, proofBudgetStatus, proofConfigured, reserveProofA
 import { PROOF_PROFILE, PROOF_RULES_VERSION, PROOF_SLOTS } from './proof-contract';
 import type { Env } from './env';
 import {
-  FORMATS, RATING_VERSION, RULES_VERSION,
+  FORMATS, PRIOR_RULES_VERSIONS, RATING_VERSION, RULES_VERSION,
   type Actor, type GameResult, type Pool, type QueueState, type RatingState,
 } from '../shared/protocol';
 
@@ -680,7 +680,7 @@ export class Competition extends DurableObject<Env> {
 
   async settle(result: GameResult): Promise<{ accepted: boolean; pending: boolean }> {
     const now = Date.now();
-    if (!result || !/^[\w-]{8,100}$/.test(result.id) || ![RULES_VERSION, PROOF_RULES_VERSION, 'online-2026-10-v1'].includes(result.rulesVersion) || (result.ai && result.rated)) throw new Error('invalid_result');
+    if (!result || !/^[\w-]{8,100}$/.test(result.id) || ![RULES_VERSION, PROOF_RULES_VERSION, ...PRIOR_RULES_VERSIONS].includes(result.rulesVersion) || (result.ai && result.rated)) throw new Error('invalid_result');
     if (result.black && result.white.id === result.black.id) throw new Error('self_play_result');
     const previous = this.ctx.storage.sql.exec<{ digest: string }>('SELECT digest FROM processed_results WHERE game_id=?', result.id).toArray()[0];
     if (previous) {

@@ -185,8 +185,8 @@ describe('authoritative browser Stockfish practice', () => {
     const timed = await activeComputer();
     await expiredClock(timed.game);
     const late = await timed.game.command(timed.white, engineCommand(timed.snapshot.version));
-    expect(late).toMatchObject({ ok: false, code: 'game_over', snapshot: { status: 'pending-adjudication', moves: timed.snapshot.moves,
-      outcome: { score: null, reason: 'timeout-needs-review' } } });
+    expect(late).toMatchObject({ ok: false, code: 'game_over', snapshot: { status: 'finished', moves: timed.snapshot.moves,
+      outcome: { reason: 'timeout-win' } } });
     const resigned = await activeComputer();
     const ended = await resigned.game.command(resigned.white, { type: 'resign', id: crypto.randomUUID(), expectedVersion: resigned.snapshot.version });
     expect(ended.snapshot.outcome?.reason).toBe('resignation');
