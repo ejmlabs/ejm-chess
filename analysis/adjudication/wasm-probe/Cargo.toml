@@ -1,0 +1,19 @@
+[package]
+name = "ejm-adjudication-feasibility"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+chasolver = { git = "https://github.com/miguel-ambrona/chasolver", rev = "3484c7e65247003fac8705a9290dc2b5d0978b94" }
+chess = "=3.2.0"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "retrieved_at_utc": "2026-10-21T03:16:47.462620+00:00",
+  "verification": "Public npm version metadata gitHead identifies the immutable repository revision. Raw notice bytes match its Git tree blob. Each tarball matches npm and lockfile SHA-512 integrity, and its published files match installed bytes. Git provenance and licenses are recorded; this is not a legal review.",
+  "packages": [
+    {
+      "package": "glicko2",
+      "version": "1.2.2",
+      "declared_license": "MIT",
+      "chosen_license": "MIT",
+      "npm_version_metadata": "https://registry.npmjs.org/glicko2/1.2.2",
+      "npm_git_head": "efe1e2d03f2a5a977b4dd9a2b07a169062f20f33",
+      "npm_tarball": "https://registry.npmjs.org/glicko2/-/glicko2-1.2.2.tgz",
+      "npm_integrity": "sha512-XtNQRKn8cbaT5zCOUGGTjFEGXLDaSPbO9skq8LO4Dr6KeC5+3IEJdW6apCeKRcEw9eDdp2voujtzrWQTrGnZ/Q==",
+      "tarball_and_installed_bytes_verified": true,
+      "notice_url": "https://github.com/mmai/glicko2js/blob/efe1e2d03f2a5a977b4dd9a2b07a169062f20f33/LICENSE.md",
+      "notice_git_blob": "242132de52203869e284d3854085a272fd5cff85",
+      "notice_path": "licenses/glicko2-1.2.2-MIT.txt",
+      "notice_sha256": "21366ef752c0c7fbf91c46ff163212d3991c6f31cf5edd216467966c50783e7e",
+      "copyright_status": "Upstream notice contains literal <year> and <copyright holders> placeholders; no attribution was invented."
+    },
+    {
+      "package": "@cloudflare/containers",
+      "version": "0.3.7",
+      "declared_license": "MIT OR Apache-2.0",
+      "chosen_license": "MIT",
+      "npm_version_metadata": "https://registry.npmjs.org/@cloudflare%2fcontainers/0.3.7",
+      "npm_git_head": "298169f4aaba82e7b712458b7c6b14fc3e40ad78",
+      "npm_tarball": "https://registry.npmjs.org/@cloudflare/containers/-/containers-0.3.7.tgz",
+      "npm_integrity": "sha512-DM9dm3FnIBSyiSJ1FLavKwl/lk3oAmTaynCzZQ9pZR0ncRPquSxkxd8Nu2MFILxmDDsPkxKsSNEh9mHHMty4Fw==",
+      "tarball_and_installed_bytes_verified": true,
+      "notice_url": "https://github.com/cloudflare/containers/blob/298169f4aaba82e7b712458b7c6b14fc3e40ad78/LICENSE-MIT",
+      "notice_git_blob": "a0e7ebf133868d6c1759cfb09f3c05d4cce430c8",
+      "notice_path": "licenses/cloudflare-containers-0.3.7-MIT.txt",
+      "notice_sha256": "9bb3b077cc8628334bab25961223dd8207252c8a56aa054195be38f1c042aaf4",
+      "copyright_status": "Complete upstream Cloudflare copyright notice retained."
+    }
+  ]
+}

@@ -1,0 +1,219 @@
+{
+  "kind": "Hypothetical allocation sensitivity, not measured usage, capacity, or an upper bill bound",
+  "currency": "USD",
+  "pricing_date": "2026-10-20",
+  "modeled_days": 30,
+  "configuration": {
+    "path": "wrangler.jsonc",
+    "sha256_at_generation": "ae90ae1ca93ea08cdbac908f4a395e67d0a9ac573c6c1540b15cd0971ed92d7f",
+    "observed": {
+      "assets.run_worker_first": true,
+      "NEW_WORK_STOPPED": "true",
+      "MONTHLY_GAME_LIMIT": "5000",
+      "MONTHLY_EMAIL_LIMIT": "1000",
+      "MONTHLY_ANALYSIS_LIMIT": "100",
+      "ANALYSIS_ENABLED": "false",
+      "limits.cpu_ms": 50,
+      "server_analysis_bindings_present": false,
+      "observability.enabled": false
+    },
+    "limit": "First canonical source occurrences, before the local environment overrides. This generator does not inspect deployed settings or account usage, and does not choose scenario inputs from the configuration."
+  },
+  "scenario_construction": {
+    "lower": "Assumes 10 seconds of billed game activity per game and 86400 other active object-seconds. Neither value is measured.",
+    "higher": "Assumes every game is billed active for 40 minutes and one additional object is billed active throughout a 30-day month.",
+    "10000": "Doubles game-dependent units from higher_5000, keeping fixed 10M Worker requests, 100M CPU ms, 1M DO requests, 5M DO writes, 100M DO reads, 1 GB DO storage, 1M D1 writes, 10M D1 reads, 0.2 GB D1 storage, maintenance duration and email unchanged.",
+    "public_traffic": "Worker totals explicitly include assumed asset, authentication, public-read, denial, and maintenance requests. Game admission does not bound those totals."
+  },
+  "scenarios": {
+    "lower_5000": {
+      "inputs": {
+        "games": 5000,
+        "billed_active_seconds_per_game": 10,
+        "other_billed_active_object_seconds": 86400,
+        "worker_requests": 1000000,
+        "worker_cpu_ms": 2000000,
+        "do_equivalent_requests": 500000,
+        "do_sql_rows_read": 25000000,
+        "do_sql_rows_written": 5000000,
+        "do_sql_storage_gb_months": "1",
+        "d1_rows_read": 5000000,
+        "d1_rows_written": 1000000,
+        "d1_storage_gb_months": "1",
+        "accepted_outbound_emails": 1000
+      },
+      "published_inclusions_available": {
+        "do_duration_gb_seconds": "17459.200",
+        "line_items_usd": {
+          "allocated_paid_base": "5.00",
+          "worker_requests": "0.00",
+          "worker_cpu": "0.00",
+          "do_requests": "0.00",
+          "do_duration": "0.00",
+          "do_sql_reads": "0.000",
+          "do_sql_writes": "0.00",
+          "do_sql_storage": "0.00",
+          "d1_reads": "0.000",
+          "d1_writes": "0.00",
+          "d1_storage": "0.00",
+          "email": "0.00"
+        },
+        "total_allocated_usd": "5.00",
+        "allocated_usd_per_1000_games": "1.00"
+      },
+      "no_inclusions_available": {
+        "do_duration_gb_seconds": "17459.200",
+        "line_items_usd": {
+          "allocated_paid_base": "5.00",
+          "worker_requests": "0.30",
+          "worker_cpu": "0.04",
+          "do_requests": "0.15",
+          "do_duration": "12.50",
+          "do_sql_reads": "0.025",
+          "do_sql_writes": "5.00",
+          "do_sql_storage": "0.20",
+          "d1_reads": "0.005",
+          "d1_writes": "1.00",
+          "d1_storage": "0.75",
+          "email": "0.35"
+        },
+        "total_allocated_usd": "25.32",
+        "allocated_usd_per_1000_games": "5.06"
+      }
+    },
+    "higher_5000": {
+      "inputs": {
+        "games": 5000,
+        "billed_active_seconds_per_game": 2400,
+        "other_billed_active_object_seconds": 2592000,
+        "worker_requests": 20000000,
+        "worker_cpu_ms": 200000000,
+        "do_equivalent_requests": 5000000,
+        "do_sql_rows_read": 1000000000,
+        "do_sql_rows_written": 40000000,
+        "do_sql_storage_gb_months": "5",
+        "d1_rows_read": 100000000,
+        "d1_rows_written": 10000000,
+        "d1_storage_gb_months": "1",
+        "accepted_outbound_emails": 1000
+      },
+      "published_inclusions_available": {
+        "do_duration_gb_seconds": "1867776.000",
+        "line_items_usd": {
+          "allocated_paid_base": "5.00",
+          "worker_requests": "3.00",
+          "worker_cpu": "3.40",
+          "do_requests": "0.60",
+          "do_duration": "25.00",
+          "do_sql_reads": "0.000",
+          "do_sql_writes": "0.00",
+          "do_sql_storage": "0.00",
+          "d1_reads": "0.000",
+          "d1_writes": "0.00",
+          "d1_storage": "0.00",
+          "email": "0.00"
+        },
+        "total_allocated_usd": "37.00",
+        "allocated_usd_per_1000_games": "7.40"
+      },
+      "no_inclusions_available": {
+        "do_duration_gb_seconds": "1867776.000",
+        "line_items_usd": {
+          "allocated_paid_base": "5.00",
+          "worker_requests": "6.00",
+          "worker_cpu": "4.00",
+          "do_requests": "0.75",
+          "do_duration": "25.00",
+          "do_sql_reads": "1.000",
+          "do_sql_writes": "40.00",
+          "do_sql_storage": "1.00",
+          "d1_reads": "0.100",
+          "d1_writes": "10.00",
+          "d1_storage": "0.75",
+          "email": "0.35"
+        },
+        "total_allocated_usd": "93.95",
+        "allocated_usd_per_1000_games": "18.79"
+      }
+    },
+    "higher_10000_sensitivity": {
+      "inputs": {
+        "games": 10000,
+        "billed_active_seconds_per_game": 2400,
+        "other_billed_active_object_seconds": 2592000,
+        "worker_requests": 30000000,
+        "worker_cpu_ms": 300000000,
+        "do_equivalent_requests": 9000000,
+        "do_sql_rows_read": 1900000000,
+        "do_sql_rows_written": 75000000,
+        "do_sql_storage_gb_months": "9",
+        "d1_rows_read": 190000000,
+        "d1_rows_written": 19000000,
+        "d1_storage_gb_months": "1.8",
+        "accepted_outbound_emails": 1000
+      },
+      "published_inclusions_available": {
+        "do_duration_gb_seconds": "3403776.000",
+        "line_items_usd": {
+          "allocated_paid_base": "5.00",
+          "worker_requests": "6.00",
+          "worker_cpu": "5.40",
+          "do_requests": "1.20",
+          "do_duration": "50.00",
+          "do_sql_reads": "0.000",
+          "do_sql_writes": "25.00",
+          "do_sql_storage": "0.80",
+          "d1_reads": "0.000",
+          "d1_writes": "0.00",
+          "d1_storage": "0.00",
+          "email": "0.00"
+        },
+        "total_allocated_usd": "93.40",
+        "allocated_usd_per_1000_games": "9.34"
+      },
+      "no_inclusions_available": {
+        "do_duration_gb_seconds": "3403776.000",
+        "line_items_usd": {
+          "allocated_paid_base": "5.00",
+          "worker_requests": "9.00",
+          "worker_cpu": "6.00",
+          "do_requests": "1.35",
+          "do_duration": "50.00",
+          "do_sql_reads": "1.900",
+          "do_sql_writes": "75.00",
+          "do_sql_storage": "1.80",
+          "d1_reads": "0.190",
+          "d1_writes": "19.00",
+          "d1_storage": "1.350",
+          "email": "0.35"
+        },
+        "total_allocated_usd": "170.94",
+        "allocated_usd_per_1000_games": "17.09"
+      }
+    }
+  },
+  "sustained_1000_active_objects": {
+    "object_seconds": 2592000000,
+    "gb_seconds": "331776000.000",
+    "duration_only_usd_with_inclusion": "4150.00",
+    "limit": "Deliberate sustained billed-active assumption. This is not hibernating capacity or a proposed authorized workload."
+  },
+  "spectator_unit_example": {
+    "spectator_hours": 10000,
+    "refresh_interval_seconds": 10,
+    "requests": 3600000,
+    "assumed_cpu_ms_per_request": 10,
+    "worker_cpu_ms": 36000000,
+    "worker_only_marginal_usd_no_inclusions": "1.80",
+    "limit": "Arithmetic example only. Excludes initial assets, authentication, reconnects, database misses, projections, storage, and plan fee."
+  },
+  "qualification_gate": {
+    "target_unique_settlements_per_second": 20,
+    "target_duration_seconds": 900,
+    "target_unique_games": 18000,
+    "current_monthly_game_default": 5000,
+    "hard_setting_ceiling": 10000,
+    "spend_measured": false,
+    "authorized_by_this_estimate": false
+  }
+}

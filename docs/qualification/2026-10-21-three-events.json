@@ -1,0 +1,142 @@
+{
+  "startedAt": "2026-10-21T00:34:57.065Z",
+  "finishedAt": "2026-10-21T00:35:36.325Z",
+  "exitCode": 0,
+  "phase": "three-events",
+  "entrants": 2000,
+  "requestedDurationMs": 900000,
+  "command": [
+    "node",
+    "/private/tmp/ejm-chess-2yz1VsKp/ejm-chess/node_modules/vitest/vitest.mjs",
+    "run",
+    "--config",
+    "vitest.qualification.config.ts"
+  ],
+  "sources": {
+    "package-lock.json": "2ccf1b919c25cb61188ae056e25073821f6f19fa7a95f6600cf8fdee4207afa4",
+    "wrangler.jsonc": "ae90ae1ca93ea08cdbac908f4a395e67d0a9ac573c6c1540b15cd0971ed92d7f",
+    "vitest.config.ts": "de85b119fd457d6acb5ed44c0efea53acd284a82d2203503c038dead7d3e8152",
+    "vitest.qualification.config.ts": "c4899a820324ae7d1edff5712ef3934408f67a317c5102a2ddf82f9d8a9422ba",
+    "src/server/competition.ts": "2336c59c27cf4120d02d17304e525999551b12cac6a048f8427aae1804790a3e",
+    "src/server/game.ts": "91ad76454ebfb7248aa92dd7ba54d19f4d722daf8475c763b481995f867cfc16",
+    "src/server/arena.ts": "d22b9caee4e6e3c43ff9c0bce910501f1b70b5c1ac4e1a65fdb4b0a994f621e1",
+    "src/server/arena-policy.ts": "428778c29463192b715fbc7972387ae8ce6c37f023c43265ccd509cf3b670438",
+    "src/server/maintenance.ts": "689a8f71aa6325db594699f6244bd7b12036766d44fa8f3fe8800fa8ea6fd819",
+    "migrations/0011_retirement_work.sql": "ac2286be17ad89e3461fab6a15a191ce6a0b06f4339c2a21feb190f4afbad735",
+    "qualification/three-events.qualify.ts": "c499bc4f82409c021391adf65cfe4a1e01a1db851089a9495d3092e544d2df49"
+  },
+  "sourceChangedDuringRun": [],
+  "sourceAtFinish": {
+    "package-lock.json": "2ccf1b919c25cb61188ae056e25073821f6f19fa7a95f6600cf8fdee4207afa4",
+    "wrangler.jsonc": "ae90ae1ca93ea08cdbac908f4a395e67d0a9ac573c6c1540b15cd0971ed92d7f",
+    "vitest.config.ts": "de85b119fd457d6acb5ed44c0efea53acd284a82d2203503c038dead7d3e8152",
+    "vitest.qualification.config.ts": "c4899a820324ae7d1edff5712ef3934408f67a317c5102a2ddf82f9d8a9422ba",
+    "src/server/competition.ts": "2336c59c27cf4120d02d17304e525999551b12cac6a048f8427aae1804790a3e",
+    "src/server/game.ts": "91ad76454ebfb7248aa92dd7ba54d19f4d722daf8475c763b481995f867cfc16",
+    "src/server/arena.ts": "d22b9caee4e6e3c43ff9c0bce910501f1b70b5c1ac4e1a65fdb4b0a994f621e1",
+    "src/server/arena-policy.ts": "428778c29463192b715fbc7972387ae8ce6c37f023c43265ccd509cf3b670438",
+    "src/server/maintenance.ts": "689a8f71aa6325db594699f6244bd7b12036766d44fa8f3fe8800fa8ea6fd819",
+    "migrations/0011_retirement_work.sql": "ac2286be17ad89e3461fab6a15a191ce6a0b06f4339c2a21feb190f4afbad735",
+    "qualification/three-events.qualify.ts": "c499bc4f82409c021391adf65cfe4a1e01a1db851089a9495d3092e544d2df49"
+  },
+  "host": {
+    "platform": "darwin",
+    "release": "25.5.0",
+    "node": "v24.19.0",
+    "cpu": "Apple M4 Pro",
+    "logicalCpus": 12,
+    "totalMemoryBytes": 25769803776
+  },
+  "packages": {
+    "vitest": "5.0.5",
+    "cloudflareVitest": "1.4.6",
+    "wrangler": "4.151.3",
+    "chessJs": "1.4.0"
+  },
+  "maxResidentSetBytes": 1030586368,
+  "memoryScope": "macOS time reports the local test command maximum resident set; this is not per-game or deployed Durable Object memory.",
+  "measurements": [
+    {
+      "kind": "native-three-event-local",
+      "entrantsPerEvent": 2000,
+      "distinctAccounts": 6000,
+      "totalGames": 1000,
+      "formats": [
+        "blitz",
+        "rapid"
+      ],
+      "scope": "Native D1/SQLite and Game DOs. Real cadence overlap: weekly rapid drains while daily rapid and hourly blitz start. Policy time is virtual; elapsed RPC times are measured. Existing credential-backed fixtures exclude signup, passwords, HTTP, provider alarms, WAN and cost.",
+      "registrationMs": 10531,
+      "blitzMoves": {
+        "samples": 334,
+        "p95Ms": 17,
+        "maxMs": 57
+      },
+      "rapidMoves": {
+        "samples": 666,
+        "p95Ms": 28,
+        "maxMs": 56
+      },
+      "overlap": [
+        {
+          "id": "arena-daily-1792951200000",
+          "status": "running",
+          "entrants": 2000,
+          "unresolved": 333
+        },
+        {
+          "id": "arena-hourly-1792951200000",
+          "status": "running",
+          "entrants": 2000,
+          "unresolved": 334
+        },
+        {
+          "id": "arena-weekly-1792944000000",
+          "status": "draining",
+          "entrants": 2000,
+          "unresolved": 333
+        }
+      ],
+      "recovery": {
+        "unique": 1000,
+        "duplicates": 5000,
+        "elapsedMs": 1473,
+        "uniquePerSecond": 678.8866259334692,
+        "scope": "Real terminal Game verification after coordinator eviction and one injected binding outage; no simultaneous continuing traffic claim."
+      },
+      "accounting": {
+        "receipts": 1000,
+        "pointsHalf": 2000,
+        "games": 2000,
+        "bytes": 11956224
+      },
+      "standingsPages": [
+        63,
+        63,
+        63
+      ],
+      "finished": true,
+      "gameOutboxesDrained": 1000,
+      "unqualified": [
+        "public registration/accounts",
+        "provider alarms",
+        "WAN/regions",
+        "spectator cache",
+        "live cost"
+      ],
+      "test": "qualifies three native 2000-entry events sharing 1000 games across both formats with restart and unavailable verification",
+      "result": "passed"
+    }
+  ],
+  "publicationRevision": {
+    "date": "2026-10-26",
+    "scope": "Personal runtime path normalization for public source handoff.",
+    "fields": [
+      "command[0]"
+    ],
+    "originalRecordSha256": "7649e2cf63336865763d611a4fecc7abfdf98582fcf5607ebb0b0f55cd8448ff",
+    "originalRecordRetainedPrivately": true,
+    "historicalSourceHashesRetained": true,
+    "executionRerun": false
+  }
+}

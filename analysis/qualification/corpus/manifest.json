@@ -1,0 +1,469 @@
+{
+  "schema": "screening-corpus-v1",
+  "license": "CC0-1.0",
+  "licenseEvidence": "license-evidence.json",
+  "selection": "First matching games in a bounded chronological monthly-archive prefix; stratified convenience sample, not random",
+  "assistanceGroundTruth": "unknown",
+  "perStratumTarget": 4,
+  "counts": {
+    "blitz/800-1399": 4,
+    "blitz/1400-1999": 4,
+    "blitz/2000-2999": 4,
+    "rapid/800-1399": 4,
+    "rapid/1400-1999": 4,
+    "rapid/2000-2999": 4
+  },
+  "complete": true,
+  "acquisition": {
+    "url": "https://database.lichess.org/standard/lichess_db_standard_rated_2026-09.pgn.zst",
+    "retrievedAt": "2026-10-21T00:09:07.241517+00:00",
+    "requestRange": "bytes=0-8388607",
+    "responseStatus": 206,
+    "responseHeaders": {
+      "ETag": "\"6ac08d73-6cdeaccb7\"",
+      "Last-Modified": "Sat, 03 Oct 2026 05:06:59 GMT",
+      "Content-Range": "bytes 0-8388607/29224520887"
+    },
+    "compressedBytesRead": 917504,
+    "compressedPrefixSha256": "c292856ae0d6910b00ddfdfe807cff6752daef9837f3b9de450a6d6bfd364710",
+    "decodedBytesRead": 5348547,
+    "gamesExamined": 2265,
+    "maxCompressedBytes": 8388608,
+    "maxDecodedBytes": 67108864,
+    "maxGames": 20000
+  },
+  "games": [
+    {
+      "id": "QqoOgL8p",
+      "path": "QqoOgL8p.pgn",
+      "sha256": "fc9dafdd20b02301269abceee5a0ccfa4649ee4373bbd6a458b5636d0b8cc604",
+      "stratum": "blitz/800-1399",
+      "speed": "blitz",
+      "timeControl": "300+3",
+      "ratingBand": "800-1399",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        1399,
+        1399
+      ],
+      "source": "https://lichess.org/QqoOgL8p",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "2uaygoif",
+      "path": "2uaygoif.pgn",
+      "sha256": "caa2d470f35f53402ff3a6915ff252326adb624d435f596c2a90498b28b582e2",
+      "stratum": "blitz/1400-1999",
+      "speed": "blitz",
+      "timeControl": "300+3",
+      "ratingBand": "1400-1999",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        1519,
+        1496
+      ],
+      "source": "https://lichess.org/2uaygoif",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "LFWxDyzX",
+      "path": "LFWxDyzX.pgn",
+      "sha256": "723219ba53ccf4de4efddb74a7c9f1b35cd5617253e6fdcd8e84b8cc0b89d718",
+      "stratum": "blitz/1400-1999",
+      "speed": "blitz",
+      "timeControl": "300+3",
+      "ratingBand": "1400-1999",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        1642,
+        1654
+      ],
+      "source": "https://lichess.org/LFWxDyzX",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "Wmrs0nCz",
+      "path": "Wmrs0nCz.pgn",
+      "sha256": "aaa89ac9ffa4bfaf3bdd0143e8adf689f4846402aee4f5de84ca69c689d5407a",
+      "stratum": "blitz/2000-2999",
+      "speed": "blitz",
+      "timeControl": "300+3",
+      "ratingBand": "2000-2999",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        2080,
+        2019
+      ],
+      "source": "https://lichess.org/Wmrs0nCz",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "mjKN6hqP",
+      "path": "mjKN6hqP.pgn",
+      "sha256": "667eb35ae40d9ac3a5dcfc3ad41ed83ec795b2a9daf0d98b8bd5775dcd54737c",
+      "stratum": "blitz/800-1399",
+      "speed": "blitz",
+      "timeControl": "300+3",
+      "ratingBand": "800-1399",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        1035,
+        1068
+      ],
+      "source": "https://lichess.org/mjKN6hqP",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "IMn5rSrD",
+      "path": "IMn5rSrD.pgn",
+      "sha256": "5d91acddb3f57bd81fa980f2ccc2ef9626ddeffb597f21b09a823430a910c7ae",
+      "stratum": "blitz/1400-1999",
+      "speed": "blitz",
+      "timeControl": "300+3",
+      "ratingBand": "1400-1999",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        1584,
+        1631
+      ],
+      "source": "https://lichess.org/IMn5rSrD",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "lTBf7DdE",
+      "path": "lTBf7DdE.pgn",
+      "sha256": "ca03ec55ea8d1906dac3df300e1b184fb02019504038aad47c74435a9a618c68",
+      "stratum": "blitz/800-1399",
+      "speed": "blitz",
+      "timeControl": "300+3",
+      "ratingBand": "800-1399",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        1168,
+        1208
+      ],
+      "source": "https://lichess.org/lTBf7DdE",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "ys9Ryeuo",
+      "path": "ys9Ryeuo.pgn",
+      "sha256": "54f2c2b911f1e9ad09e1fcb157f4a3aa929f571250771e70bc0ab9db9117a4b2",
+      "stratum": "blitz/1400-1999",
+      "speed": "blitz",
+      "timeControl": "300+3",
+      "ratingBand": "1400-1999",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        1841,
+        1850
+      ],
+      "source": "https://lichess.org/ys9Ryeuo",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "eGBPcVsa",
+      "path": "eGBPcVsa.pgn",
+      "sha256": "adbf1e17de5d9ebfe96b0f4aaca955a0cb0e7ed438c741282f04daf5b816d3f1",
+      "stratum": "blitz/800-1399",
+      "speed": "blitz",
+      "timeControl": "300+3",
+      "ratingBand": "800-1399",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        1358,
+        1346
+      ],
+      "source": "https://lichess.org/eGBPcVsa",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "pmxyr5R9",
+      "path": "pmxyr5R9.pgn",
+      "sha256": "039f8dfc41d377c19b1992bf3df3f8d78ca9dd964ba6bf6db42cb113d0acece3",
+      "stratum": "blitz/2000-2999",
+      "speed": "blitz",
+      "timeControl": "300+3",
+      "ratingBand": "2000-2999",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        2437,
+        2321
+      ],
+      "source": "https://lichess.org/pmxyr5R9",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "8egVfhVZ",
+      "path": "8egVfhVZ.pgn",
+      "sha256": "255279cf58098e60c828e7742b531bfafa5aa93bae4780c366da78f7a8ef18b9",
+      "stratum": "rapid/1400-1999",
+      "speed": "rapid",
+      "timeControl": "600+5",
+      "ratingBand": "1400-1999",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        1582,
+        1477
+      ],
+      "source": "https://lichess.org/8egVfhVZ",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "kdjx3dh7",
+      "path": "kdjx3dh7.pgn",
+      "sha256": "361538b67355eef42fad4c03fa8e9300b52a9cf3d71939e7bb83fd86f0471c35",
+      "stratum": "rapid/800-1399",
+      "speed": "rapid",
+      "timeControl": "600+5",
+      "ratingBand": "800-1399",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        986,
+        983
+      ],
+      "source": "https://lichess.org/kdjx3dh7",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "XXUP3XEA",
+      "path": "XXUP3XEA.pgn",
+      "sha256": "226475e0d364dc6c23eed9ff011612d49937f31a545e95aed614886f291b1c89",
+      "stratum": "rapid/800-1399",
+      "speed": "rapid",
+      "timeControl": "600+5",
+      "ratingBand": "800-1399",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        1062,
+        1089
+      ],
+      "source": "https://lichess.org/XXUP3XEA",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "RLGkDDXE",
+      "path": "RLGkDDXE.pgn",
+      "sha256": "c1fbb0efd6428d9dbbc0c63ec52bf469abf77835a0aca6e87834aca6b783aff2",
+      "stratum": "rapid/800-1399",
+      "speed": "rapid",
+      "timeControl": "600+5",
+      "ratingBand": "800-1399",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        999,
+        1017
+      ],
+      "source": "https://lichess.org/RLGkDDXE",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "S5yj6xNc",
+      "path": "S5yj6xNc.pgn",
+      "sha256": "791c7cd528362643c802142801aa6b357a4cf613016607f83be9eef61080ac5c",
+      "stratum": "rapid/800-1399",
+      "speed": "rapid",
+      "timeControl": "600+5",
+      "ratingBand": "800-1399",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        1358,
+        1395
+      ],
+      "source": "https://lichess.org/S5yj6xNc",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "3Ksx4wrB",
+      "path": "3Ksx4wrB.pgn",
+      "sha256": "ca71b39ece457ab174d57ee226dac2ecfe0822e1a20bac4709c0153a38c45d2d",
+      "stratum": "rapid/1400-1999",
+      "speed": "rapid",
+      "timeControl": "600+5",
+      "ratingBand": "1400-1999",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        1875,
+        1948
+      ],
+      "source": "https://lichess.org/3Ksx4wrB",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "jL9vKR8T",
+      "path": "jL9vKR8T.pgn",
+      "sha256": "c7b345ea0d4d8a0f9a21336d9573f434ccda9853aa9f11ddd4ce0ec24ee6365a",
+      "stratum": "rapid/1400-1999",
+      "speed": "rapid",
+      "timeControl": "600+5",
+      "ratingBand": "1400-1999",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        1769,
+        1814
+      ],
+      "source": "https://lichess.org/jL9vKR8T",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "FoFk3fCf",
+      "path": "FoFk3fCf.pgn",
+      "sha256": "82f177762384d41c662fd04089eef50215530426f8a85f26dfd9eecd3a6bffe4",
+      "stratum": "rapid/2000-2999",
+      "speed": "rapid",
+      "timeControl": "600+5",
+      "ratingBand": "2000-2999",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        2102,
+        2057
+      ],
+      "source": "https://lichess.org/FoFk3fCf",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "E4mPSEE5",
+      "path": "E4mPSEE5.pgn",
+      "sha256": "ca42fae6226d9cd0548b2a7e1d42f3111d0333bd1ccd3676292d8b7fd1d39ea0",
+      "stratum": "rapid/2000-2999",
+      "speed": "rapid",
+      "timeControl": "600+5",
+      "ratingBand": "2000-2999",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        1960,
+        2055
+      ],
+      "source": "https://lichess.org/E4mPSEE5",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "oRm7UF5f",
+      "path": "oRm7UF5f.pgn",
+      "sha256": "74bff8d9eeeb5843778da6317498b315baddc73193e543ac39732883b6924651",
+      "stratum": "rapid/1400-1999",
+      "speed": "rapid",
+      "timeControl": "600+5",
+      "ratingBand": "1400-1999",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        1835,
+        2010
+      ],
+      "source": "https://lichess.org/oRm7UF5f",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "DzuvE9oX",
+      "path": "DzuvE9oX.pgn",
+      "sha256": "d6e42abf919dd8cdc10354bf72ac3038b9133414301aa3e48d3189b4a1ead5be",
+      "stratum": "blitz/2000-2999",
+      "speed": "blitz",
+      "timeControl": "300+3",
+      "ratingBand": "2000-2999",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        1987,
+        2013
+      ],
+      "source": "https://lichess.org/DzuvE9oX",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "p1Bo1Sr2",
+      "path": "p1Bo1Sr2.pgn",
+      "sha256": "bcd70f1741baa488a81e800ffc4617b9b85b4e88b6b9446f7c61f5db3ab7ebde",
+      "stratum": "blitz/2000-2999",
+      "speed": "blitz",
+      "timeControl": "300+3",
+      "ratingBand": "2000-2999",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        2266,
+        2115
+      ],
+      "source": "https://lichess.org/p1Bo1Sr2",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "esPbufBG",
+      "path": "esPbufBG.pgn",
+      "sha256": "393127af7d83fb692e26db0f9fbc5ccbc7851da32d55f0da4572f55d09b5bd56",
+      "stratum": "rapid/2000-2999",
+      "speed": "rapid",
+      "timeControl": "600+5",
+      "ratingBand": "2000-2999",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        2004,
+        2024
+      ],
+      "source": "https://lichess.org/esPbufBG",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    },
+    {
+      "id": "w3zjscvJ",
+      "path": "w3zjscvJ.pgn",
+      "sha256": "10820d2ed9208e341da7bb65b1ab50f4fb11230b1430838257461813503566a8",
+      "stratum": "rapid/2000-2999",
+      "speed": "rapid",
+      "timeControl": "600+5",
+      "ratingBand": "2000-2999",
+      "ratingBandBasis": "mean of both recorded ratings",
+      "recordedRatings": [
+        2265,
+        2281
+      ],
+      "source": "https://lichess.org/w3zjscvJ",
+      "sourceDate": "2026.09.01",
+      "accountLabels": "No BOT title in the archive; account type is not independently proved",
+      "assistanceGroundTruth": "unknown"
+    }
+  ]
+}

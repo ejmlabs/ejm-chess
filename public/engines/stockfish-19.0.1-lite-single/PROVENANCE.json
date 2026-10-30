@@ -1,0 +1,54 @@
+{
+  "package": "stockfish",
+  "version": "19.0.1",
+  "build": "stockfish-19.0.1-lite-single",
+  "license": "GPL-3.0",
+  "repository": "https://github.com/nmrugg/stockfish.js",
+  "sourceCommit": "0d5dd7944f88c817c07a26bc4fb1905d5f9c46d6",
+  "releaseTag": "v19.0.1",
+  "acquiredAt": "2026-10-20",
+  "files": [
+    {
+      "name": "stockfish-19-lite-single.js",
+      "bytes": 28230,
+      "sha256": "ccb130d7ff29408531c47d859a49f91d59d4f482d05a53eb1a3231a4f624c91a",
+      "url": "https://github.com/nmrugg/stockfish.js/releases/download/v19.0.1/stockfish-19-lite-single.js",
+      "runtime": true
+    },
+    {
+      "name": "stockfish-19-lite-single.wasm",
+      "bytes": 1845971,
+      "sha256": "ee4f115bdb2d32cadf96cada104a05b5ec257d7ad6f57582190b49bc71f096de",
+      "url": "https://github.com/nmrugg/stockfish.js/releases/download/v19.0.1/stockfish-19-lite-single.wasm",
+      "runtime": true
+    },
+    {
+      "name": "source.tar.gz",
+      "bytes": 426352,
+      "sha256": "e5289a920554bf0069a6601c228e81d957c00522bb31c4343588dc5d7d251879",
+      "url": "https://codeload.github.com/nmrugg/stockfish.js/tar.gz/0d5dd7944f88c817c07a26bc4fb1905d5f9c46d6",
+      "runtime": false
+    },
+    {
+      "name": "nn-61e7af4bb97d.nnue",
+      "bytes": 1166381,
+      "sha256": "61e7af4bb97d51eeeb25d322916f86513b5cd3a827ce189c98c6e31946f99e5b",
+      "url": "https://data.stockfishchess.org/nn/nn-61e7af4bb97d.nnue",
+      "runtime": false
+    },
+    {
+      "name": "COPYING.txt",
+      "bytes": 35821,
+      "sha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b",
+      "url": "https://raw.githubusercontent.com/nmrugg/stockfish.js/0d5dd7944f88c817c07a26bc4fb1905d5f9c46d6/Copying.txt",
+      "runtime": false
+    },
+    {
+      "name": "AUTHORS",
+      "bytes": 6881,
+      "sha256": "f81e7d74c350626766382ec67fa262c38cda00cb8b501790f95cdebb526006c1",
+      "url": "https://raw.githubusercontent.com/nmrugg/stockfish.js/0d5dd7944f88c817c07a26bc4fb1905d5f9c46d6/AUTHORS",
+      "runtime": false
+    }
+  ]
+}
