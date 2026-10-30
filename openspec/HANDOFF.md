@@ -18,8 +18,9 @@ before using older references to Studio as the planning home.
 
 | Change and tasks | Checked | Next work |
 | --- | ---: | --- |
-| [add-cloudflare-chess](changes/add-cloudflare-chess/tasks.md) | 58/71 | Review the partial capacity diagnostic patch, qualify ranked proofs and recovery, complete the approved tournament workload and remaining player checks, then release and publish discovery. |
+| [add-cloudflare-chess](changes/add-cloudflare-chess/tasks.md) | 58/71 | Capacity diagnostic, ranked proof/recovery, tournament workload, and remaining player checks (canary checklist steps 8+ paused). Policy reconcile (PR #6) and explicit Join (PR #7) are on `main`. |
 | [reconcile-chess-planning-baseline](changes/reconcile-chess-planning-baseline/tasks.md) | 4/4 | Review the recorded prerequisite and merge evidence before sync and archive. This does not prove runtime correctness or release readiness. |
+| [archive/2026-10-30-fix-explicit-casual-join](changes/archive/2026-10-30-fix-explicit-casual-join/tasks.md) | 6/6 | Archived after canary Join retest; main spec at [specs/chess-play](specs/chess-play/spec.md). |
 
 Counts describe task checkboxes, not public availability. Current task files
 and fresh CLI output are authoritative. No task state, launch policy, budget

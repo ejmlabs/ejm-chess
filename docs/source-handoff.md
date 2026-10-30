@@ -70,10 +70,18 @@ boundaries. Do not paste provider identifiers, private destinations, credentials
 or old execution windows into public source. Keep secrets in local variables
 or the provider secret store.
 
+Status on 2026-10-30: a reviewed local `wrangler.jsonc` (gitignored) exists with
+production bindings plus `env.local` for Worker tests and the protected canary
+deploy. The five specialty configs remain absent in this checkout. Rebuild each
+from private records before capacity, proof-acceptance, proof-qualification,
+proof-service or recovery-drill commands. Matching shared UI source for chess
+contracts is the sibling `ejm-ui` branch `wip/preserve-all-20261025`; keep
+discovery publication behind an approved public opening.
+
 Worker tests read `wrangler.jsonc` in the local environment. Recovery tests also
 read `wrangler.recovery-drill.jsonc`. Worker dry-run packaging and preview need
-reviewed bindings. Their omission means those commands cannot be claimed as
-passing unchanged from this restored checkout. Configuration templates, if
+reviewed bindings. Specialty-config omission means those commands cannot be
+claimed as passing from this restored checkout. Configuration templates, if
 added later, must be labelled separately from actual private bindings.
 
 ## Publication revisions

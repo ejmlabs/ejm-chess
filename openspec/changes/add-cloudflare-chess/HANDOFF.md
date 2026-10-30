@@ -142,29 +142,58 @@ does not claim a new integrity audit, license review, build or execution
 qualification. The provenance archive and private records must be reviewed
 before any wider publication.
 
+## Progress since this handoff (2026-10-30)
+
+Completed outside the original resume list, with the protected canary still
+closed to the public:
+
+- Deployed Worker version `3e8dae6b-ae1d-4aca-a665-a0f27b78048a` on
+  `chess.ejmlabs.com` (Access retained). Application monthly caps stay off;
+  Cloudflare alerts and the `$85` stop remain the economic control.
+- Merged OpenSpec policy reconcile (PR #6) and explicit casual Join (PR #7);
+  archived `fix-explicit-casual-join` and synced `openspec/specs/chess-play`.
+- Owner accepted the material timeout rule (PR #3 / `ejm/chess-clock`). Doc and
+  UI gaps for the old automatic void were closed; `AGENTS.md` matches the rule.
+  The private proof-acceptance re-run against the new expectations remains
+  unexecuted and still gates ranked proof enablement.
+- Protected canary player checklist steps 1–7 plus the explicit Join retest are
+  done. **Steps 8+ are paused** by owner request; they are not abandoned.
+
+### Configuration and shared UI notes
+
+- Matching `ejm-ui` source for chess contracts remains local branch
+  `wip/preserve-all-20261025` in the sibling `ejm-ui` checkout. Publish discovery
+  and Studio listing only after public opening is approved; do not merge that
+  branch to `ejm-ui` main solely for the protected canary.
+- Local production `wrangler.jsonc` (gitignored) is reconstructed with
+  `env.local` for Worker tests and canary deploy. The five specialty configs
+  (`wrangler.capacity.jsonc`, `wrangler.proof-acceptance.jsonc`,
+  `wrangler.proof-qualification.jsonc`, `wrangler.proof-service.jsonc`,
+  `wrangler.recovery-drill.jsonc`) are still absent from this checkout and must
+  be rebuilt from private records before proof, capacity or recovery drills.
+  Do not commit secrets or provider IDs.
+
 ## Resume in this order
 
-1. Review the restored product source and publication revisions. Read each
-   owner's current rules, supply matching public shared-owner source and
-   reconstruct reviewed configuration. Record new source identities and gaps.
-2. Refresh OpenSpec status and apply instructions. Review the partial capacity
-   patch and finish only the affected failure, native and driver checks plus
-   typecheck. Retain old results as historical evidence.
+1. When unpausing the canary checklist, finish protected-host player checks from
+   step 8 onward and record results in `docs/verification.md`.
+2. Refresh OpenSpec apply status for `add-cloudflare-chess`. Review the partial
+   capacity patch and finish only the affected failure, native and driver checks
+   plus typecheck. Retain old results as historical evidence.
 3. Diagnose the retained proof and registration failures. Reconcile prior work
    and current provider state before preparing any fresh execution packet.
-   Preserve all held uncertainty and stop receipts.
+   Preserve all held uncertainty and stop receipts. Re-run private
+   proof-acceptance only after specialty Wrangler configs are reconstructed.
 4. Prepare a new feasible schedule and immutable candidate within the existing
    approved scope. Follow the review and finite-work requirements in the plan.
    Never resume an expired packet or infer success from readiness.
 5. Finish ranked proof and recovery, then the full capacity workload and its
    accounting and stop readback. Derive enabled limits from actual results.
-6. Finish only the remaining protected-host player checks. Reuse the friend,
-   mail and privacy evidence where unchanged contracts support doing so.
-7. Update product guides with measured limits and unrun checks. Build and deploy
+6. Update product guides with measured limits and unrun checks. Build and deploy
    accepted source, verify canonical public access, then publish discovery in
    `ejm-ui` and Studio through their owner processes.
-8. Update task checkboxes only from verified results. Sync and archive completed
+7. Update task checkboxes only from verified results. Sync and archive completed
    scope after required checks pass; retain longer follow-up work explicitly.
 
-No launch, provider mutation, new workload or live documentation publication
-was performed while writing this handoff.
+No public launch, provider mutation beyond the approved protected canary, or
+live discovery publication was performed while updating this handoff.
