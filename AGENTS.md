@@ -22,6 +22,15 @@ Keep unfinished tasks unchecked and follow the existing OpenSpec workflow.
 - Keep product guides and operational limits current. Separate implemented, locally tested, staged, and released behavior.
 - Preserve others' work. Do not create a remote, push, provision paid resources, or deploy without the required owner authorization.
 
+## Code principles
+
+- **KISS.** Write the simplest code that solves the whole problem.
+- **YAGNI.** Build only what a task needs now. No speculative options, layers or abstractions.
+- **DRY.** Give each rule, constant, type and behavior one authoritative home. Extend the shared
+  helper; never copy it.
+- **Clean Code.** Use clear names and small functions at one level of abstraction. Delete dead
+  code. Comment only the why. No hidden side effects.
+
 ## Less text, clear meaning
 
 Use the fewest words that preserve meaning. Prefer a clear visual, or no added
