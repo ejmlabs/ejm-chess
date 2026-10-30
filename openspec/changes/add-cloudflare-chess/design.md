@@ -479,7 +479,7 @@ Alternative: a single match-accuracy cutoff or browser monitoring presented as p
 | Product layout/assets | At most 20 KB gzip CSS on play, 14 KB on guides, 70 KB fonts, and 30 KB HTML per route; report board/piece asset costs. Existing studio budgets remain in force. |
 | Move validation | p95 server CPU at most 10 ms on representative positions and histories. |
 | Durable move commit | p95 service time at most 50 ms, excluding WAN; separately report end-to-end latency by tested region. |
-| Admission envelope | Exercise 1,000 live games and 20 settlements/second, including reconnect bursts and both formats; derive the enforced admission cap from passing results. |
+| Admission envelope | Exercise 1,000 live games and 20 settlements/second, including reconnect bursts and both formats; record measured limits for later optional ceilings. Under the 2026-10-30 demand policy these are follow-up evidence, not required application caps. |
 | Analysis | Benchmark locally and estimate cost before provisioning; under an owner-approved canary spending ceiling, measure deployed cold start, memory, nodes/second, queue delay, and cost per 1,000 games before wider use. |
 
 All figures above are proposed and unmeasured. No worldwide performance or concurrent-player guarantee follows from them. Record hardware/provider context, workload, samples, and failure rates with results. A budget miss requires a measured change or an explicit accepted trade-off, not a silent target increase.
@@ -498,16 +498,15 @@ delivery-test and alert destination. Sender onboarding and delivered messages
 were initial verification gates. Dated canary evidence records onboarding and
 delivery to that one recipient; complete task 6.2 remains open.
 
-Use fixed bounded monthly counters and idempotent operation receipts to close
-new game creation, sign-in email, and optional server analysis at conservative
-workload ceilings. Explicit private stops remain available independently of
-quota resets. Invalid configuration or unavailable quota authority closes new
-expensive work. Retries cannot double-charge a game ID or bypass its admission
-receipt. Active games, terminal delivery, replay, and necessary recovery continue.
-Retain storage ceilings separately because a new month does not free retained
-records. Set ceilings from measured request, duration, write, mail, and analysis
-costs before expanding admission. Disable server analysis first and reserve
-headroom for accepted work and service recovery.
+Use monthly usage counters and idempotent operation receipts for visibility.
+Under the 2026-10-30 demand policy they do not enforce monthly application
+admission caps. Cloudflare budget alerts and the stop webhook are the economic
+control. Explicit private versioned stops remain available. Abuse rate limits,
+authentication and platform-safety bounds remain. Retries cannot double-charge
+a game ID or bypass its admission receipt. Active games, terminal delivery,
+replay, and necessary recovery continue. Optional product retention ceilings
+may be set later from measured costs; they default off. Disable server analysis
+first and reserve headroom for accepted work and service recovery.
 
 ### Historical budget calculations, superseded on 2026-10-22
 
@@ -895,8 +894,9 @@ games, 20,000 permanent IDs, 2,048 non-hibernatable objects, 50 ms Worker CPU
 and 60-minute interval remain unchanged. Prior preparation and unresolved work
 remain charged in the shared ledger. Retain the earlier four held permits and
 two unresolved dispatches separately from the fourth run's two active objects
-and one unresolved dispatch. Production's 10,000 monthly game ceiling remains
-unchanged. This repair introduces no new financial approval or allowance.
+and one unresolved dispatch. Production no longer enforces a monthly application
+game cap; the $100 target, alerts and stop remain. This repair introduces no new
+financial approval or allowance.
 
 Product owns the isolated entry, config, run controls, protocol driver, narrow
 budget-policy boundary, native fixtures, reports and operations guides. Reuse
