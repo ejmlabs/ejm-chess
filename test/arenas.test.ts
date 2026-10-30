@@ -181,11 +181,12 @@ describe('timed arena authority', () => {
         expect(await instance.registerArena(retrying, id)).toMatchObject({ ok: false, error: { status: 429, code: 'ARENA_RETRY' } });
         expect(state.storage.sql.exec<{ value: number }>('SELECT total_changes() AS value').one().value).toBe(beforeRefill);
         expect(state.storage.sql.exec("SELECT tokens,updated_at FROM arena_tokens WHERE kind='registration'").one()).toEqual({ tokens: 0, updated_at: lastAcceptedAt });
-        clock.mockReturnValue(lastAcceptedAt + 20);
+        clock.mockReturnValue(lastAcceptedAt + 63);
         expect(value(await instance.registerArena(retrying, id)).registered).toBe(true);
         expect(schedule).toHaveBeenCalledOnce();
         expect(state.storage.sql.exec('SELECT 1 FROM arena_events WHERE id=?', unused).toArray()).toHaveLength(1);
-        expect(state.storage.sql.exec<{ tokens: number }>("SELECT tokens FROM arena_tokens WHERE kind='registration'").one().tokens).toBe(0);
+        expect(state.storage.sql.exec<{ tokens: number }>("SELECT tokens FROM arena_tokens WHERE kind='registration'").one().tokens)
+          .toBe(63 * ARENA_POLICY.registrationRate - 1_000);
         const afterRefill = state.storage.sql.exec<{ value: number }>('SELECT total_changes() AS value').one().value;
         expect(await instance.registerArena(waiting, id)).toMatchObject({ ok: false, error: { status: 429, code: 'ARENA_RETRY' } });
         clock.mockReturnValue(lastAcceptedAt + 10);
@@ -222,7 +223,8 @@ describe('timed arena authority', () => {
       clock.mockReturnValue(now + 2);
       expect(await pending).toMatchObject({ ok: false, error: { code: 'ARENA_INELIGIBLE' } });
       expect(state.storage.sql.exec('SELECT 1 FROM arena_entries').toArray()).toEqual([]);
-      expect(state.storage.sql.exec<{ tokens: number }>("SELECT tokens FROM arena_tokens WHERE kind='registration'").one().tokens).toBe(95_000);
+      expect(state.storage.sql.exec<{ tokens: number }>("SELECT tokens FROM arena_tokens WHERE kind='registration'").one().tokens)
+        .toBe((ARENA_POLICY.registrationBurst - 5) * 1_000);
       await expect(instance.getArenaMe(actors[0], id)).rejects.toMatchObject({ status: 401, code: 'SIGN_IN_REQUIRED' });
       await env.DB.prepare('UPDATE restrictions SET revoked_at=? WHERE id=?').bind(Date.now(), decisionId).run();
       expect(value(await instance.registerArena(actors[3], id)).registered).toBe(true);

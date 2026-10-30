@@ -15,7 +15,7 @@ import { Competition } from '../src/server/competition';
 import type { Actor } from '../src/server/auth';
 import type { GameSnapshot } from '../src/shared/protocol';
 import { activeGame, admitGameFixture, player } from './authority-helpers';
-import { capacityFixtureManifest } from './capacity-fixtures';
+import { capacityFixtureManifest, capacityFixtureStart } from './capacity-fixtures';
 import { capacityAccountId, capacityEventId, capacityIntent, capacityIntentStepIndex, capacityStep,
   CAPACITY_PREPARATION_BATCH_SIZE, CAPACITY_REGISTRATION_DIAGNOSTIC,
   capacityRegistrationDiagnosticSchedule, type CapacityStepReply } from '../src/shared/capacity-corpus';
@@ -144,7 +144,7 @@ describe('private native capacity adapter', () => {
   it('keeps cold registration claims ahead of overlapping warm blocks across clean reincarnation', async ({ task }) => {
     const game = env.GAME.get(env.GAME.idFromName(crypto.randomUUID()));
     const observed = await runInDurableObject(game, async (_instance, state) => {
-      const start = Date.UTC(2026, 9, 25, 17, 50);
+      const start = capacityFixtureStart();
       vi.spyOn(Date, 'now').mockReturnValue(start + 8_000);
       const manifest = capacityFixtureManifest(start), control = fixtureControl(manifest);
       const create = () => new CapacityNativeHost<Competition>(state, fixtureEnv(), 'Competition', manifest, control,
@@ -206,7 +206,7 @@ describe('private native capacity adapter', () => {
   it('replays the five failed provider account confirmations after native busy denials', async ({ task }) => {
     const game = env.GAME.get(env.GAME.idFromName(crypto.randomUUID()));
     const observed = await runInDurableObject(game, async (_instance, state) => {
-      const start = Date.UTC(2026, 9, 25, 17, 50);
+      const start = capacityFixtureStart();
       vi.spyOn(Date, 'now').mockReturnValue(start + 8_000);
       const manifest = capacityFixtureManifest(start), control = fixtureControl(manifest);
       const host = new CapacityNativeHost<Competition>(state, fixtureEnv(), 'Competition', manifest, control,
@@ -257,7 +257,7 @@ describe('private native capacity adapter', () => {
   it('meters native registration cookie auth and account limits inside the unchanged warm envelope', async ({ task }) => {
     const game = env.GAME.get(env.GAME.idFromName(crypto.randomUUID()));
     const observed = await runInDurableObject(game, async (_instance, state) => {
-      const start = Date.UTC(2026, 9, 25, 17, 50);
+      const start = capacityFixtureStart();
       const now = vi.spyOn(Date, 'now').mockReturnValue(start + 8_000);
       const manifest = capacityFixtureManifest(start), control = fixtureControl(manifest);
       const host = new CapacityNativeHost<Competition>(state, fixtureEnv(), 'Competition', manifest, control,
@@ -301,7 +301,7 @@ describe('private native capacity adapter', () => {
   it('prepays a real retry burst once and retains its slots after a lost reply and cold restart', async ({ task }) => {
     const game = env.GAME.get(env.GAME.idFromName(crypto.randomUUID()));
     const result = await runInDurableObject(game, async (_instance, state) => {
-      const start = Date.UTC(2026, 9, 25, 17, 50);
+      const start = capacityFixtureStart();
       vi.spyOn(Date, 'now').mockReturnValue(start + 8_000);
       const manifest = capacityFixtureManifest(start), control = fixtureControl(manifest);
       const create = () => new CapacityNativeHost<Competition>(state, fixtureEnv(), 'Competition', manifest, control,
@@ -327,7 +327,7 @@ describe('private native capacity adapter', () => {
       const retryWrites: number[] = [];
       for (let index = 0; index < 160; index++) {
         const reply = await offer(index);
-        expect(reply.value).toMatchObject(index < 100 ? { accepted: true } : {
+        expect(reply.value).toMatchObject(index < ARENA_POLICY.registrationBurst ? { accepted: true } : {
           accepted: false, httpStatus: 429, code: 'ARENA_RETRY' });
         expect(reply.usage).toMatchObject({ uncertain: false, unresolvedD1: 0 });
         if (index >= 128) retryWrites.push(reply.usage.doRowsWritten);
@@ -341,7 +341,7 @@ describe('private native capacity adapter', () => {
         await original.apply(this, args);
         throw new Error('native_registration_reply_lost');
       });
-      await expect(offer(160)).rejects.toThrow('native_registration_reply_lost');
+      await expect(offer(160)).rejects.toThrow('"stage":"arena-register"');
       expect((await offer(160)).value).toMatchObject({ accepted: false, code: 'capacity_step_already_issued' });
       expect(register).toHaveBeenCalledTimes(161);
       const held = state.storage.sql.exec('SELECT events,unresolved,reserved,observed FROM capacity_wrapper_workflow').one();
@@ -350,7 +350,8 @@ describe('private native capacity adapter', () => {
       await expect(create().invoke(ticket, 'maintenance')).rejects.toThrow('capacity_workflow_unresolved');
       expect(state.storage.sql.exec('SELECT events,unresolved,reserved,observed FROM capacity_wrapper_workflow').one()).toEqual(held);
       await state.storage.deleteAlarm();
-      return { accepted: 100, retryReplies: 60, measuredRetryBlock: { slots: 32, eventWrites: retryWrites,
+      return { accepted: ARENA_POLICY.registrationBurst, retryReplies: 160 - ARENA_POLICY.registrationBurst,
+        measuredRetryBlock: { slots: 32, eventWrites: retryWrites,
         totalGuardWrites: retryWrites.reduce((sum, writes) => sum + writes, 0) }, heldSlots: held.unresolved };
     });
     (task.meta as Record<string, unknown>).registrationGuard = { ...result,
@@ -788,9 +789,9 @@ describe('private native capacity adapter', () => {
       const ticket = await fixtureTicket(control, `game:${state.id.name}`, 'Game.status');
       const first = await host.invoke(ticket, 'status');
       expect(first.value).toBeNull();
-      await expect(host.invoke(ticket, 'status')).rejects.toThrow('UNIQUE constraint failed');
+      await expect(host.invoke(ticket, 'status')).rejects.toThrow('SQLITE_CONSTRAINT');
       const reconstructed = new CapacityNativeHost<Game>(state, fixtureEnv(), 'Game', manifest, control, { 'Game.status': probeEnvelope() });
-      await expect(reconstructed.invoke(ticket, 'status')).rejects.toThrow('UNIQUE constraint failed');
+      await expect(reconstructed.invoke(ticket, 'status')).rejects.toThrow('SQLITE_CONSTRAINT');
       expect(state.storage.sql.exec('SELECT id FROM capacity_wrapper_dispatches ORDER BY id').toArray()).toEqual(
         [...(schema === 'retained' ? [{ id: 'retained-dispatch' }] : []), { id: ticket.id }].sort((a, b) => a.id < b.id ? -1 : 1));
       if (schema === 'retained') expect(state.storage.sql.exec('SELECT rowid FROM capacity_wrapper_dispatches').toArray()).toHaveLength(2);

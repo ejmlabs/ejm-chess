@@ -1,5 +1,14 @@
 import type { CapacityManifest } from '../src/server/capacity-run';
 
+/** Next Sunday 17:50 UTC, so the weekly, daily and hourly fixture events all exist. */
+export function capacityFixtureStart(now = Date.now()): number {
+  const day = 86_400_000, date = new Date(now);
+  const days = (7 - date.getUTCDay()) % 7;
+  let start = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + days, 17, 50);
+  if (start <= now) start += 7 * day;
+  return start;
+}
+
 /** Native local regression fixture. Never accepted by the private HTTP entry. */
 export function capacityFixtureManifest(start = Date.now()): CapacityManifest {
   return { schema: 'ejm-chess-capacity-v1', runId: crypto.randomUUID(), digest: 'a'.repeat(64),

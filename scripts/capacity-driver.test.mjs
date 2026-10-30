@@ -912,7 +912,8 @@ test('local rehearsal refuses remote origins before I/O and reaches only loopbac
   });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
-  const sealed = { ...manifest, runId: '00000000-0000-4000-8000-000000000001', digest: 'a'.repeat(64),
+  const sealed = { ...capacityCalendarSchedule(Math.ceil((Date.now() + 3_600_000) / 60_000) * 60_000),
+    runId: '00000000-0000-4000-8000-000000000001', digest: 'a'.repeat(64),
     host: 'chess-capacity-test.ejmlabs.com', verified: { ownerApprovedFrozenRun: true } };
   const candidate = { schema: 'ejm-chess-capacity-driver-candidate-v1', ...await capacityDriverDigests(),
     incrementalMaximumCents: 2_500, ledgerDigest: 'd'.repeat(64), manifest: sealed, egressMode: 'single-egress',
