@@ -4,9 +4,12 @@ A multiplayer chess game for `chess.ejmlabs.com`, built for
 Cloudflare Workers. The board, clocks, and moves are the main interface. All routes use the public
 shared ejm-ui design, including account, replay and private review workflows.
 
-> **Status: source import.** This is a source import that does not build from a
-> clean checkout yet. Typecheck, build and the Worker tests need things that are
-> not in this repository:
+> **Status: protected canary, 2026-10-30.** A protected deployment is live at
+> `https://chess.ejmlabs.com` behind Cloudflare Access. Worker version 12
+> (`a9038ccc-3f74-4ea2-9661-4555779b32d7`) was deployed from `main` at
+> `996acf4`. Public play, ranked, tournaments, arenas and server analysis
+> remain closed. A clean checkout still needs the matching shared UI source and
+> reviewed private configuration:
 >
 > - The matching shared UI source, checked out as `../ejm-ui` (`@ejm/*` packages
 >   are `file:` dependencies). It must provide `@ejm/ui/components/Chessboard` and
@@ -28,8 +31,8 @@ shared ejm-ui design, including account, replay and private review workflows.
 
 This repository restores the retained chess implementation and its OpenSpec
 plan for source review. It includes a partial, unverified capacity diagnostic
-patch. Restoration does not establish a current build, deployment, public
-launch or supported capacity. Start with the
+patch. A protected canary is deployed; public launch, ranked play and supported
+capacity are not established. Start with the
 [OpenSpec handoff](openspec/HANDOFF.md) and
 [source and configuration recovery notes](docs/source-handoff.md).
 
