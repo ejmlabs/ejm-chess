@@ -879,3 +879,23 @@ normal completed state with its Replay link, without an Error notice. Both
 TypeScript programs passed. Final build and publication verification remain
 part of the release check. Player help already documents completed-game Replay;
 this correction changes no API, account or replay contract.
+
+## Protected canary deployment, 2026-10-30
+
+Source `main` at `996acf4` deployed Worker `ejm-chess` version 12,
+`a9038ccc-3f74-4ea2-9661-4555779b32d7`, with 46 uploaded assets. The upload was
+2,382.93 KiB raw and 456.01 KiB gzip; Worker startup was 53 ms. The existing
+D1 database, Game and Competition namespaces, Email binding, custom domain and
+four Worker secrets were retained. No migration was pending.
+
+The deployment keeps ranked, tournaments, arenas and server analysis closed.
+Browser Stockfish is enabled. Game retirement uses the scaled coordinator.
+Application monthly and product admission caps are off; the Cloudflare budget
+alerts and the `$85` stop webhook are the economic control.
+
+Local verification before deployment: 468 Worker tests, 38 driver tests,
+TypeScript, the static build, the route budget and the Worker dry run passed.
+The site remains behind Cloudflare Access. An unauthenticated HTTP probe
+received a Cloudflare challenge, so the owner browser is still required for
+player-flow, accessibility and public-launch checks. This deployment is a
+protected canary, not a public launch or capacity claim.
