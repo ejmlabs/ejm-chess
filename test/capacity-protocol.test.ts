@@ -123,6 +123,16 @@ describe('fixed private capacity protocol safeguards', () => {
     });
   });
 
+  it('labels product 503 step replies with fixed codes only', () => {
+    const paused = capacityStepResponse({ index: 7, accepted: false, acceptedAt: null, code: 'NEW_GAMES_PAUSED', httpStatus: 503 });
+    expect(paused.status).toBe(503);
+    expect(paused.headers.get('X-Capacity-Failure')).toBe('NEW_GAMES_PAUSED');
+    const unknown = capacityStepResponse({ index: 7, accepted: false, acceptedAt: null, code: 'PRIVATE_FIXTURE', httpStatus: 503 });
+    expect(unknown.headers.get('X-Capacity-Failure')).toBeNull();
+    const retry = capacityStepResponse({ index: 7, accepted: false, acceptedAt: null, code: 'ARENA_RETRY', httpStatus: 429 });
+    expect(retry.headers.get('X-Capacity-Failure')).toBeNull();
+  });
+
   it('never redispatches an issued registration after its native reply is lost', async () => {
     await fixture(async ({ create, fixtures, request }) => {
       const credential = await fixtures.prepare(0);

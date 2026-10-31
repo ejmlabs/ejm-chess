@@ -50,6 +50,8 @@ const PRIVATE_FAILURE_CODES = new Set([
   'capacity_intent_ledger_fenced', 'capacity_intent_ledger_invalid', 'capacity_intent_not_reserved',
   'capacity_intent_observation_invalid', 'capacity_permit_corrupt', 'capacity_stop_invalid',
   'capacity_ticket_secret_invalid', 'capacity_work_invalid',
+  // Product 503 step replies. Their bodies are never read by the driver.
+  'ARENAS_CLOSED', 'ARENA_STORAGE_FULL', 'BUDGET_UNAVAILABLE', 'NEW_GAMES_PAUSED',
 ]);
 export const capacityPrivateFailureCode = (value: unknown): string | null =>
   typeof value === 'string' && PRIVATE_FAILURE_CODES.has(value) ? value : null;

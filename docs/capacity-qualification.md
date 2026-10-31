@@ -249,6 +249,12 @@ mismatched receipt is dropped, and the status and fixed code remain. A lost
 reply or timeout returns no receipt and leaves the cause unknown. A 503 stays a
 failure or uncertainty in every case.
 
+A product 503 step reply carries its own code in the same header when the code
+is one of `ARENAS_CLOSED`, `ARENA_STORAGE_FULL`, `BUDGET_UNAVAILABLE` or
+`NEW_GAMES_PAUSED`, so the trace separates a paused or full arena from an
+unresolved run. Other product codes send no header. The driver still never
+reads a 5xx body.
+
 Implemented and locally tested only. No provider run has produced a receipt, and
 none of these checks qualifies capacity.
 

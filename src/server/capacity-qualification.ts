@@ -79,7 +79,9 @@ export function capacityStepResponse(value: CapacityStepReply, timing?: { authMs
       || receivedAt < sentAt || receivedAt - sentAt > 60_000 || returningAt - enteredAt > 60_000
       || stages.some((at, index) => index > 0 && at < stages[index - 1])) throw new Error('capacity_native_metrics_unavailable');
   }
-  return Response.json(value, { status: value.httpStatus ?? 200, headers: { ...noStore,
+  const status = value.httpStatus ?? 200;
+  const failure = status >= 500 ? capacityPrivateFailureCode(value.code) : null;
+  return Response.json(value, { status, headers: { ...noStore, ...(failure ? { 'X-Capacity-Failure': failure } : {}),
     ...(timing ? { 'X-Capacity-Timing': `auth;dur=${timing.authMs.toFixed(1)},authority;dur=${timing.authorityMs.toFixed(1)}` } : {}),
     ...(timing?.native ? { 'X-Capacity-Native-Timing': JSON.stringify(timing.native) } : {}) } });
 }

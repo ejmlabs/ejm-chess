@@ -578,6 +578,7 @@ test('denied and uncertain HTTP replies release unread bodies without retrying',
   for (const [status, header, privateCode] of [
     [429, null, null],
     [503, 'capacity_workflow_unresolved', 'capacity_workflow_unresolved'],
+    [503, 'NEW_GAMES_PAUSED', 'NEW_GAMES_PAUSED'],
     [503, 'capacity_private_fixture_secret', null],
     [503, 'capacity_workflow_unresolved:private-fixture-id', null],
   ]) {
