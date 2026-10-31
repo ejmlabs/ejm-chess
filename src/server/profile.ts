@@ -1,8 +1,7 @@
 import type { Env } from './env';
 import type { Pool, PublicProfile, PublicRating } from '../shared/protocol';
 import { PASSWORD_ACCOUNT_SQL } from './auth';
-
-const DAY = 86_400_000;
+import { ESTABLISHED, meetsRatingStandard } from './leaderboard';
 
 interface Account { id: string; name: string; created_at: string; restricted: number }
 interface RatingRow {
@@ -19,8 +18,9 @@ export async function publicProfile(env: Pick<Env, 'DB' | 'RANKED_ENABLED'>, id:
       FROM user u WHERE u.id=? AND (${PASSWORD_ACCOUNT_SQL}) LIMIT 1`).bind(now, id),
     env.DB.prepare(`SELECT pool,rating_display,rd,games,distinct_opponents,last_played_at,projected_at,eligible
       FROM leaderboard_entries WHERE user_id=? AND pool IN ('blitz','rapid') LIMIT 2`).bind(id),
-    env.DB.prepare(`SELECT DISTINCT pool FROM games WHERE (white_id=? OR black_id=?)
-      AND rated=1 AND ai_model_id IS NULL AND settlement='pending' LIMIT 2`).bind(id, id),
+    // Every game has one of these statuses. Naming them seeks the few pending settlements instead of walking this player's history.
+    env.DB.prepare(`SELECT DISTINCT pool FROM games WHERE status IN ('finished','pending-adjudication') AND settlement='pending'
+      AND rated=1 AND (white_id=? OR black_id=?) LIMIT 2`).bind(id, id),
   ]);
   const account = (accountResult.results as unknown as Account[])[0];
   if (!account) return null;
@@ -30,9 +30,9 @@ export async function publicProfile(env: Pick<Env, 'DB' | 'RANKED_ENABLED'>, id:
   const pools = (['blitz', 'rapid'] as const).map((pool): PublicRating => {
     const row = ratings.find(rating => rating.pool === pool);
     const lastPlayedAt = row && row.last_played_at > 0 ? row.last_played_at : null;
-    const inactive = lastPlayedAt !== null && lastPlayedAt < now - 30 * DAY;
-    const provisional = !row || row.games < 20 || row.distinct_opponents < 8 || row.rd > 100
-      || !Number.isFinite(createdAt) || createdAt > now - 7 * DAY || lastPlayedAt === null;
+    const inactive = lastPlayedAt !== null && lastPlayedAt < now - ESTABLISHED.activeWithinMs;
+    const provisional = !row || !meetsRatingStandard(row.games, row.distinct_opponents, row.rd)
+      || !Number.isFinite(createdAt) || createdAt > now - ESTABLISHED.accountAgeMs || lastPlayedAt === null;
     const pending = pendingPools.has(pool);
     const eligible = Boolean(row?.eligible && !account.restricted && !inactive && !provisional);
     const status = account.restricted ? 'unranked' : pending ? 'pending' : inactive ? 'inactive'

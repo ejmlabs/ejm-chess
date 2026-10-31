@@ -74,16 +74,19 @@ describe('bounded public player profiles', () => {
     expect((await publicProfile(env, actor.id, now + DAY + 1))?.pools[0]).toMatchObject({ status: 'established', eligible: true });
   });
 
-  it('labels pending ranked settlement while retaining the last projected rating', async () => {
+  it('labels pending ranked settlement, whether adjudication or rating repair holds it, while retaining the last projected rating', async () => {
     const actor = await player();
     await projection(actor, 'blitz');
     const now = Date.now();
-    await env.DB.prepare(`INSERT INTO games(id,pool,rated,white_id,white_name,status,reason,ended_at,created_at,pgn,plies,rules_version,result_version,projection_epoch,projection_version,projected_at,settlement)
-      VALUES(?,'blitz',1,?,'Player','pending-adjudication','timeout-needs-review',?,?,'*',0,?,1,1,1,?,'pending')`)
-      .bind(crypto.randomUUID(), actor.id, now, now, RULES_VERSION, now).run();
+    const pending = (pool: Pool, status: string) => env.DB.prepare(`INSERT INTO games(id,pool,rated,white_id,white_name,status,reason,ended_at,created_at,pgn,plies,rules_version,result_version,projection_epoch,projection_version,projected_at,settlement)
+      VALUES(?,?,1,?,'Player',?,'resignation',?,?,'*',0,?,1,1,1,?,'pending')`)
+      .bind(crypto.randomUUID(), pool, actor.id, status, now, now, RULES_VERSION, now).run();
+    await pending('blitz', 'pending-adjudication');
     expect((await publicProfile(env, actor.id))?.pools).toMatchObject([
       { pool: 'blitz', rating: 1600, games: 25, pending: true, status: 'pending' },
       { pool: 'rapid', rating: null, games: 0, pending: false, status: 'provisional' },
     ]);
+    await pending('rapid', 'finished');
+    expect((await publicProfile(env, actor.id))?.pools.map(rating => rating.pending)).toEqual([true, true]);
   });
 });

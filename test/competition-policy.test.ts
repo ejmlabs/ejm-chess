@@ -3,10 +3,11 @@ import { createExecutionContext, evictDurableObject, runInDurableObject, waitOnE
 import { Glicko2 } from 'glicko2';
 import { describe, expect, it } from 'vitest';
 import handler from '../src/server/index';
-import { initialRating, rateMatch } from '../src/server/competition';
 import type { Competition } from '../src/server/competition';
 import type { Env } from '../src/server/env';
-import type { Actor, InitGame } from '../src/shared/protocol';
+import { publicProfile } from '../src/server/profile';
+import { initialRating, rateMatch } from '../src/server/rating';
+import { RULES_VERSION, type Actor, type GameResult, type InitGame } from '../src/shared/protocol';
 import { enableRanked, player } from './authority-helpers';
 
 const DAY = 86_400_000;
@@ -194,6 +195,48 @@ describe('ranked queue and rating policy', () => {
   });
 });
 
+describe('ranked matchmaking policy', () => {
+  async function waited(competition: Authority, seconds: number, ...actors: Actor[]): Promise<void> {
+    await runInDurableObject(competition, (_instance, state) => {
+      for (const actor of actors) state.storage.sql.exec('UPDATE queue SET joined_at=? WHERE user_id=?', Date.now() - seconds * 1_000, actor.id);
+    });
+  }
+
+  it('widens the rating window by five points each second of the shorter wait', async () => {
+    const competition = await authority();
+    const [low, high] = await Promise.all([player(), player()]);
+    await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec(
+      "INSERT INTO ratings(pool,user_id,value) VALUES('blitz',?,?)", high.id, JSON.stringify({ ...initialRating(Date.now()), rating: 1900 })));
+    await competition.joinQueue(low, 'blitz', 'EU');
+    expect((await competition.joinQueue(high, 'blitz', 'EU')).status).toBe('queued');
+    await waited(competition, 59, low, high);
+    expect((await competition.queueStatus(low)).status).toBe('queued');
+    await waited(competition, 60, low, high);
+    expect((await competition.queueStatus(low)).status).toBe('reserved');
+  });
+
+  it('matches across regions only after thirty seconds', async () => {
+    const competition = await authority();
+    const [east, west] = await Promise.all([player(), player()]);
+    await competition.joinQueue(east, 'blitz', 'EU');
+    expect((await competition.joinQueue(west, 'blitz', 'AS')).status).toBe('queued');
+    await waited(competition, 29, east, west);
+    expect((await competition.queueStatus(east)).status).toBe('queued');
+    await waited(competition, 30, east, west);
+    expect((await competition.queueStatus(east)).status).toBe('reserved');
+  });
+
+  it('gives White to the player with fewer White games, whichever joined first', async () => {
+    const competition = await authority();
+    const [moreFirst, fewerSecond, fewerFirst, moreSecond] = await Promise.all([player(), player(), player(), player()]);
+    await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec(
+      'INSERT INTO colors(user_id,balance) VALUES(?,3),(?,-3),(?,-3),(?,3)', moreFirst.id, fewerSecond.id, fewerFirst.id, moreSecond.id));
+    for (const actor of [moreFirst, fewerSecond, fewerFirst, moreSecond]) await competition.joinQueue(actor, 'blitz', 'EU');
+    const whites = await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec<{ white_id: string }>('SELECT white_id FROM matches').toArray().map(row => row.white_id));
+    expect(whites.sort()).toEqual([fewerSecond.id, fewerFirst.id].sort());
+  });
+});
+
 describe('public leaderboard policy', () => {
   it('paginates tied players once in stable order and excludes private or ineligible account state', async () => {
     const now = Date.now();
@@ -241,5 +284,39 @@ describe('public leaderboard policy', () => {
     expect(first.updatedAt).toBe(now);
     expect(JSON.stringify([first, second])).not.toContain('placeholder.invalid');
     expect(await env.DB.prepare('SELECT SUM(emailVerified) AS verified FROM user WHERE id IN (?,?)').bind(ranked[0].id, ranked[1].id).first('verified')).toBe(0);
+  });
+
+  it('stores rating standing only, so account age, a restriction or a closed ranking never strands an established player', async () => {
+    const now = Date.now();
+    const [young, restricted, closed, opponent] = await Promise.all([player(), player(), player(), player()]);
+    const caseId = crypto.randomUUID();
+    const decisionId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare('UPDATE user SET createdAt=? WHERE id=?').bind(new Date(now - DAY).toISOString(), young.id),
+      env.DB.prepare('INSERT INTO fairplay_cases(id,subject_id,game_id,status,created_at,updated_at) VALUES(?,?,?,\'decided\',?,?)').bind(caseId, restricted.id, crypto.randomUUID(), now, now),
+      env.DB.prepare(`INSERT INTO fairplay_decisions(id,case_id,subject_id,reviewer_id,outcome,reason,review_note,corroboration,evidence_ids,request_hash,created_at,appeal_until)
+        VALUES(?,?,?,?,'restrict','Policy fixture.','Policy notes.','Policy proof.','[]','fixture',?,?)`).bind(decisionId, caseId, restricted.id, opponent.id, now, now + DAY),
+      env.DB.prepare('INSERT INTO restrictions(id,user_id,case_id,decision_id,reason,starts_at,expires_at) VALUES(?,?,?,?,?,?,?)').bind(decisionId, restricted.id, caseId, decisionId, 'Policy fixture.', now, now + DAY),
+    ]);
+    const established = { ...initialRating(now), rating: 1650, rd: 80, games: 25, lastPlayedAt: now };
+    const open = await authority();
+    const shut = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
+    async function project(competition: Authority, actor: Actor): Promise<void> {
+      const id = crypto.randomUUID();
+      const result: GameResult = {
+        id, eventId: `${id}:3`, reservationId: crypto.randomUUID(), format: 'blitz', rated: true,
+        white: { id: actor.id, name: actor.name, ready: true, isAnonymous: false }, black: { id: opponent.id, name: opponent.name, ready: true, isAnonymous: false },
+        status: 'finished', version: 3, rulesVersion: RULES_VERSION, terminalDigest: `fixture-${id}`,
+        outcome: { winner: 'w', score: 1, reason: 'resignation' }, startedAt: now - 30_000, endedAt: now, createdAt: now - 40_000, pgn: '[Result "1-0"]\n\n1-0', plies: 20,
+      };
+      await runInDurableObject(competition, instance => (instance as unknown as { project(value: unknown): Promise<void> })
+        .project({ result, epoch: 1, version: 1, ratings: [{ userId: actor.id, state: established, distinctOpponents: 10 }] }));
+    }
+    await Promise.all([project(open, young), project(open, restricted), project(shut, closed)]);
+    const later = now + 8 * DAY;
+    for (const actor of [young, restricted, closed]) {
+      expect(await env.DB.prepare('SELECT eligible FROM leaderboard_entries WHERE user_id=?').bind(actor.id).first('eligible')).toBe(1);
+      expect((await publicProfile(env, actor.id, later))?.pools[0]).toMatchObject({ status: 'established', eligible: true });
+    }
   });
 });

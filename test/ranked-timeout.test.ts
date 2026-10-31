@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { runInDurableObject } from 'cloudflare:test';
+import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from '../src/server/env';
 import type { Game } from '../src/server/game';
@@ -34,13 +34,16 @@ async function start(match: Awaited<ReturnType<typeof pair>>): Promise<GameSnaps
   return second.snapshot;
 }
 
-/** Replaces the starting position of a game that has not moved. */
+/** Replaces the starting position of a game that has not moved. A restart drops any position the object cached. */
 async function setPosition(game: DurableObjectStub<Game>, fen: string): Promise<void> {
   await runInDurableObject(game, (_instance, state) => {
     const stored = JSON.parse(state.storage.sql.exec<{ value: string }>('SELECT value FROM game_state').one().value);
     stored.initialFen = fen;
     state.storage.sql.exec('UPDATE game_state SET value=?', JSON.stringify(stored));
   });
+  await evictDurableObject(game);
+  await enableRanked(game);
+  await pauseAlarms(game);
 }
 
 async function ratingScores(gameId: string): Promise<number[]> {

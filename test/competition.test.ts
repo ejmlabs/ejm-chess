@@ -1,9 +1,14 @@
 import { env } from 'cloudflare:workers';
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it, vi } from 'vitest';
-import { initialRating, rateMatch, type JournalKind } from '../src/server/competition';
+import type { JournalKind } from '../src/server/competition';
+import { initialRating, rateMatch } from '../src/server/rating';
 import { enableRanked, player } from './authority-helpers';
 import { RULES_VERSION, type Actor, type GameResult, type Pool, type RatingState } from '../src/shared/protocol';
+
+async function sha256Hex(value: string): Promise<string> {
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
 
 async function paired(actors?: readonly [Actor, Actor], pool: Pool = 'blitz') {
   const competition = env.COMPETITION.get(env.COMPETITION.idFromName('global'));
@@ -582,6 +587,34 @@ describe('competitive authority', () => {
     expect(await competition.requestCorrection(appealDecision)).toEqual({ accepted: true, complete: true });
   });
 
+  it('keeps a prepared pool quiet at the publish barrier while its sibling waits to retry', async () => {
+    const [a, b, c] = await Promise.all([player(), player(), player()]);
+    const blitz = await finishedMatch([a, b], b);
+    const competition = blitz.competition;
+    await pauseAutomaticAlarms(competition);
+    await competition.settle(blitz.result);
+    const rapid = await finishedMatch([a, c], a, 'rapid');
+    await competition.settle(rapid.result);
+    await competition.flush();
+    const generations = async () => (await env.DB.prepare('SELECT pool,epoch FROM competition_generations ORDER BY pool').all()).results;
+    const before = await generations();
+    const decision = await reviewedDecision(a, blitz.result.id, [blitz.result.id, rapid.result.id]);
+    await competition.requestCorrection(decision.id);
+    const runs = () => runInDurableObject(competition, (_instance, state) => Object.fromEntries(state.storage.sql.exec<{ pool: string; phase: string; next_at: number }>(
+      'SELECT pool,phase,next_at FROM correction_runs WHERE decision_id=?', decision.id).toArray().map(run => [run.pool, run])));
+    for (let step = 0; step < 30 && (await runs()).blitz.phase !== 'publish'; step++) await competition.processCorrections();
+    expect(await runs()).toMatchObject({ blitz: { phase: 'publish' }, rapid: { phase: expect.not.stringMatching(/^publish$/) } });
+    const retryAt = Date.now() + 30_000;
+    await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec("UPDATE correction_runs SET next_at=?,error='retry_later' WHERE decision_id=? AND pool='rapid'", retryAt, decision.id));
+    await competition.processCorrections();
+    // A prepared run that stays due would re-arm the alarm every millisecond until its sibling retries.
+    expect((await runs()).blitz.next_at).toBeGreaterThanOrEqual(retryAt);
+    expect(await generations()).toEqual(before);
+    await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec("UPDATE correction_runs SET next_at=0 WHERE decision_id=?", decision.id));
+    await finishReplay(competition, decision.id);
+    expect(await generations()).not.toEqual(before);
+  });
+
   it('keeps a pool paused and exposes an unsupported historical policy instead of publishing a guessed repair', async () => {
     const { competition, result, white } = await finishedMatch();
     await competition.settle(result);
@@ -626,8 +659,7 @@ describe('competitive authority', () => {
     for (let after = 0; ;) {
       const page = await source.exportEvents({ kind: 'ratings', after, watermark: manifest.watermarks.ratings, limit: 7 });
       const { sha256, ...unsigned } = page;
-      const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(unsigned))))].map(byte => byte.toString(16).padStart(2, '0')).join('');
-      expect(sha256).toBe(digest);
+      expect(sha256).toBe(await sha256Hex(JSON.stringify(unsigned)));
       expect(page.rows.length).toBeLessThanOrEqual(7);
       pages.push(page);
       if (page.nextCursor === null) break;
@@ -649,6 +681,8 @@ describe('competitive authority', () => {
     });
     const decision = await reviewedDecision(a, results[0].id, [results[0].id]);
     await recovered.requestCorrection(decision.id);
+    const checkpoint = await runInDurableObject(recovered, (_instance, state) => state.storage.sql.exec<{ payload: string; digest: string }>('SELECT payload,digest FROM checkpoints').one());
+    expect(checkpoint.digest).toBe(await sha256Hex(checkpoint.payload));
     await recovered.processCorrections();
     expect(await recovered.correctionStatus(decision.id)).toMatchObject({ complete: false, runs: [{ phase: 'replay', cursor: 20, watermark: 21 }] });
     await evictDurableObject(recovered);

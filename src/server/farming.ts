@@ -2,10 +2,11 @@ import type { GameResult } from '../shared/protocol';
 
 export const FARMING_POLICY = 'informational-2026-10-v3';
 const DAY = 86_400_000;
-const RETAINED = 1_000;
-const QUERY_LIMIT = RETAINED + 1;
-const CANDIDATE_LIMIT = 4 * RETAINED;
-const CATCHUP_LIMIT = 8;
+/** The most check rows one neighborhood may hold before coverage is reported incomplete. */
+const NEIGHBORHOOD_LIMIT = 1_000;
+const QUERY_LIMIT = NEIGHBORHOOD_LIMIT + 1;
+const CANDIDATE_LIMIT = 4 * NEIGHBORHOOD_LIMIT;
+export const CATCHUP_LIMIT = 8;
 export const FARMING_PATTERNS = ['repeated-pair', 'reciprocal-wins', 'early-resignation', 'account-cluster', 'rating-transfer-candidate'] as const;
 type Pattern = typeof FARMING_PATTERNS[number];
 type Check = {
@@ -49,37 +50,17 @@ function isEarly(winnerId: string | null, reason: string, plies: number): boolea
   return winnerId !== null && (reason === 'resignation' || reason === 'timeout-win') && plies < 10;
 }
 function early(check: Check): boolean { return isEarly(check.winner_id, check.reason, check.plies); }
-function order(a: Check, b: Check): number { return a.ended_at - b.ended_at || a.game_id.localeCompare(b.game_id); }
+function byEnd(a: Check, b: Check): number { return a.ended_at - b.ended_at; }
 
 function incomplete(sql: SqlStorage, check: Check, work: FarmingWork, reason: CoverageReason): FarmingWork {
   sql.exec("UPDATE rated_result_checks SET policy=?,coverage='incomplete',coverage_reason=? WHERE game_id=?", FARMING_POLICY, reason, check.game_id);
   return { ...work, complete: false, reason };
 }
 
-function analyze(sql: SqlStorage, current: Check, now: number): FarmingWork {
-  const work: FarmingWork = { duplicate: false, complete: false, candidateRows: 0, rowsRead: 0, updatedChecks: 0 };
-  const checks = new Map<string, Check>([[current.game_id, current]]);
-  const flags = new Map<string, Set<Pattern>>();
-  function mark(check: Check, pattern: Pattern) {
-    const values = flags.get(check.game_id) ?? new Set<Pattern>(JSON.parse(check.patterns_json) as Pattern[]);
-    values.add(pattern);
-    flags.set(check.game_id, values);
-  }
-  // Each lookup seeks an indexed local time window. The extra row is a guard,
-  // not permission to analyze more than the retained-ranked admission ceiling.
-  function read(where: string, bindings: Array<string | number>, ordering = 'ended_at,game_id'): Check[] | null {
-    const cursor = sql.exec<Check>(`SELECT ${COLUMNS} FROM rated_result_checks WHERE ${where} ORDER BY ${ordering} LIMIT ${QUERY_LIMIT}`, ...bindings);
-    const rows = cursor.toArray();
-    work.rowsRead += cursor.rowsRead;
-    work.candidateRows += rows.length;
-    if (rows.length > RETAINED || work.candidateRows > CANDIDATE_LIMIT) return null;
-    for (const check of rows) checks.set(check.game_id, check);
-    return rows;
-  }
-  const from = current.ended_at - DAY;
-  const until = current.ended_at + DAY;
-  const peers = read('pair_key=? AND ended_at>=? AND ended_at<=?', [current.pair_key, from, until], 'ended_at');
-  if (!peers) return incomplete(sql, current, work, 'candidate-limit');
+type Mark = (check: Check, pattern: Pattern) => void;
+type Read = (where: string, bindings: Array<string | number>, ordering?: string) => Check[] | null;
+
+function markRepeatedPairs(current: Check, peers: Check[], mark: Mark): void {
   for (const peer of peers) {
     if (peer.game_id === current.game_id) continue;
     mark(current, 'repeated-pair'); mark(peer, 'repeated-pair');
@@ -87,78 +68,113 @@ function analyze(sql: SqlStorage, current: Check, now: number): FarmingWork {
       mark(current, 'reciprocal-wins'); mark(peer, 'reciprocal-wins');
     }
   }
+}
 
-  if (current.score !== null) {
-    const [a, b] = pair(current);
-    const incident = new Map<string, Check>();
-    for (const account of [a, b]) {
-      for (const index of [0, 1]) {
-        const rows = read(`json_extract(pair_key,'$[${index}]')=? AND ended_at>=? AND ended_at<=?`, [account, from, until]);
-        if (!rows) return incomplete(sql, current, work, 'candidate-limit');
-        for (const check of rows) incident.set(check.game_id, check);
-      }
+/** Three accounts whose three pairs all played scored games within one day. False when a lookup passed its bound. */
+function markAccountClusters(current: Check, read: Read, mark: Mark): boolean {
+  const [a, b] = pair(current);
+  const incident = new Map<string, Check>();
+  for (const account of [a, b]) {
+    for (const index of [0, 1]) {
+      const rows = read(`json_extract(pair_key,'$[${index}]')=? AND ended_at>=? AND ended_at<=?`, [account, current.ended_at - DAY, current.ended_at + DAY]);
+      if (!rows) return false;
+      for (const check of rows) incident.set(check.game_id, check);
     }
-    const neighbors = new Map<string, { a: Check[]; b: Check[] }>();
-    for (const check of incident.values()) {
-      if (check.score === null || check.pair_key === current.pair_key) continue;
-      const accounts = pair(check);
-      const side = accounts.includes(a) ? 'a' : accounts.includes(b) ? 'b' : null;
-      if (!side) continue;
-      const other = accounts[0] === (side === 'a' ? a : b) ? accounts[1] : accounts[0];
-      const neighbor = neighbors.get(other) ?? { a: [], b: [] };
-      neighbor[side].push(check); neighbors.set(other, neighbor);
-    }
-    for (const neighbor of neighbors.values()) {
-      if (!neighbor.a.length || !neighbor.b.length) continue;
-      neighbor.a.sort(order); neighbor.b.sort(order);
-      for (const [left, right] of [[neighbor.a, neighbor.b], [neighbor.b, neighbor.a]]) {
-        for (const check of left) {
-          const lower = Math.max(current.ended_at, check.ended_at) - DAY;
-          const upper = Math.min(current.ended_at, check.ended_at) + DAY;
-          let lo = 0; let hi = right.length;
-          while (lo < hi) {
-            const middle = (lo + hi) >>> 1;
-            if (right[middle].ended_at < lower) lo = middle + 1;
-            else hi = middle;
-          }
-          if (lo < right.length && right[lo].ended_at <= upper) {
-            mark(check, 'account-cluster'); mark(current, 'account-cluster');
-          }
+  }
+  const neighbors = new Map<string, { a: Check[]; b: Check[] }>();
+  for (const check of incident.values()) {
+    if (check.score === null || check.pair_key === current.pair_key) continue;
+    const accounts = pair(check);
+    const side = accounts.includes(a) ? 'a' : accounts.includes(b) ? 'b' : null;
+    if (!side) continue;
+    const other = accounts[0] === (side === 'a' ? a : b) ? accounts[1] : accounts[0];
+    const neighbor = neighbors.get(other) ?? { a: [], b: [] };
+    neighbor[side].push(check); neighbors.set(other, neighbor);
+  }
+  for (const neighbor of neighbors.values()) {
+    if (!neighbor.a.length || !neighbor.b.length) continue;
+    neighbor.a.sort(byEnd); neighbor.b.sort(byEnd);
+    for (const [left, right] of [[neighbor.a, neighbor.b], [neighbor.b, neighbor.a]]) {
+      for (const check of left) {
+        // The third game must end within a day of both others, so all three share one day.
+        const lower = Math.max(current.ended_at, check.ended_at) - DAY;
+        const upper = Math.min(current.ended_at, check.ended_at) + DAY;
+        let lo = 0; let hi = right.length;
+        while (lo < hi) {
+          const middle = (lo + hi) >>> 1;
+          if (right[middle].ended_at < lower) lo = middle + 1;
+          else hi = middle;
+        }
+        if (lo < right.length && right[lo].ended_at <= upper) {
+          mark(check, 'account-cluster'); mark(current, 'account-cluster');
         }
       }
     }
   }
+  return true;
+}
 
+/** `wins` are one account's wins in a window around `current`, oldest first. */
+function markRatingTransfers(current: Check, wins: Check[], mark: Mark): void {
+  const donor = (check: Check): string => {
+    const accounts = pair(check);
+    return accounts[0] === current.winner_id ? accounts[1] : accounts[0];
+  };
+  let right = 0; let earlyWins = 0; let markedUntil = 0;
+  const donors = new Map<string, number>();
+  for (let left = 0; left < wins.length; left++) {
+    while (right < wins.length && wins[right].ended_at - wins[left].ended_at <= DAY) {
+      const account = donor(wins[right]);
+      donors.set(account, (donors.get(account) ?? 0) + 1);
+      if (early(wins[right])) earlyWins++;
+      right++;
+    }
+    if (right - left >= 3 && donors.size >= 2 && earlyWins >= 2) {
+      for (let index = Math.max(left, markedUntil); index < right; index++) mark(wins[index], 'rating-transfer-candidate');
+      markedUntil = Math.max(markedUntil, right);
+    }
+    const account = donor(wins[left]);
+    const count = donors.get(account)! - 1;
+    if (count) donors.set(account, count); else donors.delete(account);
+    if (early(wins[left])) earlyWins--;
+  }
+}
+
+function analyze(sql: SqlStorage, current: Check, now: number): FarmingWork {
+  const work: FarmingWork = { duplicate: false, complete: false, candidateRows: 0, rowsRead: 0, updatedChecks: 0 };
+  const checks = new Map<string, Check>([[current.game_id, current]]);
+  const flags = new Map<string, Set<Pattern>>();
+  const mark: Mark = (check, pattern) => {
+    const values = flags.get(check.game_id) ?? new Set<Pattern>(JSON.parse(check.patterns_json) as Pattern[]);
+    values.add(pattern);
+    flags.set(check.game_id, values);
+  };
+  // Each lookup seeks an indexed local time window. The extra row only detects a
+  // breach of the bound; work never grows past it.
+  const read: Read = (where, bindings, ordering = 'ended_at,game_id') => {
+    const cursor = sql.exec<Check>(`SELECT ${COLUMNS} FROM rated_result_checks WHERE ${where} ORDER BY ${ordering} LIMIT ${QUERY_LIMIT}`, ...bindings);
+    const rows = cursor.toArray();
+    work.rowsRead += cursor.rowsRead;
+    work.candidateRows += rows.length;
+    if (rows.length > NEIGHBORHOOD_LIMIT || work.candidateRows > CANDIDATE_LIMIT) return null;
+    for (const check of rows) checks.set(check.game_id, check);
+    return rows;
+  };
+  const from = current.ended_at - DAY;
+  const until = current.ended_at + DAY;
+  const peers = read('pair_key=? AND ended_at>=? AND ended_at<=?', [current.pair_key, from, until], 'ended_at');
+  if (!peers) return incomplete(sql, current, work, 'candidate-limit');
+  markRepeatedPairs(current, peers, mark);
+  if (current.score !== null && !markAccountClusters(current, read, mark)) return incomplete(sql, current, work, 'candidate-limit');
   if (current.winner_id !== null) {
     const wins = read('winner_id=? AND ended_at>=? AND ended_at<=?', [current.winner_id, from, until]);
     if (!wins) return incomplete(sql, current, work, 'candidate-limit');
-    let right = 0; let earlyWins = 0; let markedUntil = 0;
-    const donors = new Map<string, number>();
-    function donor(check: Check): string {
-      const accounts = pair(check);
-      return accounts[0] === current.winner_id ? accounts[1] : accounts[0];
-    }
-    for (let left = 0; left < wins.length; left++) {
-      while (right < wins.length && wins[right].ended_at - wins[left].ended_at <= DAY) {
-        const account = donor(wins[right]);
-        donors.set(account, (donors.get(account) ?? 0) + 1);
-        if (early(wins[right])) earlyWins++;
-        right++;
-      }
-      if (right - left >= 3 && donors.size >= 2 && earlyWins >= 2) {
-        for (let index = Math.max(left, markedUntil); index < right; index++) mark(wins[index], 'rating-transfer-candidate');
-        markedUntil = Math.max(markedUntil, right);
-      }
-      const account = donor(wins[left]);
-      const count = donors.get(account)! - 1;
-      if (count) donors.set(account, count); else donors.delete(account);
-      if (early(wins[left])) earlyWins--;
-    }
+    markRatingTransfers(current, wins, mark);
   }
 
   // Apply nothing from an incomplete neighborhood. The basic durable record
   // and its original facts remain, and settlement is never denied by a guard.
-  if (checks.size > RETAINED || new Set([...flags.keys(), current.game_id]).size > RETAINED) {
+  if (checks.size > NEIGHBORHOOD_LIMIT || new Set([...flags.keys(), current.game_id]).size > NEIGHBORHOOD_LIMIT) {
     return incomplete(sql, current, work, 'update-limit');
   }
   for (const id of new Set([...flags.keys(), current.game_id])) {
@@ -228,15 +244,16 @@ export function farmingStatus(sql: SqlStorage) {
     COALESCE(SUM(coverage_reason='candidate-limit'),0) AS candidateLimit,
     COALESCE(SUM(coverage_reason='update-limit'),0) AS updateLimit,
     COALESCE(SUM(coverage_reason='source-unavailable'),0) AS sourceUnavailable FROM rated_result_checks`).one();
+  const counts = new Map(sql.exec<{ pattern: string; count: number }>(`SELECT j.value AS pattern,COUNT(*) AS count
+    FROM rated_result_checks c,json_each(c.patterns_json) j GROUP BY j.value`).toArray().map(row => [row.pattern, row.count]));
   const recent = sql.exec<{ game_id: string; ended_at: number; checked_at: number; patterns_json: string }>(`SELECT game_id,ended_at,checked_at,patterns_json
     FROM rated_result_checks WHERE json_array_length(patterns_json)>0 ORDER BY checked_at DESC,game_id LIMIT 20`).toArray();
   return {
     policy: FARMING_POLICY, informational: true, checked: totals.checked, flagged: totals.flagged,
     coverage: { complete: !totals.pending && !totals.incomplete, pending: Boolean(totals.pending), incomplete: totals.incomplete,
       reasons: { 'candidate-limit': totals.candidateLimit, 'update-limit': totals.updateLimit, 'source-unavailable': totals.sourceUnavailable } },
-    limits: { retainedRankedGames: RETAINED, candidateRowsPerCheck: CANDIDATE_LIMIT, rowsPerQuery: QUERY_LIMIT, updatedChecks: RETAINED, catchupPerAlarm: CATCHUP_LIMIT },
-    patterns: Object.fromEntries(FARMING_PATTERNS.map(pattern => [pattern, sql.exec<{ count: number }>(`SELECT COUNT(*) AS count
-      FROM rated_result_checks WHERE EXISTS(SELECT 1 FROM json_each(patterns_json) WHERE value=?)`, pattern).one().count])),
+    limits: { retainedRankedGames: NEIGHBORHOOD_LIMIT, candidateRowsPerCheck: CANDIDATE_LIMIT, rowsPerQuery: QUERY_LIMIT, updatedChecks: NEIGHBORHOOD_LIMIT, catchupPerAlarm: CATCHUP_LIMIT },
+    patterns: Object.fromEntries(FARMING_PATTERNS.map(pattern => [pattern, counts.get(pattern) ?? 0])),
     recent: recent.map(row => ({ gameId: row.game_id, endedAt: row.ended_at, checkedAt: row.checked_at, patterns: JSON.parse(row.patterns_json) as Pattern[] })),
   };
 }
