@@ -299,7 +299,7 @@
     {
       "id": "G08",
       "legalMoves": [],
-      "action": "two-lost-proof-replies-stale-probes-original-void-and-late-receipt"
+      "action": "two-lost-proof-replies-stale-probes-material-fallback-and-late-receipt"
     },
     {
       "id": "G09",

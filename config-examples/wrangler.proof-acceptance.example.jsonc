@@ -1,3 +1,5 @@
+// Control-only and unarmed. The sealed re-run copy adds bindings and vars: see
+// docs/timeout-proofs.md#owner-re-run-procedure
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ejm-chess-proof-acceptance-unarmed",

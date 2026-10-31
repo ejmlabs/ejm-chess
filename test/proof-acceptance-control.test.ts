@@ -34,6 +34,7 @@ function scope() {
 }
 
 type G07Evidence = {
+  outcome: string;
   replies: { attempt: number; request: TimeoutProofRequest; result: TimeoutProofResult }[];
   receipts: { id: string; game_id: string; attempt: number; result: string | null }[];
   watcher: { exitCode: number; stopConfirmed: boolean; killed: boolean; pid: number; group: number };
@@ -74,6 +75,8 @@ const g07Cases: { name: string; passed?: boolean; change: (evidence: G07Evidence
   { name: 'unreleased proof slot', change: saved => { saved.settlement.slots[0].released_at = null; } },
   { name: 'duplicate settlement', change: saved => { saved.settlement.results.push({}); } },
   { name: 'missing rating update for a material timeout', change: saved => { saved.settlement.ratings.pop(); } },
+  { name: 'old technical void result', change: saved => { saved.outcome = 'technical-void'; } },
+  { name: 'proof win instead of the material fallback', change: saved => { saved.outcome = 'timeout-proof-win'; } },
 ];
 
 describe('unarmed proof acceptance control', () => {
@@ -85,7 +88,7 @@ describe('unarmed proof acceptance control', () => {
       initialFen: fen, fen, moves: [], expiresAt: T0 + 30_000, attempt: 1 };
     const request: TimeoutProofRequest = { ...partial, ...await proofDigests(partial) };
     const result = unknownProof(request, 'resource-limit');
-    const saved: G07Evidence = { replies: [{ attempt: 1, request, result }],
+    const saved: G07Evidence = { outcome: 'timeout-win', replies: [{ attempt: 1, request, result }],
       receipts: [{ id: `${request.requestId}:1`, game_id: gameId, attempt: 1, result: JSON.stringify(result) }],
       watcher: { exitCode: 0, stopConfirmed: true, killed: true, pid: 123, group: 123 },
       settlement: { results: [{}], slots: [{ released_at: T0 }], ratings: [{}] } };
@@ -97,7 +100,7 @@ describe('unarmed proof acceptance control', () => {
       state.storage.sql.exec("INSERT INTO proof_acceptance_jobs(id) VALUES('G07')");
       state.storage.sql.exec('INSERT INTO proof_acceptance_runtime(id) VALUES(1)');
       const game = { acceptanceInspect: vi.fn(async () => ({ game: { status: 'finished',
-        result: { status: 'finished', outcome: { reason: 'timeout-win' } } }, replies: saved.replies })), flush: vi.fn(async () => {}) };
+        result: { status: 'finished', outcome: { reason: saved.outcome } } }, replies: saved.replies })), flush: vi.fn(async () => {}) };
       const competition = { flush: vi.fn(async () => {}), acceptanceInspect: vi.fn(async () => saved.settlement) };
       const prover = { acceptanceInspect: vi.fn(async () => ({ receipts: saved.receipts, diagnostic: { watcher: JSON.stringify(saved.watcher) } })) };
       // Call the actual observer. Only its fixed inspection/flush RPCs exist in this local harness.

@@ -214,7 +214,7 @@ describe('timeout proof result arbitration', () => {
     expect(events).toEqual([{ score: 0 }]);
   });
 
-  it('rejects a proof at the original void deadline and cannot overwrite its terminal result', async () => {
+  it('rejects a proof at the original fallback deadline and cannot overwrite or re-rate its terminal result', async () => {
     const match = await pair();
     const active = await ready(match);
     const flagAt = active.clocks.deadline!;
@@ -229,6 +229,33 @@ describe('timeout proof result arbitration', () => {
     await match.game.flush();
     expect(await match.game.acceptTimeoutProof(proof)).toBe(false);
     expect((await match.game.status())!.result).toEqual(final);
+    await match.game.flush();
+    const ratings = await runInDurableObject(competition, (_instance, state) =>
+      state.storage.sql.exec('SELECT score FROM rating_events WHERE game_id=?', active.id).toArray());
+    expect(ratings).toEqual([{ score: 0 }]);
+  });
+
+  it('falls back to the material rule after both lost deliveries and rates the game once', async () => {
+    const match = await pair();
+    const active = await ready(match);
+    const flagAt = active.clocks.deadline!;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(flagAt);
+    const fetcher = vi.fn(async () => { throw new Error('reply_lost_after_pool_committed'); });
+    await prover(match.game, fetcher);
+    await match.game.snapshot(match.white);
+    for (const offset of [0, 250, 500, 10_000]) {
+      clock.mockReturnValue(flagAt + offset);
+      await match.game.resolveTimeoutProof();
+    }
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect((await match.game.status())!.status).toBe('pending-adjudication');
+    clock.mockReturnValue(flagAt + 30_000);
+    expect(await match.game.snapshot(match.black)).toMatchObject({ status: 'finished', endedAt: flagAt + 30_000,
+      outcome: { winner: 'b', score: 0, reason: 'timeout-win' } });
+    await match.game.flush();
+    const ratings = await runInDurableObject(competition, (_instance, state) =>
+      state.storage.sql.exec('SELECT score FROM rating_events WHERE game_id=?', active.id).toArray());
+    expect(ratings).toEqual([{ score: 0 }]);
   });
 
   it('resolves a supported negative proof as a draw without granting either player a win', async () => {
@@ -263,7 +290,7 @@ describe('timeout proof result arbitration', () => {
     expect(requests.map(input => input.expiresAt)).toEqual([flagAt + 30_000, flagAt + 30_000]);
     expect(requests[1].requestId).toBe(requests[0].requestId);
     clock.mockReturnValue(flagAt + 30_000);
-    expect((await match.game.snapshot(match.white)).outcome?.reason).toBe('timeout-win');
+    expect((await match.game.snapshot(match.white)).outcome).toMatchObject({ winner: 'b', reason: 'timeout-win' });
   });
 
   it('reconciles a lost proof reply after restart using the same request and credit', async () => {

@@ -37,6 +37,96 @@ zero proof deliveries, an untouched proof transport sentinel and an available
 stop path. They ran no native solver or provider work and do not
 qualify ranked launch.
 
+## Owner re-run procedure
+
+Unexecuted. This re-run against the material timeout rule gates ranked proof
+(tasks 3.9 and 7.2). Earlier runs, including Q21 and Q22, are historical: never
+reuse their IDs, seals, namespaces or windows. Use fresh isolated resources, run
+in this order and stop at the first failure. A failure consumes its permits and
+needs a new reviewed candidate.
+
+**Blocker, open 2026-10-31.** `ACCEPTANCE_WORK.Competition.events` is 96. A live
+ranked match makes Competition reconcile every 30 seconds (measured 10 alarms by
+the flag, 11 with the fallback tail), which is 93 alarms across the nine fixed
+phases. Required joins, reservation checks, settlements, flushes and inspections
+add at least 70, so the fixed plan needs at least 163 permits with warm objects
+and more with each cold wake. With 96, the 96th permit is spent by G07's flag
+alarm, so G07 cannot finish and every later Competition call returns
+`proof_acceptance_work_exhausted`. This is consistent with the Q22 symptom: an
+incomplete Game job showing two Control polls, then that error from Competition
+capture. Game's 32 is estimated at 26 to 34 per game from the code, and Prover
+and Control are uncounted. Re-derive all four ceilings from measured events and
+seal again. Never refund or reset spent permits.
+
+1. **Local gate.** On Node 24, before any provider call:
+
+   ```sh
+   npx tsc -p tsconfig.worker.json
+   npx vitest run test/proof-*.test.ts
+   node scripts/rehearse-proof-local.mjs --describe
+   ```
+
+   Then run the image checks in [Reproduce and qualify](#reproduce-and-qualify).
+
+2. **Reconstruct private configs.** Copy each example from
+   [`config-examples/`](../config-examples/README.md) to the gitignored root
+   name. Fill only the fields below from the private provider inventory and
+   review records. Keep `TIMEOUT_PROOF_PROFILE=off`, `MONTHLY_PROOF_LIMIT=0`,
+   `NEW_WORK_STOPPED=true` and every other flag false.
+
+   | Config | Fill from private records |
+   | --- | --- |
+   | `wrangler.proof-qualification.jsonc` | `account_id`; fresh isolated D1 `database_id` and `database_name`; `PROOF_QUALIFICATION_DATABASE_ID` (same D1 ID); two different 32-hex namespace IDs read back for this Worker as `PROOF_QUALIFICATION_CONTROL_NAMESPACE_ID` and `..._PROVER_NAMESPACE_ID`; `PROOF_QUALIFICATION_SCOPE` (`ejm-chess-proof-qualification-` plus a run label); `..._SOURCE_REVISION` (40 or 64 hex of the deployed source); `..._EXPIRES_AT` (epoch ms, at most two hours ahead); `..._TIER` (`lite` first); production D1 and namespace IDs in `PRODUCTION_RESOURCE_IDS` (empty fails closed); secret `PROOF_QUALIFICATION_TOKEN`; one reviewed Container for `QualificationTimeoutProver` with `max_instances=1` |
+   | `wrangler.proof-acceptance.jsonc` | The example is control-only and cannot run. The sealed copy adds D1 `DB` (fresh), Durable Object bindings `GAME` to `AcceptanceGame`, `COMPETITION` to `AcceptanceCompetition` and `PROVER` to `AcceptanceTimeoutProver` (one Container, `max_instances=1`, tier `lite`) with a migration for all four classes, and vars `PROOF_ACCEPTANCE_EXECUTION=sealed-private`, `PROOF_ACCEPTANCE_TIER`, `PROOF_ACCEPTANCE_PROVER_NAMESPACE_ID`, `PRODUCTION_RESOURCE_IDS`, plus the seal values for `PROOF_ACCEPTANCE_SOURCE_REVISION`, `..._CONTROL_NAMESPACE_ID` and `..._MANIFEST_SHA256`. It binds no assets, mail, analysis or queues |
+   | `wrangler.proof-service.jsonc` | `account_id`; the existing production D1 `database_id`; the qualified Container image digest and tier. Prepare it only after steps 3 and 4 pass |
+
+   The acceptance seal is compiled privately into the manifest. It sets
+   `executionAvailable`, `adaptersAvailable`, the three reviewed hashes under
+   `reviewGates` and `sealedRuntimeIdentity` (`ProofAcceptanceIdentity`). The
+   checked-in manifest has a null seal and records no hash. Compute
+   `manifestDigest` over the compiled manifest, as `proofAcceptanceManifestDigest()`
+   does: SHA-256 of `JSON.stringify([{...manifest, sealedRuntimeIdentity: null}])`.
+   Any manifest edit changes it, so a seal made before the 2026-10-31 label change
+   is invalid.
+
+3. **Qualification harness.** Call `POST /qualify` through the reviewed private
+   access path, with `Authorization: Bearer $PROOF_QUALIFICATION_TOKEN` and one
+   body per call: `{"operation":"inspect"}`, then `{"operation":"run","batch":N}`
+   for `N` from 0 to `coldBatch` (7 for the 27 entry corpus), one at a time, then
+   `{"operation":"stop"}`. Pass: 31 `measurements` rows (27 corpus and 4 cold), each
+   `passed: true`; `configurationMatches` and `enabled` true after batch 0; after
+   stop, `stopped: true`, `stopConfirmed: true` and `enabled: false`. Details:
+   [Isolated provider harness](#isolated-provider-harness).
+
+4. **Acceptance.** Send these through a private caller bound to
+   `ProofAcceptanceCaller`: `{"operation":"arm"}`, then
+   `{"operation":"advance","id":ID}` in the order `select-lite`, `C00` to `C26`,
+   `G00` to `G11`, `close-v1`, polling `{"operation":"inspect"}` until each Game
+   job is complete. Each Game takes about five minutes and `G00` starts four
+   together, so the run takes about 50 minutes of the two-hour lifetime. Pass:
+   every `C` and `G` job has `complete` and `passed` set and `runtime.failed` is 0.
+   `G07`, `G08` and `G11` end `timeout-win` at the original flag time plus 30
+   seconds, the other Games end `timeout-proof-win`, and each has one settlement
+   result, one rating event and a released proof slot. `close-v1` stops the run.
+   On a G job, `deliveries` counts Control polls, not proof deliveries, and
+   `credit_deliveries` is only for `C` jobs. A fallback Game normally shows two
+   until flag plus 30 seconds. Procedure details:
+   [Further acceptance controller](#further-acceptance-controller-local-preparation).
+
+5. **Stop readbacks.** Record all of these, then remove the isolated deployments.
+   Control `inspect` shows `closed: true`, `closeReason: 'stopped'` and
+   `nativeBudget.closed: 0`. The G10 and G11 job observations hold the Prover
+   readback: `nativeRunning: false`, phase `idle` and no stop debt, except after
+   G11, which deliberately leaves exhausted stop debt.
+   The provider shows Container cap zero with no active or assigned instances,
+   and no route, `workers.dev` or preview alias. The qualification stop is
+   `stopConfirmed: true`.
+
+6. **Record and continue.** Write a new dated file under `docs/qualification/`;
+   do not edit the dated 2026-10-21 record. Check task 3.9 only from these
+   verified results. Then follow the unrun [deployment sequence](#private-production-service-inactive)
+   for `wrangler.proof-service.jsonc`.
+
 ## Player rules
 
 chess.js still owns live move legality, clocks and supported automatic draws.
@@ -63,7 +153,8 @@ The winning continuation may require cooperation. This tests whether mate is
 possible, rather than whether a player can force it. A material score, engine
 evaluation or likely winner cannot replace proof. A successful proof retains
 the original flag time as the game's end time. Retries never add time.
-Unknown cases remain a competitive limit and may permit loss avoidance.
+Unknown cases remain a competitive limit: the fallback can score a win in a
+rare blocked position the solver could not decide, where a draw was correct.
 
 ## Admission and draining
 
@@ -387,11 +478,11 @@ Retain raw measurements under `proof/measurements/`. The authorized corpus
 includes both surviving sides, ordinary flags, minor pieces and blocked walls,
 special moves, full-history online draws and checkmate precedence. Preserve
 expected supported answers. Ordinary flags must resolve correctly before their
-original deadlines, rather than all becoming technical voids.
+original deadlines, rather than all falling back to the material rule.
 
 Repeat the corpus through the private provider binding with four simultaneous
 cold requests, allowed retries, killed children, lost replies, controller
-restart, stale/duplicate/late results, void races and exhausted admissions.
+restart, stale/duplicate/late results, material-fallback races and exhausted admissions.
 Measure total and child CPU, peak memory, image/startup/queue time, unknown and
 failure rates, storage and retry overhead, and complete cost per 1,000 attempts.
 Only then choose the smallest passing tier, configure one instance and its
@@ -571,7 +662,7 @@ charges remain uncertain. Those operational checks stay open. C14/C15 require
 real native mating witnesses rejected by
 independent online-draw validation as `unknown`/`invalid-witness`. G07 requires
 both exact solver-child kill evidence and its native attempt receipt showing
-`unknown`/`resource-limit`; a kill or technical void alone does not establish
+`unknown`/`resource-limit`; a kill or a material fallback alone does not establish
 that reason. Native `undetermined` parser coverage is synthetic. No genuine
 native `undetermined` fixture is retained or claimed executed; record that gap
 and add a genuine fixture if found. Preserve the production `solver-undetermined`

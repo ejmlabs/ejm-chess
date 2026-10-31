@@ -136,7 +136,8 @@ export class ProofAcceptanceBudget {
       const exhausted = Boolean(row.closed || row.events >= ACCEPTANCE_WORK[this.kind].events);
       const emergency = exhausted && ['Control', 'Prover'].includes(this.kind) && emergencyOperations.has(operation) && row.emergencies < 6;
       if (row.kind !== this.kind || exhausted && !emergency) {
-        throw new Error('proof_acceptance_work_exhausted');
+        // A failed measurement closes the budget with permits left. Name it so a readback can tell closure from spent permits.
+        throw new Error(row.kind === this.kind && row.closed ? 'proof_acceptance_native_envelope_closed' : 'proof_acceptance_work_exhausted');
       }
       this.native.storage.sql.exec('UPDATE proof_acceptance_budget SET events=events+1,emergencies=emergencies+? WHERE id=1', Number(emergency));
       this.native.storage.sql.exec('INSERT INTO proof_acceptance_usage(id,operation) VALUES(?,?)', row.events + 1, operation);

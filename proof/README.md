@@ -105,7 +105,7 @@ underpromotion, bare king, two knights, bishop versus knight, blocked walls and
 draw boundaries. C14/C15 require real native mating witnesses rejected by
 independent online-draw validation as `unknown`/`invalid-witness`. G07 requires
 both exact solver-child kill evidence and its native attempt receipt showing
-`unknown`/`resource-limit`. A kill or technical void alone does not establish
+`unknown`/`resource-limit`. A kill or a material fallback alone does not establish
 that reason. Native `undetermined` parser coverage is synthetic. No genuine
 native `undetermined` fixture is retained or claimed executed; record that gap
 and add a genuine fixture if found. Preserve the production `solver-undetermined`

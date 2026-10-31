@@ -6,6 +6,7 @@ import { prepareAcceptanceAccounts, type AcceptanceAdapterEnv } from '../src/ser
 import { proofAcceptanceManifestDigest, type ProofAcceptanceIdentity } from '../src/server/proof-acceptance-journal';
 import { ProofAcceptanceBudget, ACCEPTANCE_WORK, proofRecoveryBudgetPlan,
   type AcceptanceRecoveryBudget } from '../src/server/proof-acceptance-budget';
+import { Competition } from '../src/server/competition';
 import { Game } from '../src/server/game';
 import type { Env } from '../src/server/env';
 import type { GameResult } from '../src/shared/protocol';
@@ -110,6 +111,52 @@ describe('private proof predispatch permits', () => {
       await expect(budget.run('exhausted', () => undefined)).rejects.toThrow('proof_acceptance_work_exhausted');
       expect(budget.inspect().events).toHaveLength(ACCEPTANCE_WORK.Game.events);
     });
+  });
+
+  it('names a closed envelope separately from spent permits', async () => {
+    const carrier = env.GAME.get(env.GAME.idFromName(crypto.randomUUID()));
+    await runInDurableObject(carrier, async (_instance, state) => {
+      const budget = new ProofAcceptanceBudget(state, 'Game'); budget.sealBootstrap();
+      await expect(budget.run('failed-measurement', () => budget.context.storage.sql.exec('SELECT 1 FROM missing_table')))
+        .rejects.toThrow('proof_acceptance_native_envelope_failed');
+      await expect(budget.run('after-closure', () => undefined)).rejects.toThrow('proof_acceptance_native_envelope_closed');
+      const spent = budget.inspect();
+      expect(spent.closed).toBe(1);
+      expect(spent.events.length).toBeLessThan(ACCEPTANCE_WORK.Game.events);
+    });
+  });
+
+  it('charges a live Competition match one permit per reconcile alarm and never closes it', async () => {
+    const carrier = env.GAME.get(env.GAME.idFromName(crypto.randomUUID()));
+    const startedAt = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
+    let active = false;
+    // Only the Game transport is a fixture. Competition, its alarms, D1 admission and the native meter are real.
+    const game = { init: async () => ({}), status: async () => ({ status: active ? 'active' : 'ready', result: null, startedAt: active ? startedAt : null }) };
+    const measured = await runInDurableObject(carrier, async (_instance, state) => {
+      const budget = new ProofAcceptanceBudget(state, 'Competition');
+      const config = { ...env, RANKED_ENABLED: 'true', TOURNAMENTS_ENABLED: 'false', ARENAS_ENABLED: 'false', NEW_WORK_STOPPED: 'false',
+        TIMEOUT_PROOF_PROFILE: PROOF_PROFILE, MONTHLY_PROOF_LIMIT: '39', MONTHLY_GAME_LIMIT: '39', RANKED_GAME_LIMIT: '4',
+        RANKED_RETAINED_GAME_LIMIT: '39', RANKED_QUEUE_LIMIT: '8', PROVER: {},
+        GAME: { idFromName: (name: string) => name, get: () => game } } as unknown as Env;
+      const competition = new Competition(state, { ...config, DB: budget.d1(env.DB) }, budget.context);
+      budget.sealBootstrap();
+      const [white, black] = await Promise.all([player(), player()]);
+      await budget.run('joinQueue', () => competition.joinQueue(white, 'blitz'));
+      await budget.run('joinQueue', () => competition.joinQueue(black, 'blitz'));
+      active = true;
+      let alarms = 0;
+      for (let due = await state.storage.getAlarm(); due !== null && due <= startedAt + 300_000 && alarms < 40; due = await state.storage.getAlarm()) {
+        clock.mockReturnValue(Math.max(due, Date.now())); alarms++;
+        await budget.run('alarm', () => competition.alarm());
+      }
+      return { alarms, ...budget.inspect() };
+    });
+    expect(measured.alarms).toBeGreaterThan(0);
+    expect(measured.events.map(event => event.operation)).toEqual(['bootstrap', 'joinQueue', 'joinQueue', ...Array(measured.alarms).fill('alarm')]);
+    expect(measured.closed).toBe(0);
+    expect(measured.events.every(event => event.complete === 1 && event.usage?.uncertain === false)).toBe(true);
+    expect(Math.max(...measured.events.map(event => event.usage!.doRowsRead))).toBeLessThanOrEqual(ACCEPTANCE_WORK.Competition.doRowsRead);
   });
 
   it('drains a real Game terminal outbox after five minutes of status reads and two reconstructions', async () => {
