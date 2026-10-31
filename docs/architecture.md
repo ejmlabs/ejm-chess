@@ -49,12 +49,17 @@ Every route uses the current public ejm-ui design, including protected review,
 operations, account forms, play and replay. The product supplies words, chess
 state, callbacks and semantic attributes. Shared recipes own widths, spacing,
 typography, motion and responsive layout. `src/styles.css` only imports the
-public stylesheet. The public `ejmSite({ project: 'chess' })` plugin always
-checks the consumer source and rejects product classes,
-inline styles, local CSS rules, raw HTML and opaque JSX prop spreads during
-both development and builds. The former `enforceDesignKit` option is obsolete.
-This checks source ownership; browser layout still needs its own verification.
-Extend the shared owner for a missing pattern.
+public stylesheet. `vite.config.ts` is one public preset,
+`ejmlabs({ project: 'chess', headers: chessHeaders })` from `@ejm/site/vite`, and
+`tsconfig.json` extends `@ejm/ui/tsconfig.json`. The preset checks the consumer
+source and rejects product classes, inline styles, local CSS rules, raw HTML and
+opaque JSX prop spreads during both development and builds. After prerendering
+it fails the build unless every page has one `h1`, no skipped heading level, the
+skip link first, `main#main` and `rel="external"` on links to other hosts. Public
+components take no `className` or `style`, and controls inside
+`Page variant="application"` are compact without a `density` prop. These checks
+cover source ownership and page structure; browser layout still needs its own
+verification. Extend the shared owner for a missing pattern.
 
 | Public contract | Product use |
 | --- | --- |

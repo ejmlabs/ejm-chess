@@ -168,10 +168,9 @@ closed to the public:
 
 ### Configuration and shared UI notes
 
-- Matching `ejm-ui` source for chess contracts remains local branch
-  `wip/preserve-all-20261025` in the sibling `ejm-ui` checkout. Publish discovery
-  and Studio listing only after public opening is approved; do not merge that
-  branch to `ejm-ui` main solely for the protected canary.
+- The `ejm-ui` revision chess builds against is pinned in
+  `.github/ui-source.json`. Publish discovery and Studio listing only after
+  public opening is approved.
 - Local production `wrangler.jsonc` (gitignored) is reconstructed with
   `env.local` for Worker tests and canary deploy. The five specialty configs
   (`wrangler.capacity.jsonc`, `wrangler.proof-acceptance.jsonc`,

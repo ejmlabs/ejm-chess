@@ -161,8 +161,9 @@ recorded upstream URL. Keep the source and license files with any distribution.
 All pages, guides, game surfaces, fields, actions, tables, disclosures, and
 states compose public ejm-ui exports. Shared application recipes also own
 widths, spacing, forms, game columns and move lists. The product stylesheet
-only imports public UI styles. The public `ejmSite` build guard rejects local visual
-classes, inline styles and CSS rules. Native semantic HTML retains labels and
+only imports public UI styles. The `ejmlabs` preset from `@ejm/site/vite` rejects local visual
+classes, inline styles and CSS rules, and fails the build on a page that breaks the
+shared page rules. Native semantic HTML retains labels and
 validation inside those recipes.
 The kit owns maintained cm-chessboard rendering and input; chess owns legality,
 clock estimation, and authoritative commands. Static guides keep prose in HTML
