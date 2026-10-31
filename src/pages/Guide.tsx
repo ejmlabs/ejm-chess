@@ -241,8 +241,8 @@ const guides: Record<string, GuideContent> = server ? {
       <AppHeading as="h2">Local development</AppHeading>
       <p>Use Node 24, install the sibling public ejm-ui packages, then install this product’s dependencies.
         The repository README and operations guide give the local commands, bindings, migration steps, and launch gates.</p>
-      <AppPre><code>{'npm ci\nnpm run typecheck\nnpm test\nnpm run build\nnpm run worker:check\nnpm run budget'}</code></AppPre>
-      <p>Run the type check, focused server tests, static build, Worker dry run, and bundle budget checks before review.
+      <AppPre><code>{'npm ci\nnpm run typecheck\nnpm test\nnpm run build\nnpm run worker:check'}</code></AppPre>
+      <p>Run the type check, focused server tests, static build, and Worker dry run before review.
         The test command runs native workerd tests and then the Node load-driver tests. The driver tests use local fixtures and a loopback connection, without provider load.
         Tests must protect a real rule or failure risk.</p>
       <AppHeading as="h2">Automatic operation</AppHeading>
