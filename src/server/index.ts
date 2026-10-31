@@ -14,7 +14,7 @@ import { publicArenaJson } from './public-arena-cache';
 import { arenaRegistrationAdmission } from './arena-registration-admission';
 import { cleanupPrivateData, fairPlayHandler, reviewAvailable } from './fairplay';
 import { maintainUnattendedGames } from './maintenance';
-import { cleanupAnalysis, consumeAnalysis, drainAnalysis, reconcileReportedAnalysis } from './analysis';
+import { ESTABLISHED } from './leaderboard';
 import { aiEnabled } from './env';
 import type { JournalKind } from './competition';
 import { publicProfile } from './profile';
@@ -24,7 +24,6 @@ import type { Env } from './env';
 
 export { Game } from './game';
 export { Competition } from './competition';
-export { StockfishAnalyzer } from './analysis';
 
 type Outcome<T> = { ok: true; value: T } | { ok: false; error: { status: number; code: string; message: string } };
 
@@ -179,9 +178,6 @@ async function authenticatedRoute(request: Request, env: Env, ctx: ExecutionCont
     if (response) {
       if (response.ok && request.method === 'POST' && url.pathname === '/api/admin/decisions') {
         ctx.waitUntil(competition(env).processCorrections());
-      }
-      if (response.ok && request.method === 'POST' && url.pathname === '/api/reports') {
-        ctx.waitUntil(reconcileReportedAnalysis(env));
       }
       return response;
     }
@@ -359,7 +355,7 @@ async function leaderboard(env: Env, url: URL): Promise<Response> {
       AND l.account_created_at<=? AND l.last_played_at>=?
       AND NOT EXISTS(SELECT 1 FROM restrictions r WHERE r.user_id=l.user_id AND r.revoked_at IS NULL AND r.expires_at>?)
       AND (? IS NULL OR l.rating_display<? OR (l.rating_display=? AND l.user_id>?))
-    ORDER BY l.rating_display DESC,l.user_id ASC LIMIT 51`).bind(format, now - 7 * 86400_000, now - 30 * 86400_000, now,
+    ORDER BY l.rating_display DESC,l.user_id ASC LIMIT 51`).bind(format, now - ESTABLISHED.accountAgeMs, now - ESTABLISHED.activeWithinMs, now,
       cursor?.rating ?? null, cursor?.rating ?? null, cursor?.rating ?? null, cursor?.id ?? '').all<{ id: string; name: string; rating: number; games: number; updatedAt: number }>();
   const page = rows.results.slice(0, 50);
   const last = page.at(-1);
@@ -384,14 +380,13 @@ async function queue(request: Request, env: Env, path: string, actor: Actor): Pr
 /** The caller has already checked the owner. Returns nothing for an unknown route, so the router answers 404. */
 async function adminOperations(request: Request, env: Env, url: URL, actor: Actor): Promise<Response | undefined> {
   if (url.pathname === '/api/admin/operations' && request.method === 'GET') {
-    const [authority, casual, analysis, budget, security] = await Promise.all([
+    const [authority, casual, budget, security] = await Promise.all([
       competition(env).health(),
       env.DB.prepare("SELECT COUNT(*) AS retained FROM casual_game_admissions WHERE storage_state='retained'").first(),
-      env.DB.prepare('SELECT status,COUNT(*) AS jobs,MIN(created_at) AS oldest FROM analysis_jobs GROUP BY status').all(),
       budgetStatus(env),
       accountRequestStatus(env.DB),
     ]);
-    return jsonResponse({ authority, budget, security, casual: { ...casual, limit: casualGameLimit(env) }, analysis: { enabled: env.ANALYSIS_ENABLED === 'true', states: analysis.results }, ai: { enabled: aiEnabled(env), build: STOCKFISH_BUILD, execution: 'browser' } });
+    return jsonResponse({ authority, budget, security, casual: { ...casual, limit: casualGameLimit(env) }, ai: { enabled: aiEnabled(env), build: STOCKFISH_BUILD, execution: 'browser' } });
   }
   if (url.pathname === '/api/admin/operations/budget' && request.method === 'POST') {
     return jsonResponse(await setBudgetStops(env, actor.id, await readJson(request, 1024)));
@@ -399,12 +394,7 @@ async function adminOperations(request: Request, env: Env, url: URL, actor: Acto
   if (url.pathname === '/api/admin/operations/maintenance' && request.method === 'POST') {
     await readJson(request, 1024);
     const authority = await competition(env).maintenance();
-    const [games, analysis] = await Promise.allSettled([
-      maintainUnattendedGames(env),
-      reconcileReportedAnalysis(env).then(() => drainAnalysis(env)),
-    ]);
-    return jsonResponse({ authority, games: games.status === 'fulfilled' ? games.value : 'retry-needed',
-      analysis: analysis.status === 'fulfilled' ? 'complete' : 'retry-needed' });
+    return jsonResponse({ authority, games: await maintainUnattendedGames(env).catch(() => 'retry-needed' as const) });
   }
   if (url.pathname === '/api/admin/operations/export/manifest' && request.method === 'GET') return jsonResponse(await competition(env).beginExport());
   if (url.pathname === '/api/admin/operations/recovery/inventory' && request.method === 'GET') {
@@ -445,7 +435,6 @@ export default {
     } catch (error) {
       let safeError: unknown = error;
       if (error instanceof Error) {
-        if (error.message.includes('engine_unavailable')) safeError = new ApiError(503, 'AI_UNAVAILABLE', 'Computer practice is unavailable. Try a casual invitation.');
         if (['game_not_found', 'not_a_player'].some(code => error.message.includes(code))) safeError = new ApiError(404, 'GAME_NOT_FOUND', 'This game was not found for your session.');
         if (error.message.includes('seat_unavailable')) safeError = new ApiError(409, 'SEAT_UNAVAILABLE', 'This invitation has already been claimed or has expired.');
       }
@@ -453,16 +442,12 @@ export default {
       catch { return errorResponse(safeError); }
     }
   },
-  async queue(batch: MessageBatch, env: Env): Promise<void> {
-    await consumeAnalysis(batch, env);
-  },
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const work: [string, () => Promise<unknown>][] = [
       ['competition', () => competition(env).maintenance()],
       ['unattended_games', () => maintainUnattendedGames(env)],
-      ['analysis', async () => { await reconcileReportedAnalysis(env); await drainAnalysis(env); }],
     ];
-    if (event.cron === '15 3 * * *') work.push(['private_cleanup', () => cleanupPrivateData(env)], ['analysis_cleanup', () => cleanupAnalysis(env)]);
+    if (event.cron === '15 3 * * *') work.push(['private_cleanup', () => cleanupPrivateData(env)]);
     ctx.waitUntil((async () => {
       const results = await Promise.allSettled(work.map(([, run]) => run()));
       results.forEach((result, index) => { if (result.status === 'rejected') console.error('maintenance_failed', work[index][0]); });

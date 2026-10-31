@@ -5,7 +5,6 @@ import { acquireTournamentAccount, competitiveSessionEligible } from './auth';
 import { ARENA_POLICY, arenaLimits } from './arena-policy';
 import { ArenaProjection } from './arena-projection';
 import { newWorkAllowed, reserveMonthlyWork } from './budget';
-import { isolatedGameBudget } from './capacity-policy';
 import type { Env } from './env';
 import { assertNotClosing, gamePhase, NEW_GAMES_PAUSED, requireSession, seatPair, type EventBridge } from './events';
 import { CADENCE_POOL, CADENCES, GAME_WINDOW_MS, MINUTE, occurrences } from './schedule';
@@ -166,9 +165,8 @@ export class ArenaControl {
   ensure(now = Date.now()): boolean {
     if (!this.enabled()) return false;
     let created = false;
-    const fixedStarts = isolatedGameBudget(this.getEnv())?.arenaStarts;
     this.ctx.storage.transactionSync(() => {
-      for (const cadence of CADENCES) for (const startsAt of fixedStarts ? [fixedStarts[cadence]] : occurrences(cadence, now)) {
+      for (const cadence of CADENCES) for (const startsAt of occurrences(cadence, now)) {
         if (startsAt + PAIRING_MS[cadence] <= now) continue;
         const id = `arena-${cadence}-${startsAt}`;
         if (this.event(id)) continue;
@@ -678,7 +676,7 @@ export class ArenaControl {
   }
 
   status() {
-    return { enabled: this.enabled(), policy: ARENA_POLICY.version, limits: arenaLimits(this.getEnv()), measuredCapacity: null,
+    return { enabled: this.enabled(), policy: ARENA_POLICY.version, limits: arenaLimits(this.getEnv()),
       unfinished: this.active(), bytes: this.ctx.storage.sql.databaseSize,
       open: this.ctx.storage.sql.exec<{ count: number }>("SELECT COUNT(*) AS count FROM arena_events WHERE status IN ('running','draining')").one().count,
       projectionBuilds: this.ctx.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM arena_projection_builds').one().count };

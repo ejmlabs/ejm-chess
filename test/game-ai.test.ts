@@ -94,16 +94,13 @@ describe('authoritative browser Stockfish practice', () => {
     const competitive = await runInDurableObject(competition, (_instance, state) => ({
       ratings: state.storage.sql.exec('SELECT game_id FROM rating_events WHERE game_id=?', snapshot.id).toArray(),
       farming: state.storage.sql.exec('SELECT game_id FROM pair_games WHERE game_id=?', snapshot.id).toArray(),
-      outbox: state.storage.sql.exec<{ analysed: number }>("SELECT analysed FROM outbox WHERE json_extract(payload,'$.result.id')=?", snapshot.id).toArray(),
     }));
     expect(competitive.ratings).toHaveLength(0);
     expect(competitive.farming).toHaveLength(0);
-    expect(competitive.outbox.every(row => row.analysed === 1)).toBe(true);
     await competition.flush();
     expect(await env.DB.prepare('SELECT rated,ai_model_id,ai_actual_model,settlement FROM games WHERE id=?').bind(snapshot.id).first())
       .toEqual({ rated: 0, ai_model_id: STOCKFISH_BUILD, ai_actual_model: STOCKFISH_BUILD, settlement: 'unrated' });
     expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM leaderboard_entries WHERE user_id=?').bind(white.id).first('n')).toBe(0);
-    expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM analysis_jobs WHERE game_id=?').bind(snapshot.id).first('n')).toBe(0);
     const profile = await publicProfile(env, white.id);
     expect(profile?.pools).toHaveLength(2);
     expect(profile?.pools.every(pool => pool.games === 0 && pool.distinctOpponents === 0 && !pool.eligible && !pool.pending)).toBe(true);

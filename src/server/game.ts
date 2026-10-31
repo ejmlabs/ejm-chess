@@ -142,11 +142,8 @@ export class Game extends DurableObject<Env> {
   private chessPlies = 0;
   protected recoveryDrill = false;
 
-  constructor(ctx: DurableObjectState, env: Env, internalContext?: DurableObjectState) {
+  constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    // The private capacity composition passes the real native state to super.
-    // Its internal adapter meters the same product storage and scheduling.
-    if (internalContext) { this.ctx = internalContext as typeof this.ctx; ctx = this.ctx; }
     ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS game_state (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)`);
     ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS command_receipts
       (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, payload TEXT NOT NULL, version INTEGER NOT NULL, accepted_at INTEGER NOT NULL)`);

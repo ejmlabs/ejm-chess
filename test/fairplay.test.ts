@@ -164,8 +164,8 @@ describe('private human review and appeals', () => {
     const duplicate = await fairPlayHandler(request('/api/reports', body), env, reporter);
     const receipt = await duplicate!.json();
     expect(receipt).toMatchObject({ report: { id: report.id, caseId: report.caseId, status: 'expired-unreviewed', closedAt: now, reviewAvailable: false } });
-    await expect(recordEvidence(env, { caseId: report.caseId, gameId, kind: 'engine_summary', sourceRef: `${gameId}:b`,
-      sourceVersion: '1', analysisVersion: 'screen-v1', summary: { positions: 1, engineAgreement: 1 } }))
+    await expect(recordEvidence(env, { caseId: report.caseId, gameId, kind: 'related_game', sourceRef: `${gameId}:b`,
+      sourceVersion: '1', summary: { moveCount: 2 } }))
       .rejects.toMatchObject({ code: 'CASE_CLOSED' });
     await expect(fairPlayHandler(request('/api/admin/decisions', { commandId: crypto.randomUUID(), caseId: report.caseId,
       expectedVersion: 2, outcome: 'clear', reason: 'Do not reopen an automatically closed report.', evidenceIds: [] }, accessToken), reviewEnv, reviewer))
@@ -307,7 +307,7 @@ describe('private human review and appeals', () => {
     const serverEvidence = (await env.DB.prepare("SELECT id FROM fairplay_evidence WHERE case_id=? AND game_id=? AND kind='server_game'").bind(report.caseId, firstGame).first<{ id: string }>())!.id;
     const unrelatedGame = await completedGame(reviewer, reporter);
     await expect(fairPlayHandler(request(`/api/admin/cases/${report.caseId}/evidence`, { gameId: unrelatedGame }, accessToken), reviewEnv, reviewer)).rejects.toMatchObject({ code: 'GAME_UNAVAILABLE' });
-    const relatedResponse = await fairPlayHandler(request(`/api/admin/cases/${report.caseId}/evidence`, { gameId: otherGame, summary: { engineAgreement: 1 } }, accessToken), reviewEnv, reviewer);
+    const relatedResponse = await fairPlayHandler(request(`/api/admin/cases/${report.caseId}/evidence`, { gameId: otherGame, summary: { moveCount: 99 } }, accessToken), reviewEnv, reviewer);
     const relatedEvidence = (await relatedResponse!.json() as { evidence: { id: string } }).evidence.id;
     const caseResponse = await fairPlayHandler(request(`/api/admin/cases/${report.caseId}`, undefined, accessToken), reviewEnv, reviewer);
     const review = await caseResponse!.json() as { games: { id: string; pgn: string }[]; evidence: { id: string; summary_json: string }[] };
@@ -387,8 +387,8 @@ describe('private human review and appeals', () => {
     const response = await fairPlayHandler(request('/api/reports', { gameId: humanGame, reason: 'engine-assistance', details: 'Please review this human game.' }), env, reporter);
     const { report } = await response!.json() as { report: { caseId: string } };
     await expect(fairPlayHandler(request(`/api/admin/cases/${report.caseId}/evidence`, { gameId: practice }, accessToken), reviewEnv, reviewer)).rejects.toMatchObject({ code: 'GAME_UNAVAILABLE' });
-    await expect(recordEvidence(env, { caseId: report.caseId, gameId: practice, kind: 'engine_summary', sourceRef: practice,
-      sourceVersion: '1', analysisVersion: 'screen-v1', summary: { engineAgreement: 1 } })).rejects.toMatchObject({ code: 'EVIDENCE_CAPACITY' });
+    await expect(recordEvidence(env, { caseId: report.caseId, gameId: practice, kind: 'related_game', sourceRef: practice,
+      sourceVersion: '1', summary: { moveCount: 2 } })).rejects.toMatchObject({ code: 'EVIDENCE_CAPACITY' });
     expect(await env.DB.prepare('SELECT 1 FROM fairplay_reports WHERE game_id=?').bind(practice).first()).toBeNull();
     expect(await env.DB.prepare('SELECT 1 FROM fairplay_evidence WHERE game_id=?').bind(practice).first()).toBeNull();
     expect(await env.DB.prepare('SELECT 1 FROM restrictions WHERE user_id=?').bind(subject.id).first()).toBeNull();

@@ -1,6 +1,5 @@
 import type { Game } from './game';
 import type { Competition } from './competition';
-import type { StockfishAnalyzer } from './analysis';
 import type { AuthEnv } from './auth';
 import type { BudgetWebhookEnv } from './budget-webhook';
 import type { ProductionResourceEnv } from './production-resources';
@@ -23,11 +22,6 @@ export interface Env extends AuthEnv, BudgetWebhookEnv, ProductionResourceEnv {
   RANKED_RETAINED_GAME_LIMIT?: string;
   AI_ENABLED?: string;
   TURNSTILE_SITE_KEY?: string;
-  ANALYSIS_QUEUE?: Queue;
-  ANALYZER?: DurableObjectNamespace<StockfishAnalyzer>;
-  ANALYSIS_ENABLED?: string;
-  ANALYSIS_DAILY_LIMIT?: string;
-  ANALYSIS_DEAD_LETTER_QUEUE?: Queue;
 }
 
 /** Computer practice runs in the browser and needs no provider credential. Only exact `true` enables it. */

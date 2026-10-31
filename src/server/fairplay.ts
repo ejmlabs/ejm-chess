@@ -107,35 +107,30 @@ async function submitReport(request: Request, env: AuthEnv, actor: Actor): Promi
   return reportReceipt(env, report, 201);
 }
 
-/** Trusted background callers supply references and bounded numeric summaries, never browser evaluations or raw telemetry. */
+/** Trusted callers supply references and a bounded summary, never browser evaluations or raw telemetry. */
 export async function recordEvidence(env: AuthEnv, input: {
-  caseId: string; gameId: string; kind: 'server_game' | 'engine_summary' | 'related_game' | 'farming';
-  sourceRef: string; sourceVersion: string; analysisVersion?: string;
-  summary: { moveCount?: number; positions?: number; forcedPositions?: number; meanLoss?: number; engineAgreement?: number; pattern?: 'repeated-pairs' | 'reciprocal-results' | 'early-resignations'; gameIds?: string[] };
+  caseId: string; gameId: string; kind: 'server_game' | 'related_game' | 'farming';
+  sourceRef: string; sourceVersion: string;
+  summary: { moveCount?: number; pattern?: 'repeated-pairs' | 'reciprocal-results' | 'early-resignations'; gameIds?: string[] };
 }): Promise<string> {
   identifier(input.caseId, 'case');
   identifier(input.gameId, 'game');
   identifier(input.sourceRef, 'source reference');
   string(input.sourceVersion, 'source version', 1, 128);
-  if (input.kind === 'engine_summary' && !input.analysisVersion) throw new ApiError(400, 'ANALYSIS_VERSION_REQUIRED', 'Engine evidence needs an analysis version.');
   const summary = {
-    moveCount: input.summary.moveCount, positions: input.summary.positions, forcedPositions: input.summary.forcedPositions,
-    meanLoss: input.summary.meanLoss, engineAgreement: input.summary.engineAgreement, pattern: input.summary.pattern,
+    moveCount: input.summary.moveCount, pattern: input.summary.pattern,
     gameIds: input.summary.gameIds?.slice(0, 20).map(id => identifier(id, 'related game')),
   };
-  for (const value of [summary.moveCount, summary.positions, summary.forcedPositions, summary.meanLoss, summary.engineAgreement]) {
-    if (value !== undefined && (!Number.isFinite(value) || value < 0 || value > 1_000_000_000)) throw new ApiError(400, 'INVALID_EVIDENCE', 'Check evidence values.');
-  }
   const now = Date.now();
   const id = crypto.randomUUID();
-  await env.DB.prepare(`INSERT OR IGNORE INTO fairplay_evidence(id,case_id,game_id,kind,source_ref,source_version,analysis_version,summary_json,created_at,expires_at,hold_until)
-    SELECT ?,?,?,?,?,?,?,?,?,?,COALESCE((SELECT MAX(appeal_until) FROM fairplay_decisions WHERE case_id=?),0)
+  await env.DB.prepare(`INSERT OR IGNORE INTO fairplay_evidence(id,case_id,game_id,kind,source_ref,source_version,summary_json,created_at,expires_at,hold_until)
+    SELECT ?,?,?,?,?,?,?,?,?,COALESCE((SELECT MAX(appeal_until) FROM fairplay_decisions WHERE case_id=?),0)
     WHERE EXISTS(SELECT 1 FROM fairplay_cases c JOIN games g ON g.id=?
       WHERE c.id=? AND c.automatic_closed_at IS NULL AND g.status='finished' AND g.ai_model_id IS NULL AND (g.white_id=c.subject_id OR g.black_id=c.subject_id))
       AND NOT EXISTS(SELECT 1 FROM casual_game_admissions a WHERE a.game_id=? AND COALESCE(a.archive_error,'') LIKE 'retiring:%' AND a.archive_retry_at>?)
       AND NOT EXISTS(SELECT 1 FROM tournament_game_admissions a WHERE a.game_id=? AND COALESCE(a.archive_error,'') LIKE 'retiring:%' AND a.archive_retry_at>?)
       AND (SELECT COUNT(*) FROM fairplay_evidence WHERE case_id=?)<20`)
-    .bind(id, input.caseId, input.gameId, input.kind, input.sourceRef, input.sourceVersion, input.analysisVersion ?? null, JSON.stringify(summary), now, now + EVIDENCE_RETENTION_MS, input.caseId, input.gameId, input.caseId, input.gameId, now, input.gameId, now, input.caseId).run();
+    .bind(id, input.caseId, input.gameId, input.kind, input.sourceRef, input.sourceVersion, JSON.stringify(summary), now, now + EVIDENCE_RETENTION_MS, input.caseId, input.gameId, input.caseId, input.gameId, now, input.gameId, now, input.caseId).run();
   const existing = await env.DB.prepare(`SELECT e.id FROM fairplay_evidence e JOIN games g ON g.id=e.game_id
     WHERE e.case_id=? AND e.source_ref=? AND e.source_version=? AND e.kind=? AND g.ai_model_id IS NULL`)
     .bind(input.caseId, input.sourceRef, input.sourceVersion, input.kind).first<{ id: string }>();

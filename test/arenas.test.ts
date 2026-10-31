@@ -3,7 +3,6 @@ import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { acquireSeatGuard, hasActiveSeat } from '../src/server/auth';
 import { ARENA_POLICY, arenaLimits } from '../src/server/arena-policy';
-import { bindIsolatedGameBudget } from '../src/server/capacity-policy';
 import { readArenaStandings, readArenaSummary } from '../src/server/arena-projection';
 import type { Competition } from '../src/server/competition';
 import type { Env } from '../src/server/env';
@@ -253,16 +252,16 @@ describe('timed arena authority', () => {
           if (eligible instanceof Error) throw eligible;
           return eligible ? { expiresAt: new Date(actor.sessionExpiresAt).toISOString(), accountReady: 1, restricted: 0 } : null;
         });
-        const prepare = vi.spyOn(database, 'prepare').mockImplementation(query => query.startsWith('SELECT s.expiresAt,')
-          ? { bind: () => ({ first: readEligibility }) } as unknown as D1PreparedStatement : originalPrepare(query));
         const readAvailability = vi.fn(async () => {
           await paused;
           if (available instanceof Error) throw available;
-          return available;
+          return available ? { allowed: 1 } : null;
         });
-        internal.env = { ...internal.env };
-        bindIsolatedGameBudget(internal.env, { manifestDigest: 'a'.repeat(64), maximum: 20_000,
-          available: readAvailability, reserve: async () => true });
+        const prepare = vi.spyOn(database, 'prepare').mockImplementation(query => {
+          if (query.startsWith('SELECT s.expiresAt,')) return { bind: () => ({ first: readEligibility }) } as unknown as D1PreparedStatement;
+          if (query.startsWith('SELECT 1 FROM operations_control')) return { bind: () => ({ first: readAvailability }) } as unknown as D1PreparedStatement;
+          return originalPrepare(query);
+        });
         const pending = instance.registerArena(actor, id).then(value => ({ value }), error => ({ error }));
         let result: Awaited<typeof pending>;
         try {
@@ -423,25 +422,6 @@ describe('timed arena authority', () => {
       expect(state.storage.sql.exec<{ state: string }>('SELECT state FROM arena_entries WHERE event_id=? AND user_id=?', id, actors[0].id).one().state).toBe('withdrawn');
       expect(state.storage.sql.exec<{ entrants: number }>('SELECT entrants FROM arena_events WHERE id=?', id).one().entrants).toBe(0);
     });
-  });
-
-  it('creates fixed isolated events through native scheduling without changing the clock or production calendar', async () => {
-    const competition = await authority();
-    const anchor = Math.ceil(Date.now() / 60_000) * 60_000;
-    const starts = { weekly: anchor - 110 * 60_000, daily: anchor + 10 * 60_000, hourly: anchor + 10 * 60_000 };
-    const events = await runInDurableObject(competition, (instance, state) => {
-      const internal = instance as unknown as { env: Env; arenas: { ensure(now?: number): void } };
-      bindIsolatedGameBudget(internal.env, { manifestDigest: 'a'.repeat(64), maximum: 20_000,
-        arenaStarts: starts, available: async () => true, reserve: async () => true });
-      internal.arenas.ensure();
-      return state.storage.sql.exec<{ cadence: string; starts_at: number; closes_at: number }>(
-        'SELECT cadence,starts_at,closes_at FROM arena_events ORDER BY cadence').toArray();
-    });
-    expect(events).toHaveLength(3);
-    for (const event of events) {
-      expect(event.starts_at).toBe(starts[event.cadence as keyof typeof starts]);
-      expect(event.closes_at - event.starts_at).toBe(event.cadence === 'hourly' ? HOUR : 2 * HOUR);
-    }
   });
 
   it('starts simultaneous daily and hourly events while two earlier events still drain, with no open-event ceiling', async () => {

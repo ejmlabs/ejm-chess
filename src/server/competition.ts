@@ -112,7 +112,6 @@ type Outbox = {
   id: string;
   payload: string;
   projected: number;
-  analysed: number;
   attempts: number;
   next_attempt_at: number;
 };
@@ -138,11 +137,8 @@ export class Competition extends DurableObject<Env> {
   private casuals: CasualControl;
   private repair: RatingRepair;
 
-  constructor(ctx: DurableObjectState, env: Env, internalContext?: DurableObjectState) {
+  constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    // The runtime always receives its real state. Only private composition can
-    // supply this third argument to meter product storage and follow-on work.
-    if (internalContext) { this.ctx = internalContext as typeof this.ctx; ctx = this.ctx; }
     const sql = ctx.storage.sql;
     sql.exec(`CREATE TABLE IF NOT EXISTS slots (user_id TEXT PRIMARY KEY,state TEXT NOT NULL,pool TEXT NOT NULL,game_id TEXT)`);
     sql.exec(`CREATE TABLE IF NOT EXISTS queue
@@ -165,7 +161,7 @@ export class Competition extends DurableObject<Env> {
     sql.exec(`CREATE TABLE IF NOT EXISTS processed_results (game_id TEXT PRIMARY KEY,event_id TEXT NOT NULL,digest TEXT NOT NULL,sequence INTEGER NOT NULL)`);
     sql.exec(`CREATE TABLE IF NOT EXISTS rating_events (sequence INTEGER PRIMARY KEY,game_id TEXT NOT NULL UNIQUE,pool TEXT NOT NULL,policy TEXT NOT NULL,epoch INTEGER NOT NULL,
       white_id TEXT NOT NULL,black_id TEXT NOT NULL,score REAL NOT NULL,pre_white TEXT NOT NULL,pre_black TEXT NOT NULL,post_white TEXT NOT NULL,post_black TEXT NOT NULL,accepted_at INTEGER NOT NULL)`);
-    sql.exec(`CREATE TABLE IF NOT EXISTS outbox (id TEXT PRIMARY KEY,payload TEXT NOT NULL,projected INTEGER NOT NULL DEFAULT 0,analysed INTEGER NOT NULL DEFAULT 0,attempts INTEGER NOT NULL DEFAULT 0,next_attempt_at INTEGER NOT NULL)`);
+    sql.exec(`CREATE TABLE IF NOT EXISTS outbox (id TEXT PRIMARY KEY,payload TEXT NOT NULL,projected INTEGER NOT NULL DEFAULT 0,attempts INTEGER NOT NULL DEFAULT 0,next_attempt_at INTEGER NOT NULL)`);
     sql.exec(`CREATE TABLE IF NOT EXISTS incidents (id INTEGER PRIMARY KEY AUTOINCREMENT,game_id TEXT NOT NULL,kind TEXT NOT NULL,payload TEXT NOT NULL,created_at INTEGER NOT NULL)`);
     sql.exec(`CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY,value TEXT NOT NULL)`);
     sql.exec("INSERT OR IGNORE INTO meta(key,value) VALUES('epoch','1')");
@@ -422,7 +418,7 @@ export class Competition extends DurableObject<Env> {
     if (this.slot(actor.id)?.state === 'tournament') return this.queueView(actor.id);
     if (this.repair.paused(pool)) return { status: 'closed', reason: 'Rating repair is in progress.' };
     this.expireTickets(now);
-    if (!this.slot(actor.id) && !await newWorkAllowed(this.env, 'games', now)) {
+    if (!this.slot(actor.id) && !await newWorkAllowed(this.env, 'games')) {
       return { status: 'closed', reason: 'New games are paused. Existing games will finish.' };
     }
     const admissionError = this.ctx.storage.transactionSync(() => {
@@ -690,11 +686,8 @@ export class Competition extends DurableObject<Env> {
   }
 
   private enqueue(projection: Projection, now: number): void {
-    const result = projection.result;
-    const analysisNeeded = this.env.ANALYSIS_ENABLED === 'true' && result.rated && !result.ai
-      && result.status === 'finished' && result.outcome.score !== null && !projection.settlementPending;
-    this.ctx.storage.sql.exec('INSERT OR IGNORE INTO outbox(id,payload,analysed,next_attempt_at) VALUES(?,?,?,?)',
-      `${result.eventId}:${projection.epoch}:${projection.version}`, JSON.stringify(projection), analysisNeeded ? 0 : 1, now);
+    this.ctx.storage.sql.exec('INSERT OR IGNORE INTO outbox(id,payload,next_attempt_at) VALUES(?,?,?)',
+      `${projection.result.eventId}:${projection.epoch}:${projection.version}`, JSON.stringify(projection), now);
   }
 
   private applyFinished(result: GameResult, sequence: number, epoch: number, now: number): Projection {
@@ -774,12 +767,6 @@ export class Competition extends DurableObject<Env> {
           if (!row.projected) {
             await this.project(projection);
             this.ctx.storage.sql.exec('UPDATE outbox SET projected=1 WHERE id=?', row.id);
-          }
-          if (!row.analysed && this.env.ANALYSIS_ENABLED === 'true') {
-            if (!this.env.ANALYSIS_QUEUE) throw new Error('analysis_unavailable');
-            await this.env.ANALYSIS_QUEUE.send({ gameId: projection.result.id, resultVersion: projection.result.version,
-              rulesVersion: projection.result.rulesVersion, priority: 'sample', engineVersion: 'stockfish-17.1', profileVersion: 'screen-v1' });
-            this.ctx.storage.sql.exec('UPDATE outbox SET analysed=1 WHERE id=?', row.id);
           }
           this.ctx.storage.sql.exec('DELETE FROM outbox WHERE id=?', row.id);
         } catch {

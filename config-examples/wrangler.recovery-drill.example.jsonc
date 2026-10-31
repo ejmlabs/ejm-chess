@@ -26,7 +26,7 @@
     "migrations_dir": "migrations"
   }],
   "vars": {
-    "AUTH_BASE_URL": "https://recovery-drill.invalid",
+    "AUTH_BASE_URL": "https://chess.ejmlabs.com",
     "LOCAL_DEV": "false",
     "OPERATION_MODE": "unattended",
     "GAME_RETIREMENT_MODE": "preview",
@@ -34,7 +34,6 @@
     "RANKED_ENABLED": "false",
     "TOURNAMENTS_ENABLED": "false",
     "ARENAS_ENABLED": "false",
-    "ANALYSIS_ENABLED": "false",
     "NEW_WORK_STOPPED": "true",
     "PRODUCTION_RESOURCE_IDS": "99999999-9999-9999-9999-999999999999",
     "RECOVERY_DRILL_SCOPE": "ejm-chess-recovery-drill-replace-me",

@@ -100,13 +100,9 @@ async function readRating(competition: Awaited<ReturnType<typeof paired>>['compe
   });
 }
 
-async function analysisMatch(enabled: string | undefined, queue?: Queue) {
+async function settledMatch() {
   const match = await paired();
   await pauseAutomaticAlarms(match.competition);
-  await runInDurableObject(match.competition, instance => {
-    const internal = instance as unknown as { env: typeof env };
-    internal.env = { ...internal.env, ANALYSIS_ENABLED: enabled, ANALYSIS_QUEUE: queue };
-  });
   const active = await startMatch(match);
   const ended = await match.game.command(match.black, { type: 'resign', id: crypto.randomUUID(), expectedVersion: active.version });
   if (!ended.ok) throw new Error(ended.code);
@@ -116,8 +112,8 @@ async function analysisMatch(enabled: string | undefined, queue?: Queue) {
 }
 
 describe('competitive authority', () => {
-  it.each([undefined, 'false'])('drains scored ranked projections with optional analysis disabled (%s)', async enabled => {
-    const { competition, result, white, black } = await analysisMatch(enabled);
+  it('drains scored ranked projections', async () => {
+    const { competition, result, white, black } = await settledMatch();
     await competition.flush();
     expect(await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('SELECT id FROM outbox').toArray())).toEqual([]);
     expect(await env.DB.prepare('SELECT status,settlement,score FROM games WHERE id=?').bind(result.id).first())
@@ -126,52 +122,19 @@ describe('competitive authority', () => {
       .toEqual([{ games: 1 }, { games: 1 }]);
   });
 
-  it('does not backfill disabled results when optional analysis is later enabled', async () => {
-    const { competition } = await analysisMatch('false');
-    const send = vi.fn().mockResolvedValue(undefined);
-    await runInDurableObject(competition, instance => {
-      const internal = instance as unknown as { env: typeof env };
-      internal.env = { ...internal.env, ANALYSIS_ENABLED: 'true', ANALYSIS_QUEUE: { send } as unknown as Queue };
-    });
-    await competition.flush();
-    expect(send).not.toHaveBeenCalled();
-    expect(await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('SELECT id FROM outbox').toArray())).toEqual([]);
-  });
-
-  it('drains stored optional analysis retries when the feature is disabled', async () => {
-    const { competition, result, white } = await analysisMatch('true');
-    await competition.flush();
-    expect(await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('SELECT projected,analysed,attempts FROM outbox').toArray()))
-      .toEqual([{ projected: 1, analysed: 0, attempts: 1 }]);
+  it('retries a failed projection from the outbox without repeating settlement', async () => {
+    const { competition, result, white } = await settledMatch();
     const rating = await readRating(competition, white);
-    await runInDurableObject(competition, (instance, state) => {
-      const internal = instance as unknown as { env: typeof env };
-      internal.env = { ...internal.env, ANALYSIS_ENABLED: 'false', ANALYSIS_QUEUE: undefined };
+    await runInDurableObject(competition, async (instance, state) => {
+      const batch = vi.spyOn((instance as unknown as { env: typeof env }).env.DB, 'batch').mockRejectedValueOnce(new Error('d1_unavailable'));
+      try { await instance.flush(); } finally { batch.mockRestore(); }
+      expect(state.storage.sql.exec('SELECT projected,attempts FROM outbox').toArray()).toEqual([{ projected: 0, attempts: 1 }]);
       state.storage.sql.exec('UPDATE outbox SET next_attempt_at=0');
+      await instance.flush();
+      expect(state.storage.sql.exec('SELECT id FROM outbox').toArray()).toEqual([]);
     });
-    await competition.flush();
-    expect(await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('SELECT id FROM outbox').toArray())).toEqual([]);
+    expect(await env.DB.prepare('SELECT status,settlement FROM games WHERE id=?').bind(result.id).first()).toEqual({ status: 'finished', settlement: 'settled' });
     expect(await readRating(competition, white)).toEqual(rating);
-    expect(await env.DB.prepare('SELECT status,settlement FROM games WHERE id=?').bind(result.id).first())
-      .toEqual({ status: 'finished', settlement: 'settled' });
-  });
-
-  it('retains enabled optional analysis until queue delivery succeeds without repeating settlement', async () => {
-    const send = vi.fn().mockRejectedValueOnce(new Error('queue_unavailable')).mockResolvedValue(undefined);
-    const { competition, result, white } = await analysisMatch('true', { send } as unknown as Queue);
-    await competition.flush();
-    expect(await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('SELECT projected,analysed,attempts FROM outbox').toArray()))
-      .toEqual([{ projected: 1, analysed: 0, attempts: 1 }]);
-    const rating = await readRating(competition, white);
-    await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('UPDATE outbox SET next_attempt_at=0'));
-    await competition.flush();
-    expect(send).toHaveBeenCalledTimes(2);
-    expect(send).toHaveBeenLastCalledWith({ gameId: result.id, resultVersion: result.version, rulesVersion: result.rulesVersion,
-      priority: 'sample', engineVersion: 'stockfish-17.1', profileVersion: 'screen-v1' });
-    expect(await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('SELECT id FROM outbox').toArray())).toEqual([]);
-    expect(await readRating(competition, white)).toEqual(rating);
-    await competition.flush();
-    expect(send).toHaveBeenCalledTimes(2);
   });
 
   it('keeps ranked admission closed by default', async () => {

@@ -59,8 +59,7 @@ export function assertDrillConfiguration(env: DrillEnv): void {
     || env.RECOVERY_GAME_NAMESPACE_ID === env.RECOVERY_COMPETITION_NAMESPACE_ID
     || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(env.RECOVERY_SOURCE_REVISION ?? '')
     || env.NEW_WORK_STOPPED !== 'true' || env.RANKED_ENABLED !== 'false'
-    || env.TOURNAMENTS_ENABLED !== 'false' || env.ARENAS_ENABLED !== 'false' || env.ANALYSIS_ENABLED !== 'false'
-    || env.EMAIL || env.ANALYSIS_QUEUE || env.ANALYZER) {
+    || env.TOURNAMENTS_ENABLED !== 'false' || env.ARENAS_ENABLED !== 'false' || env.EMAIL) {
     throw new ApiError(409, 'DRILL_TARGET_UNVERIFIED', 'Configure and review fresh isolated recovery resources before using this drill.');
   }
 }

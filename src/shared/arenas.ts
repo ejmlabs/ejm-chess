@@ -30,7 +30,7 @@ export interface ArenaList {
   enabled: boolean;
   serverNow: number;
   events: ArenaSummary[];
-  limits: { maxEntrants: number; measuredCapacity: null };
+  limits: { maxEntrants: number };
 }
 
 export interface ArenaStanding {

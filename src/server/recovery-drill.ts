@@ -161,7 +161,6 @@ export class RecoveryDrillCompetition extends Competition {
   constructor(ctx: DurableObjectState, env: DrillEnv) {
     super(ctx, { ...env, RANKED_ENABLED: 'true' });
     createProbe(ctx);
-    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS recovery_drill_analysis_omissions(id TEXT PRIMARY KEY,game_id TEXT NOT NULL,recorded_at INTEGER NOT NULL)');
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS recovery_drill_privacy(game_id TEXT PRIMARY KEY,value TEXT NOT NULL)');
   }
   private privacyRecord(gameId: string): PrivacyFixture | null {
@@ -331,22 +330,6 @@ export class RecoveryDrillCompetition extends Competition {
     await this.ctx.storage.sync();
     return reservation;
   }
-  override async flush(): Promise<void> {
-    const rows = this.ctx.storage.sql.exec<{ id: string; payload: string }>('SELECT id,payload FROM outbox WHERE analysed=0 ORDER BY id LIMIT 16').toArray();
-    for (const row of rows) {
-      const { result } = JSON.parse(row.payload) as { result: GameResult };
-      if (result.rated && result.status === 'finished' && result.white.id === await syntheticUserId(this.env, result.id, 'w')
-        && result.black?.id === await syntheticUserId(this.env, result.id, 'b')
-        && await this.env.DB.prepare('SELECT 1 FROM recovery_drill_probe WHERE id=?').bind(result.id).first()) {
-        this.ctx.storage.transactionSync(() => {
-          this.ctx.storage.sql.exec('INSERT OR IGNORE INTO recovery_drill_analysis_omissions(id,game_id,recorded_at) VALUES(?,?,?)', row.id, result.id, Date.now());
-          this.ctx.storage.sql.exec('UPDATE outbox SET analysed=1 WHERE id=?', row.id);
-        });
-      }
-    }
-    // Postgame analysis is deliberately omitted in the isolated scope and never claimed as run.
-    await super.flush();
-  }
   async syntheticCorrection(gameId: string, action: 'restrict' | 'clear') {
     if (!this.ctx.storage.sql.exec('SELECT 1 FROM rating_events WHERE game_id=?', gameId).toArray()[0]) {
       throw new ApiError(409, 'DRILL_RATING_REQUIRED', 'Finish and settle a synthetic rated game before its correction fixture.');
@@ -502,11 +485,11 @@ async function route(request: Request, env: DrillEnv): Promise<Response> {
       authority: await competition.beginExport() });
   }
   if (body.operation === 'reserve-budget') {
-    // A bounded isolated fixture allowance. The deployment and persistent stop row stay unchanged.
-    const accepted = await reserveMonthlyWork({ ...env, NEW_WORK_STOPPED: 'false', MONTHLY_GAME_LIMIT: '6' }, 'games', `recovery:${gameId}`);
-    return jsonResponse({ accepted, syntheticMonthlyAllowance: 6,
+    // The deployment and persistent stop row stay unchanged.
+    const accepted = await reserveMonthlyWork({ ...env, NEW_WORK_STOPPED: 'false' }, 'games', `recovery:${gameId}`);
+    return jsonResponse({ accepted,
       receipt: await env.DB.prepare('SELECT period,units,created_at FROM budget_receipts WHERE kind=? AND id=?').bind('games', `recovery:${gameId}`).first(),
-      control: await env.DB.prepare("SELECT version,games_stopped,email_stopped,analysis_stopped FROM operations_control WHERE id='product'").first() });
+      control: await env.DB.prepare("SELECT version,games_stopped,email_stopped FROM operations_control WHERE id='product'").first() });
   }
   if (body.operation === 'terminal-ack') {
     if (body.action !== 'arm' && body.action !== 'release') throw new ApiError(400, 'INVALID_DRILL_ACTION', 'Choose arm or release for the synthetic terminal acknowledgement.');

@@ -13,9 +13,8 @@
     "engine:fetch": "node scripts/stockfish-assets.mjs --fetch",
     "engine:probe": "node scripts/probe-stockfish.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.worker.json",
-    "test": "npm run test:worker && npm run test:driver",
+    "test": "npm run test:worker",
     "test:worker": "vitest run",
-    "test:driver": "node --test scripts/capacity-driver.test.mjs",
     "qualify:local": "node scripts/qualify-local.mjs",
     "worker:check": "wrangler deploy --env '' --dry-run --outdir .worker-build",
     "budget": "ejm-ssg budget && npm run budget:guides",
@@ -23,7 +22,6 @@
   },
   "dependencies": {
     "@better-auth/core": "1.7.12",
-    "@cloudflare/containers": "0.3.7",
     "@echecs/round-robin": "4.1.0",
     "@echecs/tournament": "3.3.0",
     "@ejm/core": "file:../ejm-ui/packages/core",
@@ -50,8 +48,7 @@
     "typescript": "5.9.3",
     "vite": "8.3.4",
     "vitest": "5.0.5",
-    "wrangler": "4.151.3",
-    "ws": "8.21.0"
+    "wrangler": "4.151.3"
   },
   "overrides": {
     "zod": "4.6.7"

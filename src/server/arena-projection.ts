@@ -28,7 +28,7 @@ export async function readArenaList(env: Pick<Env, 'DB' | 'ARENAS_ENABLED' | 'AR
     WHERE finished_at IS NULL OR finished_at>=? ORDER BY starts_at DESC,event_id LIMIT 21`).bind(visible(now)).all<{ summary: string }>();
   return { enabled: env.ARENAS_ENABLED === 'true', serverNow: now,
     events: result.results.map(row => JSON.parse(row.summary) as ArenaSummary),
-    limits: { maxEntrants: arenaLimits(env).maxEntrants, measuredCapacity: null } };
+    limits: { maxEntrants: arenaLimits(env).maxEntrants } };
 }
 
 export async function readArenaSummary(db: D1Database, id: string): Promise<ArenaSummary | null> {
