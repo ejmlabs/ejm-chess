@@ -352,7 +352,7 @@ accounts or games. Errors include a machine-readable `error` and a short
 | `POST /api/account/complete` | Existing signed-in explicit account sets username/password while preserving its player ID |
 | `GET /api/leaderboard?pool=blitz\|rapid&cursor=…` | Bounded leaderboard entries, update time, and next cursor |
 | `GET /api/players/:id` | Public credential-backed player profile and two bounded rating-pool states; no guest, private email or private case records |
-| `GET /api/history` | Current account’s latest 50 terminal games, AI labels, and available PGN |
+| `GET /api/history` | Current account’s latest 50 terminal games, its own color (`w` or `b`), AI labels, and available PGN |
 | `GET /api/games/:id/pgn` | Participant-only completed PGN from D1, including retired games |
 | `GET /api/tournaments` | Bounded public schedule/standings and current caller’s event status |
 | `GET /api/tournaments/:id` | One public event with caller-specific game/status fields |
@@ -364,6 +364,7 @@ accounts or games. Errors include a machine-readable `error` and a short
 | `GET /api/arenas/:id/me` | Private current entrant status and accepted game link |
 | `POST /api/arenas/:id/register\|withdraw\|queue\|pause\|resume` | Authenticated entrant actions under current account and cross-mode reservation checks |
 | `POST /api/games` | `{id, format, ai?: {modelId, level}}`; creator-bound idempotent casual/Stockfish admission, with the pinned engine build and one named strength |
+| `GET /api/games/open` | `{ids}`: games the current account still holds a seat in, newest first, at most 10 |
 | `POST /api/games/:id/join` | Single-claim invitation or authorized participant reopen |
 | `GET /api/games/:id/connect` | Same-origin authenticated WebSocket |
 | `GET /api/admin/operations` | Access and owner protected status/lag counters |

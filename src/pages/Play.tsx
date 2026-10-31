@@ -19,7 +19,6 @@ import Challenge from '../client/Challenge';
 import { useGame } from '../client/useGame';
 import { useComputer } from '../client/useComputer';
 import { submitLegalMove } from '../client/moveDispatch';
-import { markOpenGame, readOpenGames } from '../client/openGames';
 import { clockText, resultText } from '../client/gameText';
 import type { Move } from '../client/Board';
 import { FORMATS, type Color, type GameSnapshot, type Pool, type QueueState } from '../shared/protocol';
@@ -161,24 +160,16 @@ function PlaySession({ search }: { search: string }) {
     return () => { cancelled = true; };
   }, [id, me, joinedId, entryAttempt]);
 
-  // Resume links for games this browser opened. The server answers only for this account's seats.
+  // Resume links for every game this account still holds a seat in, from any browser.
   useEffect(() => {
     if (!me || id) return;
     let cancelled = false;
-    void Promise.all(readOpenGames().map(gameId => api<GameSnapshot>(gamePath(gameId)).then(game => {
-      if (unfinished(game)) return describeOpenGame(game, me);
-      markOpenGame(gameId, false);
-      return null;
-    }).catch(reason => {
-      if (reason instanceof RequestFailure && [404, 410].includes(reason.status)) markOpenGame(gameId, false);
-      return null;
-    }))).then(games => { if (!cancelled) setOpenGames(games.filter(game => game !== null)); });
+    void api<{ ids: string[] }>('/api/games/open')
+      .then(({ ids }) => Promise.all(ids.map(gameId => api<GameSnapshot>(gamePath(gameId))
+        .then(game => unfinished(game) ? describeOpenGame(game, me) : null, () => null))))
+      .then(games => { if (!cancelled) setOpenGames(games.filter(game => game !== null)); }, () => {});
     return () => { cancelled = true; };
   }, [me, id, openGamesAttempt]);
-
-  useEffect(() => {
-    if (state) markOpenGame(state.id, unfinished(state));
-  }, [state?.id, state?.status]);
 
   const openGame = useCallback((gameId: string, enter = false) => {
     const url = new URL('/play/', location.origin);

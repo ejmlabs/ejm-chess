@@ -12,12 +12,13 @@ import { Status } from '@ejm/ui/layout/Status';
 import { Text } from '@ejm/ui/layout/Text';
 import { api, type Me } from '../client/api';
 import { historyResult } from '../client/gameText';
-import { FORMATS, type Pool } from '../shared/protocol';
+import { FORMATS, type Color, type Pool } from '../shared/protocol';
 import { STOCKFISH_BUILD } from '../shared/engine';
 
 interface HistoryGame {
   id: string;
   format: Pool;
+  color: Color;
   rated: number;
   aiModel: string | null;
   actualModel: string | null;
@@ -36,7 +37,7 @@ interface FairPlayState {
 type NoticeLoad = { status: 'loading' | 'error' } | { status: 'ready'; data: FairPlayState };
 
 type LoadState = { status: 'loading' | 'signed-out' | 'error' }
-  | { status: 'ready'; games: HistoryGame[]; guest: boolean; names: string[] };
+  | { status: 'ready'; games: HistoryGame[]; guest: boolean };
 
 const dateFormat = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' });
 const historyColumns = [
@@ -181,7 +182,7 @@ export default function History() {
       setAccount(me);
       if (!me) { setState({ status: 'signed-out' }); return; }
       const { games } = await api<{ games: HistoryGame[] }>('/api/history');
-      if (current) setState({ status: 'ready', games, guest: me.isAnonymous, names: [me.username, me.name].filter((name): name is string => Boolean(name)) });
+      if (current) setState({ status: 'ready', games, guest: me.isAnonymous });
     }).catch(() => { if (current) setState({ status: 'error' }); });
     return () => { current = false; };
   }, [attempt]);
@@ -206,7 +207,7 @@ export default function History() {
               game: <><Link href={`/${game.pgn ? 'replay' : 'play'}/?game=${encodeURIComponent(game.id)}`}>{game.format === 'blitz' ? 'Blitz' : 'Rapid'} {FORMATS[game.format].label}</Link>
                 {' '}<Text variant="muted">{game.aiModel === STOCKFISH_BUILD ? 'Stockfish' : game.aiModel ? `AI · ${game.actualModel ?? game.aiModel}` : game.rated ? 'Ranked' : 'Casual'}</Text></>,
               finished: <time dateTime={new Date(game.endedAt).toISOString()}>{dateFormat.format(game.endedAt)}</time>,
-              result: historyResult(game.result, game.pgn, state.names),
+              result: historyResult(game.result, game.color),
               save: game.pgn ? <Button variant="link" density="compact" onClick={() => downloadPgn(game)}
                 aria-label={`Download PGN for ${dateFormat.format(game.endedAt)}`}>PGN</Button> : 'Unavailable',
             }))} />}

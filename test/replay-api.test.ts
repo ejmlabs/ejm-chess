@@ -148,7 +148,7 @@ describe('participant replay exports', () => {
   });
 
   it('keeps an active ranked game out of replay and history downloads until its timeout result is projected', async () => {
-    const { id, game, white, snapshot, competition } = await rankedGame();
+    const { id, game, white, black, snapshot, competition } = await rankedGame();
     expect((await http(request(`/api/games/${id}/pgn`, white.cookie))).status).toBe(404);
     await runInDurableObject(game, (_instance, state) => {
       const row = state.storage.sql.exec<{ value: string }>('SELECT value FROM game_state').one();
@@ -164,8 +164,10 @@ describe('participant replay exports', () => {
     expect(exported.status).toBe(200);
     expect(parseReplay(await readPgn(exported)).result).toBe('0-1');
     const history = await http(request('/api/history', white.cookie));
-    const records = await history.json() as { games: { id: string; pgn?: string }[] };
-    expect(records.games.find(record => record.id === id)).toHaveProperty('pgn');
+    const records = await history.json() as { games: { id: string; color: string; pgn?: string }[] };
+    expect(records.games.find(record => record.id === id)).toMatchObject({ color: 'w', pgn: expect.any(String) });
+    const blackHistory = await (await http(request('/api/history', black.cookie))).json() as { games: { id: string; color: string }[] };
+    expect(blackHistory.games.find(record => record.id === id)?.color).toBe('b');
   });
 
   it('replays a real completed computer export with its fixed build and difficulty labels', async () => {

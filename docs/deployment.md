@@ -167,6 +167,16 @@ longer exist.
 "AI_ENABLED": "false"
 ```
 
+The assets block must route every request through the Worker and serve the
+built not-found page for unknown paths:
+
+```jsonc
+"assets": { "directory": "dist", "binding": "ASSETS", "run_worker_first": true, "not_found_handling": "404-page" }
+```
+
+Without `not_found_handling`, an unknown page returns an empty 404. API 404s
+stay JSON either way.
+
 Those values describe the initial stopped deployment. The recorded protected
 build has `NEW_WORK_STOPPED=false`, no application monthly caps,
 `AI_ENABLED=true` and scaled retirement, with ranked, tournaments and arenas

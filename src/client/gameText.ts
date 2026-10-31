@@ -34,13 +34,10 @@ export function clockText(ms: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
-/** Read a history result from this account's side when its seat name appears in the PGN, otherwise from White's side. */
-export function historyResult(result: string | null, pgn: string | undefined, names: readonly string[]): string {
+/** Read a history result from this account's side. */
+export function historyResult(result: string | null, color: Color): string {
   if (result === '1/2-1/2' || result === '½-½') return 'Draw';
   if (result === 'Void') return 'Void';
   if (result !== '1-0' && result !== '0-1') return 'Pending';
-  const seat = (side: 'White' | 'Black') => new RegExp(`^\\[${side} "(.*)"\\]$`, 'm').exec(pgn ?? '')?.[1] ?? '';
-  const color = names.includes(seat('White')) ? 'w' : names.includes(seat('Black')) ? 'b' : null;
-  const winner = result === '1-0' ? 'w' : 'b';
-  return color ? (color === winner ? 'Won' : 'Lost') : winner === 'w' ? 'White won' : 'Black won';
+  return (result === '1-0' ? 'w' : 'b') === color ? 'Won' : 'Lost';
 }

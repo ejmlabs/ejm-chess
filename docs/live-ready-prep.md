@@ -89,6 +89,9 @@ Names and values only. They live in the private production `wrangler.jsonc`
   `NEW_WORK_STOPPED` stops new work for any value except unset or exact `false`.
 - `wrangler deploy` replaces dashboard vars with the config's vars, so the
   private config must hold the full set.
+- The assets block needs `"not_found_handling": "404-page"` with
+  `run_worker_first: true`, so unknown pages get the built not-found page; see
+  [deployment](deployment.md#prepare-configuration-and-build).
 
 ## Stop levers
 
@@ -262,6 +265,7 @@ curl -sS https://chess.ejmlabs.com/api/config
 curl -sS https://chess.ejmlabs.com/api/arenas
 curl -sSI https://chess.ejmlabs.com/ | grep -iE 'content-security|strict-transport|x-content-type|x-frame|referrer|permissions'
 curl -sS -X POST -o /dev/null -w '%{http_code}\n' https://chess.ejmlabs.com/api/operations/budget-stop
+curl -sS -w '\n%{http_code}\n' https://chess.ejmlabs.com/no-such-page/ | grep -E 'Page not found|^404$'
 ```
 
 From a non-canary network, sign up a fresh account, sign in and start a game.
@@ -272,7 +276,8 @@ under heavy load is still being measured. Watch the first hour:
 and spend against the alerts.
 
 **Pass:** every route 200; `/api/config` matches step 3; the budget-stop POST
-returns 403 (404 means its secret is missing or malformed); headers present;
+returns 403 (404 means its secret is missing or malformed); an unknown page
+returns 404 with the "Page not found" page; headers present;
 Turnstile, signup, signin and a game work publicly; guides match. **Stop:** use
 the stop levers, then fix.
 

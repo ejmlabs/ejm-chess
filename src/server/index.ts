@@ -1,6 +1,6 @@
 import { csp, directives } from '@ejm/site/headers';
 import { chessHeaders } from '../policy';
-import { FORMATS, type Actor as GameActor, type Pool } from '../shared/protocol';
+import { FORMATS, type Actor as GameActor, type Color, type Pool } from '../shared/protocol';
 import { isGameId } from '../shared/gamePath';
 import { getEngineLevel, STOCKFISH_BUILD } from '../shared/engine';
 import { acquireSeatGuard, authHandler, casualGameLimit, completeAccount, currentActor, hasRecoveryEmail, knownGame, PASSWORD_ACCOUNT_SQL, rankedEligibility, type Actor } from './auth';
@@ -183,6 +183,7 @@ async function authenticatedRoute(request: Request, env: Env, ctx: ExecutionCont
     }
   }
   if (url.pathname === '/api/games' && request.method === 'POST') return createGame(request, env, signedIn(requestActor));
+  if (url.pathname === '/api/games/open' && request.method === 'GET') return openGames(env, signedIn(requestActor));
   const gameRoute = /^\/api\/games\/([^/]+)(?:\/(join|connect|pgn))?$/.exec(url.pathname);
   if (gameRoute) {
     const response = await gameAction(request, env, signedIn(requestActor), gameRoute[1], gameRoute[2]);
@@ -331,9 +332,16 @@ async function gameAction(request: Request, env: Env, actor: Actor, id: string, 
   }
 }
 
+/** Games this account still holds a seat in, from any browser. The read is bounded; the seat guard limits how many exist. */
+async function openGames(env: Env, actor: Actor): Promise<Response> {
+  const rows = await env.DB.prepare('SELECT game_id AS id FROM active_game_seats WHERE user_id=? AND released_at IS NULL ORDER BY acquired_at DESC,game_id LIMIT 10')
+    .bind(actor.id).all<{ id: string }>();
+  return jsonResponse({ ids: rows.results.map(row => row.id) });
+}
+
 async function history(env: Env, actor: Actor): Promise<Response> {
-  const rows = await env.DB.prepare(`SELECT id,pool AS format,rated,ai_model_id AS aiModel,ai_actual_model AS actualModel,score,reason,status,ended_at AS endedAt,pgn FROM games
-    WHERE (white_id=? OR black_id=?) ORDER BY ended_at DESC,id LIMIT 50`).bind(actor.id, actor.id).all<{ id: string; format: Pool; rated: number; aiModel: string | null; actualModel: string | null; score: number | null; reason: string; status: string; endedAt: number; pgn: string }>();
+  const rows = await env.DB.prepare(`SELECT id,pool AS format,CASE WHEN white_id=? THEN 'w' ELSE 'b' END AS color,rated,ai_model_id AS aiModel,ai_actual_model AS actualModel,score,reason,status,ended_at AS endedAt,pgn FROM games
+    WHERE (white_id=? OR black_id=?) ORDER BY ended_at DESC,id LIMIT 50`).bind(actor.id, actor.id, actor.id).all<{ id: string; format: Pool; color: Color; rated: number; aiModel: string | null; actualModel: string | null; score: number | null; reason: string; status: string; endedAt: number; pgn: string }>();
   return jsonResponse({ games: rows.results.map(({ score, status, pgn, ...row }) => ({ ...row, result: status === 'pending-adjudication' ? 'Pending adjudication' : score === 1 ? '1-0' : score === 0 ? '0-1' : score === 0.5 ? '½-½' : 'Void', ...(status === 'finished' ? { pgn } : {}) })) });
 }
 

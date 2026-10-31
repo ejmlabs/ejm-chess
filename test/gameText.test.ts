@@ -31,12 +31,12 @@ describe('result text', () => {
     expect(clockText(-5)).toBe('0:00');
   });
 
-  it('reads a history result from the player’s seat', () => {
-    const pgn = '[Event "Casual"]\n[White "alice"]\n[Black "bob"]\n[Result "0-1"]\n\n1. f3 e5 2. g4 Qh4# 0-1';
-    expect(historyResult('0-1', pgn, ['bob'])).toBe('Won');
-    expect(historyResult('0-1', pgn, ['alice'])).toBe('Lost');
-    expect(historyResult('0-1', pgn, ['carol'])).toBe('Black won');
-    expect(historyResult('½-½', pgn, ['bob'])).toBe('Draw');
-    expect(historyResult('Pending adjudication', undefined, ['bob'])).toBe('Pending');
+  it('reads a history result from the player’s own color', () => {
+    expect(historyResult('0-1', 'b')).toBe('Won');
+    expect(historyResult('0-1', 'w')).toBe('Lost');
+    expect(historyResult('1-0', 'w')).toBe('Won');
+    expect(historyResult('½-½', 'b')).toBe('Draw');
+    expect(historyResult('Void', 'w')).toBe('Void');
+    expect(historyResult('Pending adjudication', 'b')).toBe('Pending');
   });
 });

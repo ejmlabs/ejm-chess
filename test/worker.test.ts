@@ -47,6 +47,16 @@ describe('Worker admission and private read contracts', () => {
     expect((await replay.json() as GameSnapshot).id).toBe(id);
   });
 
+  it('lists only the signed-in account’s own open games', async () => {
+    const [white, outsider] = await Promise.all([account(), account()]);
+    const id = crypto.randomUUID();
+    expect((await worker.fetch(request('/api/games', white, { id, format: 'blitz' }), env)).status).toBe(201);
+    const open = async (cookie: string) => (await (await worker.fetch(request('/api/games/open', cookie), env)).json() as { ids: string[] }).ids;
+    expect(await open(white)).toEqual([id]);
+    expect(await open(outsider)).toEqual([]);
+    expect((await worker.fetch(request('/api/games/open'), env)).status).toBe(401);
+  });
+
   it('rejects cross-origin mutations before a game is created', async () => {
     const cookie = await account();
     const id = crypto.randomUUID();
