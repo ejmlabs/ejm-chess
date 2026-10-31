@@ -157,10 +157,12 @@ stability, and a retained terminal/outbox fixture without the format marker.
 
 ## Reserve accepted work before admission
 
-A game may emit one pending-adjudication result and then one final result.
-The existing Competition path can retain each event in `result_events` and
-in a projection `outbox` at the same time. Reserve four copies before accepting
-a new game:
+A new game emits one terminal result. Only games saved under earlier rules
+versions can have emitted a `pending-adjudication` result before their final
+one, and no new game can enter that state. The existing Competition path can
+retain each event in `result_events` and in a projection `outbox` at the same
+time. The coordinator keeps its four-copy floor, so those older games stay
+covered. Reserve four copies before accepting a new game:
 
 ```text
 2 terminal events * 2 coordinator copies * 256 KiB = 1 MiB per game
@@ -216,7 +218,8 @@ storage, deployed, or browser upper-bound qualification follows from this run.
 ## Source evidence
 
 - `src/server/game.ts`: `seat`, `parseCommand`, `init`, accepted move handling,
-  `result`, `finish`, and pending-adjudication expiry.
+  `result`, `finish`, and expiry of pending adjudication on games saved under
+  earlier rules versions.
 - `src/server/adjudication.ts`: automatic outcome checks after each move.
 - `src/shared/protocol.ts`: result fields and the shared derived bound.
 - `src/server/auth.ts`: account creation name bound and configured ID strategy.

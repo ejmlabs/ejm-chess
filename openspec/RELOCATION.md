@@ -15,9 +15,9 @@ The following were carried forward:
 - All six delta specs, proposal, design, tasks and evidence-scope records for
   [add-cloudflare-chess](changes/add-cloudflare-chess/).
 - The completed
-  [baseline reconciliation](changes/reconcile-chess-planning-baseline/).
+  [baseline reconciliation](changes/archive/2026-10-30-reconcile-chess-planning-baseline/).
 - The existing `config.yaml` and the exact three main-spec additions in the
-  [reviewed prerequisite patch](changes/reconcile-chess-planning-baseline/reviewed-prerequisite-additions.patch):
+  [reviewed prerequisite patch](changes/archive/2026-10-30-reconcile-chess-planning-baseline/reviewed-prerequisite-additions.patch):
   `ejmlabs-site`, `documentation-discovery` and `public-web-access`.
 
 The three prerequisites preserve four requirements and nine scenarios needed

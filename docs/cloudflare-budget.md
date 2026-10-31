@@ -3,7 +3,7 @@
 ## Current policy, 2026-10-31
 
 The owner set one economic control: Cloudflare budget alerts and the automatic
-stop. The application enforces no monthly game, signup, email or analysis cap
+stop. The application enforces no monthly game, signup or email cap
 and no arbitrary product cap on ranked, arena, tournament or casual play (owner
 decision, 2026-10-31; first set 2026-10-30). Usage counters remain for the
 private Operations page; they do not deny new work. Billing alerts can lag, so
@@ -20,7 +20,7 @@ under their normal checks.
 
 The owner approved a $100 monthly spending envelope for chess. This is an
 operating limit, not a capacity tier, provider invoice cap, or proof that the
-configured workload costs less than $100. Keep server analysis disabled.
+configured workload costs less than $100.
 Ranked, arenas and tournaments open under the 2026-10-31 launch policy; see
 [live-ready prep](live-ready-prep.md).
 
@@ -63,14 +63,15 @@ none. There is no monthly or lifetime application signup cap.
 
 ## Stored budget records
 
-Aggregate keys are fixed: three categories across twelve reusable month slots,
-plus three receipt-count rows, one control row and one signup aggregate row. Each category keeps at most
+Aggregate keys are fixed: two categories (games and email) across twelve
+reusable month slots, plus a receipt-count row per category, one control row and
+one signup aggregate row. Each category keeps at most
 twelve stored month records; an inactive slot can retain an older month.
 Receipts contain private work IDs, timestamps, and unit counts.
-They contain no email address, sign-in token, engine position, or report text.
+They contain no email address, sign-in token, or report text.
 
 Game receipts remain permanent, and unused charged reservations also count.
-Email and analysis receipts expire after 62 days.
+Email receipts expire after 62 days.
 The normal minute maintenance cycle removes at most 100 expired receipts per
 call. No receipt row count closes admission. Cleanup does not refund
 monthly usage or delete game history. Stale operator changes cannot overwrite
@@ -80,12 +81,11 @@ is required.
 
 ## Cost estimates and billing alerts
 
-The October 22 policy replaces the earlier proof/core/email allocations,
+The October 22 policy replaces the earlier per-service allocations,
 mandatory recovery and unknown-cost reserves, and repeated financial reviews.
 The [dated cost worksheet](cost-estimate.md#historical-allocation-worksheet-2026-10-21)
 retains those assumptions for comparison. They are not current operating caps
-or launch requirements. The isolated capacity run retains its approved $25
-incremental ceiling within the single $100 target.
+or launch requirements.
 
 Work counters do not measure dollars. Provider billing units, shared-account
 usage, retained storage and delayed reporting still affect the invoice. Keep
@@ -120,12 +120,11 @@ these application counters.
 | Signal | Operator action |
 | --- | --- |
 | First usage alert, or 50% of an app allowance | Review chess and shared-account usage, growth, oldest work, and remaining days |
-| Second usage alert, or unexpectedly rising unit cost | Stop server analysis; investigate before allowing more optional work |
-| Final usage alert | The associated dedicated webhook stops new games, email, and analysis when Cloudflare delivers the notification; reporting and delivery can be delayed |
+| Second usage alert, or unexpectedly rising unit cost | Investigate; stop new work if the rise persists |
+| Final usage alert | The associated dedicated webhook stops new games and email when Cloudflare delivers the notification; reporting and delivery can be delayed |
 | Spending threatens the $100 envelope before that alert | Use the private stop controls, preserve accepted work, and inspect billing |
 | Stop set, or receipt cleanup behind | Keep the stop, inspect reservations and cleanup, and reconcile actual spend before resuming |
 | Failed result outbox or correction, or lag above two minutes | Inspect authority status and provider health; run one bounded retry cycle and investigate persistent failures |
-| Analysis queue age above ten minutes while enabled | Check its daily/monthly allowance, lease, provider response, and dead letters; do not enable more concurrency |
 
 These are response thresholds, not measured service objectives. Provider outage,
 attack traffic, a shared subscription, or charges reported late can exceed the
@@ -154,8 +153,8 @@ building an automated billing dependency.
 The observed coverage was true, with a billing anchor of 2026-09-29 UTC. The
 usage response contained 128 account-wide records, with charge periods ending
 as late as 2026-10-21 UTC. Its returned cost fields were zero. This is a dated,
-partial readback. It does not establish complete current chess costs, unused
-shared allowances, or a free proof run. Reconcile service quantities against
+partial readback. It does not establish complete current chess costs or unused
+shared allowances. Reconcile service quantities against
 the exact chess resources, retained storage, subscription fees and later
 billing updates before approving more paid work. Preserve an allowance for
 usage that has not yet appeared.
@@ -204,7 +203,7 @@ Configure it only after approving the deployed resource and destination:
    and association through the provider before claiming automatic dollar stops.
 4. While admission is already closed, send Cloudflare's Save/Test notification.
    Verify a successful response and the private control/audit state. A test
-   notification deliberately stops all three categories. Repeated notifications
+   notification deliberately stops both categories (games and email). Repeated notifications
    while already stopped do not add control versions. A new notification after
    an owner reopens work will stop it again.
 5. Read back the real billing policy's destination association as well. A generic
@@ -214,8 +213,8 @@ Configure it only after approving the deployed resource and destination:
 
 After authenticating, the endpoint accepts an object with nonempty `text` of
 at most 4,096 characters inside an 8,192-byte JSON body. It ignores other
-metadata. Every accepted notification, including Save/Test, atomically sets all
-three stops. The endpoint cannot clear a stop, reset an allowance, select an
+metadata. Every accepted notification, including Save/Test, atomically sets both
+stops. The endpoint cannot clear a stop, reset an allowance, select an
 account, or change the spending envelope. It stores only a fixed audit actor
 and reason. It does not parse an asserted dollar amount or store/log/return the
 provider message or raw payload. Wrong secrets fail before body parsing or D1.
@@ -236,8 +235,8 @@ safeguards.
    Access identity. Refresh Operations. Save its current budget `control.version`,
    usage counts, pending work, and cost evidence privately.
 2. Use the versioned stop form under Operations. Its private JSON `POST` goes to
-   `/api/admin/operations/budget`. Supply `expectedVersion`, all three boolean
-   settings `gamesStopped` (new accounts and games), `emailStopped`, and `analysisStopped`, plus a reason
+   `/api/admin/operations/budget`. Supply `expectedVersion`, both boolean
+   settings `gamesStopped` (new accounts and games) and `emailStopped`, plus a reason
    of 10 to 240 characters. Stop settings are private operational metadata; keep
    credentials and personal data out of the reason.
 3. Refresh status and verify the new version and flags. A `409
@@ -250,7 +249,7 @@ safeguards.
    not stop charges from existing work or HTTP requests.
 5. Inspect provider health and the cause. Retry accepted work through Operations
    once per investigation cycle. Check result/correction lag, archive cooldowns,
-   analysis state, and receipt cleanup. Do not clear a lease or delete an outbox
+   and receipt cleanup. Do not clear a lease or delete an outbox
    merely because it is old.
 6. Before resuming, reconcile actual chess cost against the $100 monthly envelope
    and confirm headroom for accepted work and a late bill. Clear only the desired
@@ -265,7 +264,6 @@ Example body to stop every new budgeted category:
   "expectedVersion": 0,
   "gamesStopped": true,
   "emailStopped": true,
-  "analysisStopped": true,
   "reason": "Investigating the monthly usage alert."
 }
 ```

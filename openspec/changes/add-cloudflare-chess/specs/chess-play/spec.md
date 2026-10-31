@@ -20,7 +20,7 @@ The service SHALL use the owner's one $100 monthly spending target (2026-10-22).
 - **WHEN** the owner enables protected-host use
 - **THEN** monthly and lifetime signup, game and email application caps SHALL be off
 - **AND** account/game and email stops SHALL be cleared while abuse controls, authentication, protocol and input bounds, platform-safety bounds and accepted-work recovery remain enforced
-- **AND** optional server analysis SHALL remain disabled and public Access removal SHALL follow the launch sequence
+- **AND** public Access removal SHALL follow the launch sequence
 
 
 ### Requirement: Bounded chess spending
@@ -50,7 +50,8 @@ seat ownership, and authoritative deadlines consistent across database and
 object recovery. They SHALL identify exact targets and boundaries, remain
 private, reject incompatible or uncertain recovery plans, and preserve later
 accepted work. Local hooks and tests SHALL NOT be reported as a verified
-provider restore.
+provider restore. The restore-and-replay provider drill is follow-up only
+and SHALL NOT gate launch.
 
 #### Scenario: Capture a private recovery point
 
@@ -145,7 +146,7 @@ Players SHALL be able to choose labelled, unrated Stockfish games with named dif
 
 ### Requirement: Cloudflare hosted game service
 
-The game, its authoritative services, stored player data, and background analysis SHALL run on Cloudflare. Production SHALL use `https://chess.ejmlabs.com`. Documentation SHALL distinguish proposed, locally tested, staged, and released behavior.
+The game, its authoritative services, stored player data, and background work SHALL run on Cloudflare. Production SHALL use `https://chess.ejmlabs.com`. Documentation SHALL distinguish proposed, locally tested, staged, and released behavior.
 
 #### Scenario: Production service inventory
 
@@ -406,7 +407,7 @@ Participants SHALL have access to their game history and completed PGN exports. 
 #### Scenario: Unrelated account requests live state
 
 - **WHEN** an unrelated account requests a game that is still in progress
-- **THEN** it receives no private position, player session, or analysis data
+- **THEN** it receives no private position or player session data
 
 #### Scenario: Completed game export
 

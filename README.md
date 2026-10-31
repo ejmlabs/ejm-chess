@@ -7,8 +7,7 @@ shared ejm-ui design, including account, replay and private review workflows.
 > **Status: protected canary, 2026-10-30.** A protected deployment is live at
 > `https://chess.ejmlabs.com` behind Cloudflare Access. Worker version 12
 > (`a9038ccc-3f74-4ea2-9661-4555779b32d7`) was deployed from `main` at
-> `996acf4`. Public play, ranked, tournaments, arenas and server analysis
-> remain closed. Owner decision, 2026-10-31: ranked, arenas and tournaments open
+> `996acf4`. Public play, ranked, tournaments and arenas remain closed. Owner decision, 2026-10-31: ranked, arenas and tournaments open
 > at launch with no product caps and the material timeout rule only; the order
 > is in [live-ready prep](docs/live-ready-prep.md). A clean checkout still needs
 > the matching shared UI source and reviewed private configuration:
@@ -18,23 +17,20 @@ shared ejm-ui design, including account, replay and private review workflows.
 >   a `useSearch` export from `@ejm/ssg`; without them typecheck reports two
 >   errors (`src/client/Board.tsx`, `src/pages/Play.tsx`) and the build fails.
 > - The private Worker configurations (`wrangler.jsonc`,
->   `wrangler.capacity.jsonc`, `wrangler.recovery-drill.jsonc`), which are
->   git-ignored. The three `wrangler.proof-*.jsonc` configs belong to the retired
->   timeout-proof path. Worker tests, the Worker dry run and recovery tests
->   cannot run without them. They also supply `PRODUCTION_RESOURCE_IDS`, the
+>   `wrangler.recovery-drill.jsonc`), which are git-ignored. Worker tests, the
+>   Worker dry run and recovery tests cannot run without them. They also supply `PRODUCTION_RESOURCE_IDS`, the
 >   production database and namespace ids that the isolated drill refuses to
 >   target.
 > - Node 24 (`engines`).
 >
-> The capacity patch is partial and unreviewed. Provider identifiers and spending
-> thresholds are kept in the private provider record, not here.
+> Provider identifiers and spending thresholds are kept in the private provider
+> record, not here.
 
 ## Status
 
 This repository restores the retained chess implementation and its OpenSpec
-plan for source review. It includes a partial, unverified capacity diagnostic
-patch. A protected canary is deployed; public launch, ranked play and supported
-capacity are not established, and behavior under heavy load is still being
+plan for source review. A protected canary is deployed; public launch and ranked
+play are not established, and behavior under heavy load is still being
 measured. Start with the
 [OpenSpec handoff](openspec/HANDOFF.md) and
 [source and configuration recovery notes](docs/source-handoff.md).
@@ -47,31 +43,24 @@ evidence. Feature flags open after the player and readback checks in
 The game includes casual invitations, authoritative game state and clocks,
 versioned commands, username/password player accounts, separate blitz and
 rapid competition pools, Glicko-2 settlement, private history and interactive replays, a chess brand family,
-and unattended opt-in tournament previews. Private fair-play tools remain optional. It also includes labelled, unrated browser Stockfish practice and a private, disabled-by-default postgame analysis pipeline.
+and unattended opt-in tournament previews. Private fair-play tools remain optional. It also includes labelled, unrated browser Stockfish practice.
 The board offers a remembered Show legal moves toggle, on by default, with
 legal destination dots and capture rings when selecting a piece on your turn.
 Source code is not evidence of public availability or load capacity.
 See the [verification record](docs/verification.md) for the local and provider checks actually run.
-The [local capacity qualification](docs/local-qualification.md) separates native
-game, socket and three-event evidence from synthetic settlement and public
-release gates.
-The [local full-workload runner](docs/capacity-local-rehearsal.md) uses real
-clocks and loopback transport. It cannot qualify provider capacity or costs.
+The [local arena and settlement qualification](docs/local-qualification.md)
+separates native game, socket and three-event evidence from synthetic
+settlement and public release gates.
 
 Known limits:
 
 - New games require a username/password account. Recovery email is optional, including for competition. Any supplied address is private and used only for verification and password recovery, with no marketing. Skipping email means a lost password cannot be reset by email. Local development disables email delivery but supports password signup/signin and casual play. Real verification and recovery delivery passed for one approved recipient in the protected preview. This does not establish broad deliverability. See [accounts](docs/accounts.md).
 - A timeout draws when the rules library proves insufficient material or the
   player with time left has only a king. Otherwise the player who ran out loses, and a disconnect does not stop the clock.
-  A fully blocked position with no possible mate is not detected and scores as a loss. Ranked uses this same material timeout rule. The private timeout-proof path was retired on 2026-10-31; see [its history](docs/timeout-proofs.md).
-- Browser chess cannot guarantee cheat prevention. Engine screening, thresholds,
-  objective abuse controls, privacy, and rating corrections remain unvalidated at scale. Reports are informational in unattended mode; there is no automatic cheating conviction.
-- Computer practice runs Stockfish on the player's device with four named strengths, without model APIs or tokens. Strength depends on the device and search budget; no Elo is claimed. Computer games never affect ratings or human fair play screening.
+  A fully blocked position with no possible mate is not detected and scores as a loss. Ranked uses this same material timeout rule.
+- Browser chess cannot guarantee cheat prevention. Objective abuse controls, privacy, and rating corrections remain unvalidated at scale. Reports are informational in unattended mode, with no engine screening and no automatic cheating conviction.
+- Computer practice runs Stockfish on the player's device with four named strengths, without model APIs or tokens. Strength depends on the device and search budget; no Elo is claimed. Computer games never affect ratings or fair-play checks.
 - Round-robin events support three or four players. Timed arenas use paged standings and explicit queue/pause controls. Arenas have no product entrant or game cap, and behavior under heavy load is still being measured.
-- The Stockfish image and bounded pipeline passed local checks. Three amd64
-  emulation resource fixtures took about 12 to 16 seconds at one CPU and peaked
-  near 318 MiB. A quarter-CPU job timed out. Deployed native limits and costs
-  remain unverified; these figures are not a public throughput claim.
 - Isolated native D1 and Game/Competition restoration, correction replay,
   tombstone recovery, undo and saved account-closure reapplication passed the
   recorded synthetic drills. Production restoration, service-wide recovery
@@ -131,12 +120,10 @@ npm run worker:check
 npm run budget
 ```
 
-`npm test` runs the native workerd suite, then the Node load-driver suite.
-Use `npm run test:worker -- test/game.test.ts` for a focused Worker check or
-`npm run test:driver` for the driver alone. The driver tests use local fixtures
-and a loopback WebSocket probe; they do not generate provider load.
+`npm test` runs the native workerd suite. Use
+`npm run test:worker -- test/game.test.ts` for a focused Worker check.
 
-Run the optional local capacity phases with `npm run qualify:local`,
+Run the optional local qualification phases with `npm run qualify:local`,
 `npm run qualify:local -- --three-events`, or
 `npm run qualify:local -- --sustained`. Add `--quick` for smoke checks. The full
 sustained phase takes 15 elapsed minutes. Read its
@@ -179,11 +166,10 @@ entry remains outside shared project discovery while public play is closed.
 
 Maintained packages provide chess rules (`chess.js`), board interaction
 (`cm-chessboard`), tournament pairing and standings (`@echecs/round-robin` and `@echecs/tournament`), accounts (`better-auth`), Glicko-2 calculations (`glicko2`),
-Access JWT verification (`jose`), and Container lifecycle (`@cloudflare/containers`).
-The optional analysis image uses pinned Stockfish and python-chess with retained
-source and notices. The maintained Stockfish 19.0.1 lite single-thread browser port is vendored as separate lazy assets with corresponding source and GPL notices. It is absent from initial human-play downloads and the Worker bundle.
+and Access JWT verification (`jose`).
+The maintained Stockfish 19.0.1 lite single-thread browser port is vendored as separate lazy assets with corresponding source and GPL notices. It is absent from initial human-play downloads and the Worker bundle.
 Cloudflare platform services provide the runtime and storage.
-See [third-party notices](THIRD_PARTY_NOTICES.md) for image obligations and the
+See [third-party notices](THIRD_PARTY_NOTICES.md) for engine obligations and the
 separate piece-art license.
 
 ## Documentation
@@ -197,14 +183,11 @@ separate piece-art license.
 - [Fair play and unattended limits](docs/fair-play.md)
 - [Account export, closure, privacy and retention](docs/privacy.md)
 - [Automatic tournaments, schedules, points, and limits](docs/tournaments.md)
-- [Timed arena design and capacity targets](docs/arena-design.md)
+- [Timed arena design](docs/arena-design.md)
 - [Local arena, socket, retirement and settlement qualification](docs/local-qualification.md)
 - [Private match replays](docs/replays.md)
 - [Stockfish practice, difficulty, recovery, and privacy](docs/ai-opponents.md)
-- [Private analysis contract, measurements, and cost estimate](docs/analysis.md)
-- [Adjudication candidate and remaining accuracy gates](docs/adjudication-feasibility.md)
 - [Go-live order, production values and stop levers](docs/live-ready-prep.md)
-- [Retired timeout-proof path (history)](docs/timeout-proofs.md)
 - Public routes: `/help/`, `/rules/`, `/fair-play/`, `/privacy/`,
   `/docs/developer-guide/`, and `/credits/`
 

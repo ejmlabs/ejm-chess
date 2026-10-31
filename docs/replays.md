@@ -28,9 +28,8 @@ recorded SetUp/FEN headers. It accepts at most 1 MiB of UTF-8 PGN and 12,700
 half-moves. The move limit covers the conservative standard-start maximum
 under the server's existing automatic draw rules. It adds no server chess rule;
 see the [result-bound derivation](result-bounds.md). Invalid or excessive
-records show an error instead of a partial or invented game. These replay
-limits are separate from postgame screening limits. No engine is downloaded
-or called.
+records show an error instead of a partial or invented game. No engine is
+downloaded or called.
 
 Live Game payloads may retire after one hour when a matching saved terminal
 record is proved. Permanent ID tombstones prevent reuse. Completed PGNs stay

@@ -11,8 +11,9 @@ release record. This design document alone establishes no public capacity,
 deployed API or release.
 
 Owner decision, 2026-10-31: arenas open at launch with `ARENAS_ENABLED=true`
-and no product caps. The 2,000-player provider run below is follow-up evidence,
-not a gate. See [live-ready prep](live-ready-prep.md).
+and no product caps. The 2,000-player capacity harness is deleted (owner
+decision, 2026-10-31); the workload below is a reference target for a future
+staging script, not planned work. See [live-ready prep](live-ready-prep.md).
 
 ## Status and scope
 
@@ -20,13 +21,13 @@ not a gate. See [live-ready prep](live-ready-prep.md).
 | --- | --- |
 | Three- or four-player round robin | Implemented for the local preview; see its guide for existing local checks and limits |
 | `arena-v1` rules and owner design | Selected; described below |
-| Arena implementation and API | Written locally, with focused native tests and local capacity workloads |
-| First capacity tier | Follow-up evidence only; the fixed workload is described below |
+| Arena implementation and API | Written locally, with focused native tests and local qualification workloads |
+| Reference workload | Not planned work; targets are described below |
 | Public deployment and worldwide play | Activation and measured client egress recorded per release |
 
 The first tier targets 2,000 entrants per event, 1,000 live games across modes,
-and 20 unique results per second. These are follow-up acceptance workloads, not
-supported limits or caps. Arenas have no product entrant or game cap. Behavior
+and 20 unique results per second. These are reference targets, not supported
+limits or caps. Arenas have no product entrant or game cap. Behavior
 under heavy load is still being measured.
 
 The later 10,000-entry and 5,000-live-game tier needs separate qualification.
@@ -49,7 +50,6 @@ reservation release continue to drain.
 | `ARENA_RETAINED_GAME_LIMIT` | No cap | No cap | Retained rows in the shared preview and arena tournament game ledger |
 | `ARENA_GAME_ID_LIMIT` | No cap | No cap | All permanent IDs in that shared ledger, including archived games |
 | `ARENA_AUTHORITY_BYTE_LIMIT` | 4,294,967,296 bytes, or 4 GiB | 4,294,967,296 bytes, or 4 GiB | Competition SQLite platform byte stop plus space reserved for accepted games |
-| `MONTHLY_GAME_LIMIT` | Usage counter only | Usage counter only | No admission cap; the Cloudflare budget stop governs |
 
 Numeric arena settings accept unsigned decimal integers, including zero.
 Missing values use the defaults. Malformed values or values above the maximum
@@ -67,19 +67,18 @@ update it in the same transaction as the entry, including cleanup and rollback.
 The first schema upgrade counts existing entries once. Later admission guards
 read one counter row; a missing or invalid row closes new admission. Existing
 games and accepted results can still drain. This local change still needs
-capacity qualification with the complete workload.
+measurement under real demand.
 
 The round-robin preview and arenas share D1 tournament admission rows and have
 no product cap. Casual payloads and permanent casual IDs keep their separate
 optional limits alongside the shared game and authority byte guards.
 
 The full 20-new-game-results-per-second target for 15 minutes needs 18,000 games.
-It is follow-up evidence, run only inside the isolated capacity plan (20,000
-charged synthetic admissions, $25 incremental ceiling), and gates no production
-opening. A separate synthetic pre-admitted settlement fixture measures
-coordinator throughput without creating new game admissions or monthly
-receipts. It cannot qualify that admission target. Never reset counters, delete
-receipts, recycle IDs, or refund uncertain work to make a load run fit.
+No provider run is planned and it gates no production opening. A separate
+synthetic pre-admitted settlement fixture measures coordinator throughput
+without creating new game admissions or monthly receipts. It cannot qualify
+that admission target. Never reset counters, delete receipts, recycle IDs, or
+refund uncertain work to make a load run fit.
 
 ### Shared game admission
 
@@ -154,8 +153,7 @@ Persist each game's identity, reservation, and wall deadline before external
 initialization. Retries and restarts must use those same values. The game wall
 limit includes readiness and play. An earlier chess clock, readiness, or proven
 terminal result keeps precedence. The common online rules and the material
-timeout rule still apply; see the
-[adjudication policy](adjudication-feasibility.md).
+timeout rule still apply.
 
 A game still unresolved at its published wall limit receives the defined
 technical void. Never infer a winner from a scheduling failure. Service or
@@ -423,15 +421,13 @@ storage or cost. See [operations](operations.md) and
 [verification](verification.md#limits-and-remaining-release-work) for release
 evidence and limits.
 
-## Qualification gates
+## Reference workload targets
 
-The [bounded follow-up scopes](capacity-follow-up.md) prepare the separate
-full-hour retention, real calendar and later-tier measurements. They are
-unarmed proposals and authorize no provider work.
-
-The following are first-tier acceptance targets, kept as follow-up evidence
-after launch. They gate no opening. The table does not declare them passed; see
-[the local report](local-qualification.md) for measured parts and their limits.
+The following first-tier targets are kept as a reference for a future small
+staging load script, written only if demand needs checking (owner decision,
+2026-10-31). No run is planned and they gate no opening. The table does not
+declare them passed; see [the local report](local-qualification.md) for measured
+parts and their limits.
 Account creation and email delivery need their own evidence; the signup load
 below uses accounts that already have username/password credentials. Recovery
 email and its verification are optional.
@@ -496,7 +492,7 @@ duplicate results, real outbox acknowledgements and finalization. The exact
 workloads, source fingerprints and storage limits are in the
 [local qualification report](local-qualification.md).
 
-Public registration, regional latency, screening accuracy, deployed archive
+Public registration, regional latency, deployed archive
 throughput and monthly cost remain unverified and are measured after opening.
 Make no public capacity claim from local checks. Deployment evidence is tracked
 separately in the [runbook](deployment.md).

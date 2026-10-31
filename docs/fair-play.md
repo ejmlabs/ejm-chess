@@ -2,8 +2,8 @@
 
 ## Current status
 
-Ordinary operation is unattended. Private reports and optional engine summaries
-are informational. They cannot convict a player, restrict an account, or remove
+Ordinary operation is unattended. Private reports are informational, with no
+engine screening. They cannot convict a player, restrict an account, or remove
 ratings. Report receipts state whether review is available. The default receipt
 says that human review is unavailable and no action follows from the report.
 
@@ -11,12 +11,7 @@ Server authority rejects illegal commands and forged clocks or results.
 Turnstile, session checks, request limits, queue admission, and tournament
 reservations add friction to automated abuse. They cannot prove that a player
 used no outside help. Unsupervised engine assistance cannot be reliably
-eliminated by this product. Screening is disabled by default and has not been
-calibrated for public play.
-
-A bounded local screening evaluation uses licensed public game records and
-controlled examples. It measures the current summaries and sampling limits;
-it does not establish a cheating classifier or a safe sanction threshold.
+eliminated by this product.
 
 ## Player rules
 
@@ -48,9 +43,7 @@ remain separate from human review history.
 
 A repeated report returns the same private receipt and closure, including after
 its ordinary evidence expires. It does not reopen the case, refresh retention
-or recreate deleted evidence. A late engine summary can remain in its existing
-private job record but cannot attach new case evidence or reopen the report.
-Pending optional analysis does not extend the seven-day review window.
+or recreate deleted evidence.
 
 Closure and deletion are separate. Existing evidence keeps its ordinary 90-day
 expiry and any valid hold. Receipts and permitted case/audit metadata remain;
@@ -71,8 +64,7 @@ A concern is not proof. A reviewed restriction needs retained evidence from
 at least two games, a server record, and a written explanation of corroborating
 facts. Never sanction on accuracy, a shared IP address, window focus, or report
 count alone. Do not collect focus signals or invasive device fingerprints.
-Reporter identities, report text, reviewer notes, and raw engine evidence stay
-private. A player receives the decision reason and expiry.
+Reporter identities, report text, and reviewer notes stay private. A player receives the decision reason and expiry.
 
 The database records case versions, evidence references, reviewer identity,
 decision reasons, corroboration, notices, and an audit trail. Restrictions last
@@ -101,8 +93,9 @@ An overturn revokes the related restriction and preserves the audit trail.
 The correction outbox replays the affected rating pool into a separate
 generation, publishes the completed projection, and drains results recorded
 during repair. Immutable results, rating events, checkpoints, and decision
-history are not deleted by expiry or casual payload retirement. Production
-restore and review/appeal acceptance checks remain launch gates.
+history are not deleted by expiry or casual payload retirement. The restore
+drill is follow-up only; review and appeal acceptance checks apply only if
+reviewed mode is enabled.
 
 ## Evidence retention and limits
 
@@ -130,47 +123,18 @@ recorded after retirement may retain the private D1 replay without recreating
 the retired Game payload. See [operations](operations.md) for retry, retirement,
 permanent storage ceilings, and the limits of automatic recovery.
 
-## Screening evaluation and uncertainty
+## Limits of detection
 
-The retained evaluation cohort contains 24 games from the September 2026
-[Lichess CC0 archive](https://database.lichess.org/). It includes four games in
-each of six groups: 5+3 and 10+5, each with lower, middle and higher recorded
-rating bands. Selection uses the mean of the two Lichess ratings. Those ratings
-are not ejm-chess ratings and do not transfer here.
+There is no engine screening, assistance classifier, measured false-positive
+rate, measured false-negative rate, cheating probability, or enforcement
+threshold. Server-side Stockfish analysis was deleted on 2026-10-31. Nothing here
+can justify automated accusations, restrictions, rating changes, or a
+reviewed-player badge.
 
-The collector takes the first matching ordinary-length games from a bounded
-archive prefix. This is a small stratified convenience sample, not a random
-sample of chess players. No retained record has a BOT title, but the evaluation
-does not independently prove account type or that either player used no help.
-All public games have unknown assistance ground truth. A strong game, an
-engine-like move, or a low loss score is not a cheating finding.
-
-Separate controlled transcripts cover single-legal-move positions, sparse
-engine choices during and after the opening, and wholly engine-chosen play.
-Synthetic choices are labelled as synthetic. They are not presented as human
-games. The local run sampled none of two planted opening choices and one of
-three planted middle-game choices. One public-game side had no sampled
-positions; another had 100% agreement from just one position. Those scores
-provide no valid cheating threshold. Position sampling can miss deliberate
-assistance, while forced choices provide no evidence of a player's independent
-decisions. Missing or unfinished
-analysis is neither clearance nor guilt.
-
-There is no assistance classifier, measured false-positive rate, measured
-false-negative rate, cheating probability, or enforcement threshold. The
-evaluation supplies score distributions, exact controlled sampling coverage,
-failed-job counts and source hashes. It cannot justify automated accusations,
-restrictions, rating changes, or a reviewed-player badge. The
-[reproduction and uncertainty report](../analysis/qualification/report.md)
-records the local evidence and its limits. These checks establish no deployed
-throughput, regional latency, operating cost, or public capacity.
-
-Unattended operation keeps reports and engine summaries informational. Leave
-optional server analysis disabled unless its separate resource, cost, privacy
-and deployment checks pass. Do not use the evaluation command as a switch for
-ranked admission. If reviewed operation is proposed, first define the staffed
-case capacity, response window, corroboration standard and appeal coverage;
-this unattended evaluation supplies no review-capacity plan.
+Unattended operation keeps reports informational. If reviewed operation is
+proposed, first define the staffed case capacity, response window,
+corroboration standard and appeal coverage; unattended operation supplies no
+review-capacity plan.
 
 ## Competitive evidence still needed
 
@@ -189,9 +153,6 @@ player flows. The rest is evidence to gather after opening.
   promise; their bounded isolated drill is not production acceptance.
 - Measured queue, CPU, memory, storage, latency, and cost under real load, after opening.
 - Live email, Turnstile, hostname, and deployed schedule checks.
-- If screening is enabled, approved Container resources, a reproducible public
-  game and controlled-assistance evaluation, and an accepted uncertainty policy.
-  Unknown labels cannot supply a measured false-positive rate.
 - If reviewed mode is enabled, staffed review, corroboration, notices, appeals,
   correction/reversal, and recovery acceptance checks.
 

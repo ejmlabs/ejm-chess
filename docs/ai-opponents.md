@@ -36,8 +36,8 @@ Keep the tab open. Server clocks continue while a tab sleeps, the browser closes
 or the connection drops. If loading or searching fails, choose Retry computer.
 Return to the same game link with the same account to recover the authoritative
 position. Reconnect rebuilds the search from all accepted moves. An engine
-failure does not grant an invented move or win. The published timeout and
-unknown-adjudication rules still apply. Draw offers are unavailable in practice.
+failure does not grant an invented move or win. The published timeout rule
+still applies. Draw offers are unavailable in practice.
 
 Computer games are labelled and always unrated. They grant no competitive
 rating, qualification, farming evidence, or human engine-use case. A browser can
@@ -116,7 +116,3 @@ missing pinned inputs from the recorded upstream URLs. The build runs the pin
 check before emitting assets.
 The acquisition check verifies pinned assets; bit-for-bit recompilation of the
 upstream binary remains unverified. See [third-party notices](../THIRD_PARTY_NOTICES.md).
-
-The private Stockfish 17.1 Container remains a separate disabled-by-default
-postgame screening service. Browser practice does not enable it or create
-analysis costs.

@@ -18,8 +18,8 @@ The implementation was restored from a private source-retention archive:
 
 Archive integrity, member hashes, sizes and modes were verified against the
 private inventory. The retained source had no committed product HEAD. It
-includes the partial capacity failure-receipt patch, which was unreviewed,
-untested and undeployed when retained. This PR preserves that state; it is not
+included a partial capacity failure-receipt patch, since deleted with the
+capacity harness (2026-10-31). This PR preserves the retained state; it is not
 a qualified release candidate or proof of current live service behavior.
 
 The old temporary checkout is gone. The private archive and original planning
@@ -54,26 +54,26 @@ establish compatibility before release; retention is not that evidence.
 
 ## Configuration gap
 
-Three private provider configurations were intentionally excluded and are ignored
+Two private provider configurations were intentionally excluded and are ignored
 by Git:
 
 - `wrangler.jsonc`
-- `wrangler.capacity.jsonc`
 - `wrangler.recovery-drill.jsonc`
 
 Reconstruct them from reviewed current provider state and the retained private
 records. The three `wrangler.proof-*.jsonc` configs of the retired timeout-proof
-path (2026-10-31) are no longer needed. Preserve distinct production, local,
-recovery and capacity boundaries. Do not paste provider identifiers, private destinations, credentials
+path (2026-10-31) and `wrangler.capacity.jsonc` of the deleted capacity
+harness are no longer needed. Preserve distinct production, local and recovery
+boundaries. Do not paste provider identifiers, private destinations, credentials
 or old execution windows into public source. Keep secrets in local variables
 or the provider secret store.
 
 Status on 2026-10-30: a reviewed local `wrangler.jsonc` (gitignored) exists with
 production bindings plus `env.local` for Worker tests and the protected canary
-deploy. The two specialty configs remain absent as private copies in this
+deploy. The specialty config remains absent as a private copy in this
 checkout. Non-secret templates live under [`config-examples/`](../config-examples/README.md);
 copy an example to the matching gitignored filename, then fill IDs from private
-records before capacity or recovery-drill commands. Matching shared UI source for chess contracts is the
+records before recovery-drill commands. Matching shared UI source for chess contracts is the
 sibling `ejm-ui` branch `wip/preserve-all-20261025`; keep discovery publication
 behind an approved public opening. See [live-ready prep](live-ready-prep.md).
 

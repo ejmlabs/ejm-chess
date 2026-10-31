@@ -27,10 +27,11 @@ Migration `0015_signup_budget.sql` passed on 2026-10-21 UTC after a native
 Time Travel bookmark was saved. On October 22, the owner enabled 10,000 signup
 attempts and games and 5,000 account emails per UTC month, with 100,000 lifetime
 signup attempts. The 2026-10-30 demand policy later removed those application
-caps; the settings are usage counters only. `NEW_WORK_STOPPED=false`; saved
-account/game and email stops are clear. Server analysis remains stopped. The recorded protected version
-keeps ranked, tournaments, arenas and server analysis closed. Browser Stockfish
-is enabled and game retirement uses the scaled coordinator. Both `workers_dev`
+caps; those settings are no longer read (2026-10-31). `NEW_WORK_STOPPED=false`; saved
+account/game and email stops are clear. The recorded protected version keeps
+ranked, tournaments and arenas closed. Any `ANALYSIS_*`, `ANALYZER`, `MONTHLY_*`
+or `SIGNUP_ATTEMPT_LIMIT` setting in the private config is unused since
+2026-10-31; remove it at the next release. Browser Stockfish is enabled and game retirement uses the scaled coordinator. Both `workers_dev`
 and preview URLs are disabled. The public Worker
 CPU limit is 50 ms. Minute and daily cron expressions are configured. Keep
 scheduled-execution evidence separate from a saved cron expression.
@@ -50,10 +51,10 @@ resources and alert policies are preserved.
 
 Production `wrangler.jsonc` now binds the dedicated D1 database, restricted
 email sender and canonical domain. Public access is protected during release
-checks. Queues and server-analysis Containers remain absent. The local
+checks. Queues and Containers remain absent. The local
 placeholder is confined to `env.local`. The launch release keeps the existing
 production D1, Game and Competition identities and adds no binding. Never
-attach an isolated drill or capacity namespace to production.
+attach an isolated drill namespace to production.
 
 The owner approved one $100 monthly chess target, with alerts and an emergency
 stop. Earlier per-service allocations no longer gate launch. Record the exact
@@ -79,7 +80,6 @@ recipient addresses, credentials, or unrelated resource names.
 | Turnstile | A chess widget restricted to the canonical hostname, with server-side action checks |
 | Email Sending | A verified sending domain and `EMAIL` binding restricted to sender `chess@ejmlabs.com` |
 | Notifications | Dedicated chess alert policies with approved private recipients and saved configuration readback; inbox delivery remains unverified |
-| Optional analysis | Dedicated chess queues and private analyzer namespace/Container only after a separate tested configuration and cost approval; absent initially |
 
 Use the smallest provider permissions that support the approved task. Limit
 credentials to the selected account and zone where the provider permits it.
@@ -164,7 +164,6 @@ longer exist.
 "RANKED_ENABLED": "false",
 "TOURNAMENTS_ENABLED": "false",
 "ARENAS_ENABLED": "false",
-"ANALYSIS_ENABLED": "false",
 "AI_ENABLED": "false"
 ```
 
@@ -173,7 +172,7 @@ build has `NEW_WORK_STOPPED=false`, no application monthly caps,
 `AI_ENABLED=true` and scaled retirement, with ranked, tournaments and arenas
 closed. The launch release enables ranked, arenas, tournaments and browser
 Stockfish; its exact values are in [live-ready prep](live-ready-prep.md#production-values).
-Keep server analysis disabled. A stop preserves accepted games, clocks, result delivery, replay,
+A stop preserves accepted games, clocks, result delivery, replay,
 receipts and scheduled recovery.
 
 Run the normal checks and finish the frontend build before the Worker dry run:
@@ -299,9 +298,8 @@ npm run worker:check
 npx wrangler deploy --env '' --strict --secrets-file "$CHESS_SECRETS_FILE"
 ```
 
-Keep analysis queues and Containers absent. Keep both cron expressions and the
-accepted-work recovery bindings intact. Do not run a Container rollout as an
-incidental part of this first deployment.
+Keep Queues and Containers absent. Keep both cron expressions and the
+accepted-work recovery bindings intact.
 
 For a later approved secret rotation, use hidden input and read back names,
 not values:
@@ -339,11 +337,11 @@ same-origin cookies and WebSocket admission. Verify scheduled recovery from
 real trigger evidence; a saved cron expression is not execution evidence.
 
 The initial global stop also prevents verification and password-recovery sends. A later approved mail
-canary must preserve game and analysis denial while allowing a small number of
-email attempts. Set the versioned game and analysis stops, or
+canary must preserve game denial while allowing a small number of
+email attempts. Set the versioned game stop, or
 `NEW_WORK_STOPPED=true`, keep every feature gate false, choose the approved
 small email allowance, then clear the global stop for that protected test.
-Monthly limit settings are usage counters only. Record this separate
+Record this separate
 configuration change and restore the global stop afterward.
 
 Use only the approved canary inboxes. Create explicit username/password accounts
@@ -367,7 +365,7 @@ the fixed fee allocation. A Save/Test notification alone is not proof of a
 real billing policy or automatic dollar stop. Delayed usage reporting, public
 traffic, subscriptions, storage, and accepted work can exceed the envelope.
 
-Keep analysis, shared project discovery and release claims closed until their
+Keep shared project discovery and release claims closed until their
 own documented checks pass. Ranked, arenas and tournaments open through the
 launch sequence. Remove the full-host canary restriction only under the approved
 release scope, retaining the owner protection on admin page/API paths. The order and checks are in
@@ -413,7 +411,7 @@ Game and Competition authorities. Retry through their idempotent outboxes.
 Preserve original clocks and outcome deadlines. Do not grant a winner or
 rewrite one player's rating to compensate for deployment failure.
 
-### Full restore remains a separate gate
+### Full restore is follow-up only
 
 Read-only native Game/Competition capture hooks and admitted-ID inventory are
 implemented behind the existing owner and Access checks. The separate
@@ -448,7 +446,9 @@ account/session SQL export. Synthetic isolated drills may use approved private
 exports. Never put such files in public artifacts, fixtures, source or builds.
 A D1 export does not capture Game objects or the Competition authority.
 
-Rehearse a full restore on isolated, approved resources before production use:
+The restore-and-replay provider drill is follow-up only, not a launch gate
+(owner decision, 2026-10-31); its code stays. Rehearse a full restore on
+isolated, approved resources before relying on one in production:
 
 1. Preserve the current stores, deployable code/configuration, and secret
    references. Record D1/DO recovery boundaries and the authority watermark.
@@ -470,7 +470,7 @@ Rehearse a full restore on isolated, approved resources before production use:
 
 This repository does not establish a complete cross-store restore coordinator,
 production restore drill, an independent production backup, or measured recovery
-objective. Keep full-service restore and public launch gates open. Do not run
+objective; that work is follow-up only. Do not run
 a production Time Travel/DO restore, delete a namespace, or swap a database
 binding as an unreviewed rollback step.
 
@@ -482,9 +482,7 @@ protected deployment. Command examples elsewhere are instructions, not evidence
 that each action ran. The approved recipient completed verification and password
 recovery; the budget callback destination and association passed their bounded
 test. The dated recovery and privacy reports record the extended isolated
-native restores, undo and one account's closure reapplication. The dated
-proof report for the retired timeout-proof path records 31 native corpus/cold
-transport cases and partial usage.
+native restores, undo and one account's closure reapplication.
 Broad mail delivery, actual scheduled execution, a real billing threshold
 event, service-wide recovery acceptance, regional behavior and complete
 operating cost remain open.

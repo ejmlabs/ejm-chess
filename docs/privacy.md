@@ -85,8 +85,7 @@ Scheduled cleanup is bounded and can be delayed. Appeal and evidence holds apply
 | Released seat records | 30-day cleanup eligibility |
 | Ordinary evidence and report text | 90 days, subject to appeal and evidence holds |
 | Private reviewer notes, corroboration and appeal text | Minimized 90 days after final case action, once appeal windows and holds end |
-| Analysis summaries and dead letters | 30-day cleanup eligibility |
-| Email/analysis budget receipts | 62-day cleanup eligibility |
+| Email budget receipts | 62-day cleanup eligibility |
 | Game IDs, PGNs, results, historical names, rating/correction history and minimal case audit | Permanent retained history |
 | Native provider recovery history | Rolling 30 days on the verified Paid D1 and SQLite Durable Object backends |
 | Raw synthetic drill files | Delete after acceptance within 30 days; retain sanitized reports and hashes |
@@ -98,7 +97,7 @@ service capacity.
 
 Your account actions require your current session and password. Private case
 and operational access requires the verified owner account and Cloudflare
-Access. Reports and engine summaries remain informational in unattended mode.
+Access. Reports remain informational in unattended mode.
 These automated controls are the account-request route; no human response time
 is offered. Losing a password without recovery email has no operator bypass.
 

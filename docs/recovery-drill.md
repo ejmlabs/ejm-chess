@@ -2,6 +2,9 @@
 
 ## Current status and limits
 
+The restore-and-replay provider drill is follow-up only, not a launch gate
+(owner decision, 2026-10-31). Its code and this guide stay for later use.
+
 Game and Competition expose private, read-only `captureRecoveryPoint()` RPCs.
 Production HTTP capture requires the existing verified owner account and
 matching Cloudflare Access identity. Production exports no native restore or
@@ -36,9 +39,9 @@ matrix also passed held result delivery, ranked correction, positive budget
 receipts, naturally aged tombstones and a complete native undo rehearsal.
 The later [privacy rehearsal](qualification/provider-privacy-20261021.md)
 verified one saved closure receipt reapplied twice after native D1 rollback,
-with both DOs kept current. Task 6.3 remains open for enabled events, broader
-concurrent accepted work, complete later-closure sets, proof lifecycle recovery,
-independent backup and accepted retention policy.
+with both DOs kept current. Task 6.3 no longer includes the drill. Follow-up
+work covers enabled events, broader concurrent accepted work, complete
+later-closure sets, independent backup and accepted retention policy.
 
 Capture reads at most 128 application tables, 512 schema entries, 4,096 rows and
 2 MiB of encoded schema and row data per object. It hashes table, index, trigger
@@ -87,7 +90,7 @@ and verify that credentials, recovery addresses and sessions remain removed
 before access reopens. An incomplete closure set must keep access closed. The
 [privacy policy](privacy.md) describes retained identity and native-history
 retention. This requirement adds no production restore endpoint or approval.
-The frozen v3 rehearsal predates the privacy migration. A separately sealed
+The frozen v3 rehearsal predates the privacy migration. A separate
 single-account rehearsal passed under the later source/capture boundary;
 that result does not prove complete multi-account or concurrent closure replay.
 
@@ -131,9 +134,7 @@ invalid email addresses and real package-generated password hashes. Passwords,
 tokens and session values are never returned. The isolated Game/Competition
 adapters can exercise ranked settlement without opening a public ranked route.
 Ranked fixture setup writes the normal reservation metadata, then calls the
-normal Game initialization and account-seat guard. The private adapter records that optional postgame analysis was
-omitted and drains only synthetic analysis outboxes, so the absence of an
-analysis binding cannot be mistaken for a completed analysis job.
+normal Game initialization and account-seat guard.
 
 ## Protected requests and private records
 
@@ -255,7 +256,7 @@ refusal after the captured boundary changed. It is not a successful restore.
    deadline and outbox paths. Independently verify D1 data, retry the exact
    accepted command, test an overdue deadline, terminal delivery with a lost
    reply, an accepted result, correction epochs, tombstone, budget receipt
-   totals and enabled event state. Record uncovered cases as open gates.
+   totals and enabled event state. Record uncovered cases as open follow-up.
 9. Record elapsed time, the last retained accepted event and actual data-loss
    boundary, provider retention, native undo outputs, and every failed or unrun
    check. Do not infer full-service recovery from restored probe values alone.
@@ -284,7 +285,7 @@ This calls `reserveMonthlyWork` with a temporary six-game monthly fixture
 allowance and stable receipt ID `recovery:<gameId>`. It leaves deployment flags,
 the zero deployment allowances and persistent stop rows unchanged. A persistent
 games stop still refuses a new receipt. A retry recognizes only the existing
-matching receipt. No game, email, analysis or solver work is admitted by this
+matching receipt. No game or email work is admitted by this
 operation. Before capture, require `accepted: true`, one receipt and unchanged
 stop/version values. Preserve its original period, units, creation time, receipt
 count and month totals in the private D1 boundary comparison. Verify the exact
@@ -523,5 +524,4 @@ The local integration test reconstructs only the synthetic pre-closure D1 rows
 to protect receipt reapplication, stale-history refusal, duplicate handling and
 secret-output boundaries. It does not invoke or simulate a successful native
 provider PITR operation. Run the existing local recovery integration command
-before reviewing a new sealed candidate; native provider evidence remains a
-separate required gate.
+before reviewing a new candidate; native provider evidence is follow-up only.

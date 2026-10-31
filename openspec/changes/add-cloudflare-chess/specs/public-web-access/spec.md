@@ -49,9 +49,9 @@ The public production sites, including chess, SHALL serve traffic through their 
 
 ### Requirement: Initial chess publication
 
-Chess SHALL open public ranked play and arenas only after the timeout-proof path is retired, protected-host player flows including ranked and arena play pass, and live mail, budget-alert, cron and stop-webhook readbacks pass, followed by Access removal and public verification. It SHALL keep private administration and canonical-domain protection. The first-tier run and longer benchmarks SHALL stay unfinished follow-up evidence, neither required nor claimed as passed.
+Chess SHALL open public ranked play and arenas only after the timeout-proof path is retired, protected-host player flows including ranked and arena play pass, and live mail, budget-alert, cron and stop-webhook readbacks pass, followed by Access removal and public verification. It SHALL keep private administration and canonical-domain protection. No first-tier run or longer benchmark is planned, required or claimed as passed.
 
 #### Scenario: The initial ranked and arena release passes
 
 - **WHEN** the launch checks pass and the canonical host opens
-- **THEN** public players can use ranked play and arenas, private admin routes remain protected, and published limits distinguish measured capacity from unfinished benchmarks
+- **THEN** public players can use ranked play and arenas, private admin routes remain protected, and published limits distinguish measured capacity from unmeasured claims

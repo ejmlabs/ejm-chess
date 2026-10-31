@@ -70,7 +70,7 @@ The developer guide now reflects the shared UI owner's mandatory source
 checks and obsolete `enforceDesignKit` option. The separate proof acceptance
 entry is control-only and permanently unarmed in this source. It has no
 scenario adapters or complete work/cost envelope; see
-[timeout proofs](timeout-proofs.md). No release checkbox, public admission,
+timeout proofs (guide removed 2026-10-31). No release checkbox, public admission,
 provider resource or capacity claim changed.
 
 ## Board and standings checkpoint, 2026-10-21 UTC
@@ -110,7 +110,7 @@ versions per seeded entrant, projection used 1,435 advances, 5,816 write rows
 and 113,342 read rows; cleanup took 1,434 advances. These are different retained
 history shapes, not a speed comparison. Nonterminal metadata was direct
 excluded setup. Native Competition alarm cadence and the complete 20,000-Game
-workload remain unqualified. See [capacity qualification](capacity-qualification.md).
+workload remain unqualified. See capacity qualification (guide removed 2026-10-31).
 
 The source now streams standings from immutable versions in bounded candidate
 windows, retains the version needed by an active frozen build, and persists
@@ -124,7 +124,7 @@ thirteen-event Game lifecycle used 97 then 83 write rows, including cold
 wrapper setup. The same 65 projection advances used 336 then 271 write rows.
 This compares the same native fixture; it does not establish an upper bound
 for the full workload. Existing databases keep their original table layout.
-The [capacity guide](capacity-qualification.md) records the comparison and
+The capacity guide (removed 2026-10-31) recorded the comparison and
 the remaining accounting gaps.
 
 ## Lifecycle and capacity checkpoint, 2026-10-21 04:08 UTC
@@ -143,7 +143,7 @@ while uncertain native starts remain closed. The 38 focused proof tests are
 included in the integrated run. Public Container APIs avoid the pinned SDK's
 automatic start retry paths. Provider failure/restart behavior, full receipt
 recovery, the smallest passing tier and complete costs remain unqualified.
-See [timeout proofs](timeout-proofs.md).
+See timeout proofs (guide removed 2026-10-31).
 
 The private capacity adapter uses bound one-use native dispatch tickets and a
 generation retirement fence. A separate pinned-workerd probe passed 11 local
@@ -152,9 +152,9 @@ generation reacquisition, durable state and running-alarm interruption. Its
 no-retry observation lasted 2.5 seconds. That is not a 60-minute shutdown proof
 or a provider run. Socket-used objects retain their permits conservatively.
 Controller accounting, complete envelopes, the fixed driver and full workload
-remain disabled gates; see [capacity qualification](capacity-qualification.md).
+remain disabled gates; see capacity qualification (guide removed 2026-10-31).
 
-The [follow-up measurement scopes](capacity-follow-up.md) prepare full-hour
+The follow-up measurement scopes (guide removed 2026-10-31) prepare full-hour
 retention, real calendar scheduling, ranked proof recovery/cost and the later
 10,000-entry/5,000-live tier. They are unapproved proposals with finite limits,
 not executable or measured scopes. The 72,000-object physical-storage floor
@@ -867,7 +867,7 @@ launch and ranked-admission limits remain in force.
 - The planning PR contains the earlier plan. These latest implementation and
   planning changes are local. No product remote repository was created.
 
-Use the [operations guide](operations.md), [adjudication evidence](adjudication-feasibility.md),
+Use the [operations guide](operations.md),
 [fair play limits](fair-play.md), [tournament contract](tournaments.md), and
 [replay contract](replays.md) for setup, recovery, and remaining launch gates.
 

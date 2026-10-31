@@ -13,8 +13,13 @@ configs. Record each result, the deployed revision and every unrun check in
   Security and abuse limits, input bounds, bounded work per request and alarm,
   fair-play rules (including 2 ranked games per pair per 24 hours), platform
   safety bounds, ID non-recycling and the explicit stops stay.
-- The 2,000-player provider load test no longer gates ranked play or arenas.
-  It is follow-up evidence. Measure demand after opening.
+- The 2,000-player capacity harness is deleted, so no load run gates ranked
+  play or arenas. Measure demand after opening; if it ever needs checking, write
+  a small staging load script then.
+- Server-side Stockfish analysis is deleted. Reports stay informational with no
+  engine screening. Browser Stockfish practice stays.
+- The restore-and-replay provider drill is follow-up only, not a gate. Its code
+  stays.
 - Ranked uses the material timeout rule, the same as casual. The private
   timeout-proof path is retired: no proof Container, qualification, proof
   limits or `PROVER` binding. Ranked opens with `RANKED_ENABLED=true`.
@@ -30,12 +35,9 @@ configs. Record each result, the deployed revision and every unrun check in
 7. Public verification (**7.2**, **4.5**)
 8. Discovery (**7.3**)
 
-Not on the path, report as unrun: the 2,000-player provider run, the nine-day
-calendar, full-hour endurance, regional runs, the later tier, **6.4** and
-**10.4**. Their methods are follow-up scope in
-[capacity qualification](capacity-qualification.md),
-[capacity follow-up](capacity-follow-up.md) and [config examples](../config-examples/README.md).
-The retired proof is history in [timeout proofs](timeout-proofs.md).
+Not on the path, report as unrun: the restore-and-replay provider drill, the
+regional and endurance measurements (**6.4**, **10.4**). The drill's
+configuration is in [config examples](../config-examples/README.md).
 
 ## Prep status
 
@@ -56,7 +58,6 @@ The retired proof is history in [timeout proofs](timeout-proofs.md).
 | Access full-host + admin policy | Canary remains Access-protected | Owner session still required |
 | Budget alerts + `$85` stop webhook | Policy docs; application monthly caps off | Inbox delivery of an alert still unverified; not a hard cap |
 | Canary deploy scope | Worker `6aa3ef0c…` includes Join + material timeout | Release readback (step 3) |
-| Analysis cold-start costs | Analysis stays disabled | Measure only if analysis is approved |
 | Cost estimate vs $100 target | See [cost estimate](cost-estimate.md) and [budget](cloudflare-budget.md) | Update from current invoice and alerts (step 5) |
 
 ## Production values
@@ -73,12 +74,13 @@ Names and values only. They live in the private production `wrangler.jsonc`
 | `NEW_WORK_STOPPED` | `false` | canary build |
 | `OPERATION_MODE` | `unattended` | canary build |
 | `GAME_RETIREMENT_MODE` | `scaled` | canary build |
-| `ANALYSIS_ENABLED` | `false` | canary build |
 | `ARENA_*`, `CASUAL_*`, `RANKED_*` limits | unset (no product caps) | none |
 
 - `RANKED_ENABLED` alone opens ranked, and `/api/config` reports `ranked` from
-  it. No proof setting or `PROVER` binding exists. Delete `TIMEOUT_PROOF_PROFILE`
-  and `MONTHLY_PROOF_LIMIT` from the private config if still present.
+  it. No proof setting or `PROVER` binding exists. Delete `TIMEOUT_PROOF_PROFILE`,
+  `MONTHLY_PROOF_LIMIT`, any `ANALYSIS_*` or `ANALYZER` setting, and any
+  `MONTHLY_*` or `SIGNUP_ATTEMPT_LIMIT` setting from the private config if still
+  present.
 - `TOURNAMENTS_ENABLED` can open now. The fixed round-robin limits (3 active
   events, 256 event records, 128 retained payloads, 10,000 game IDs) are
   removed, so shared arena games no longer close the preview.
@@ -93,7 +95,7 @@ Names and values only. They live in the private production `wrangler.jsonc`
 | Need | Lever |
 | --- | --- |
 | All new work now | Operations stop form, `gamesStopped` (also blocks signup). With D1 or Access down, deploy `NEW_WORK_STOPPED=true`. |
-| Ranked only | Deploy `RANKED_ENABLED=false`. Queueing and pairing close, a queued player is dropped, a match still being created is cancelled and its seats released, and a created game not yet started voids at its first Ready (`eligibility-revoked`: no winner, no rating change). Started games finish and settle. New leaderboard projections mark rows ineligible. |
+| Ranked only | Deploy `RANKED_ENABLED=false`. Queueing and pairing close, a queued player is dropped, a match still being created is cancelled and its seats released, and a created game not yet started voids at its first Ready (`eligibility-revoked`: no winner, no rating change). Started games finish and settle. Leaderboard projections are unchanged: the stored flag holds only the rating standard, and readers check account age, activity and restrictions at read time. |
 | Arenas only | Deploy `ARENAS_ENABLED=false`. Unstarted events cancel; running events drain. |
 | Tournaments only | Deploy `TOURNAMENTS_ENABLED=false`. Unstarted events cancel; running events finish. |
 | The host | Recreate the full-host Access application from its saved settings (after step 6). |
@@ -139,8 +141,8 @@ the chess SHA is recorded. **Stop:** any failure.
 ### 3. Deploy to the protected canary (7.2)
 
 Set the production values table in the private `wrangler.jsonc`. Diff it
-against the last deployed copy; only the three flags and the removed proof
-variables may change. Access still
+against the last deployed copy; only the three flags and the removed proof,
+analysis and monthly variables may change. Access still
 limits the host to canary identities and the games stop stays clear.
 
 ```sh
@@ -156,8 +158,7 @@ Open `/api/config`, `/api/arenas`, `/api/tournaments` and
 **Pass:** `/api/config` shows `ranked`, `ai` and `tournaments` true; arenas and
 tournaments `enabled` true; `authority.rankedOpen` true; `retirement.mode`
 `scaled`; each unset product limit reads `9007199254740991` and
-`authorityBytes` `4294967296`; `analysis.enabled` false; `budget.stoppedByEnv`
-false; provider readback confirms `workers_dev` and `preview_urls` false and
+`authorityBytes` `4294967296`; `budget.stoppedByEnv` false; provider readback confirms `workers_dev` and `preview_urls` false and
 both cron triggers. **Stop:** any other value. Fix and redeploy, or roll back.
 
 ### 4. Canary player checklist (3.6, 7.1)
@@ -210,7 +211,7 @@ npx wrangler tail --env '' --format json --status ok
   approved inbox; the sending domain's DNS, signing and bounce records still
   read back as verified; Operations shows the email stop clear.
 - Alerts: send Test from each saved usage policy to the approved inbox. Send the
-  webhook Save/Test: it stops all three categories. Clear them in the owner form
+  webhook Save/Test: it sets every stop. Clear them in the owner form
   with the latest `expectedVersion`. Compare account usage with the $100
   envelope and update the [cost estimate](cost-estimate.md). Alerts and the
   webhook are the economic limit; they are not a hard invoice cap.

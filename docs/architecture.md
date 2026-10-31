@@ -112,11 +112,6 @@ separate docs stylesheet.
 | Cloudflare Access | A second identity check for private owner review |
 | Email binding | Security-only verification and recovery delivery, once configured and verified |
 
-The optional private Stockfish Container and bounded analysis pipeline are
-implemented but disabled. See [analysis](analysis.md) for pins, resource
-measurements, retry controls, source obligations, and deployment gates. An engine
-summary is not a calibrated detector or a mating proof.
-
 Optional [Stockfish practice](ai-opponents.md) runs a pinned maintained engine in a browser worker loaded only for computer games. The White owner submits versioned `engine-move` proposals for Black. The Game authority still validates session, game type, turn, legality, deadline, and result; it does not trust client clocks or engine provenance. The browser includes the complete accepted move history in each search and discards stale output. Computer results are always unrated and excluded from human fair play checks. There is no external inference service or provider key.
 
 ## Game authority
@@ -155,8 +150,7 @@ displayed clock. This bounded online policy does not prove all possible mating
 paths, so a fully blocked position with no possible mate scores as a loss.
 
 Ranked games use this same material timeout rule at the flag, and the result
-is rated. The earlier private timeout-proof path was retired on 2026-10-31; see
-[timeout proofs](timeout-proofs.md) for its history.
+is rated.
 
 ## Accounts and active seats
 
@@ -279,8 +273,8 @@ event history lasts seven days. See [tournaments](tournaments.md).
 ### Unattended operation and retained records
 
 `OPERATION_MODE=unattended` disables new case and appeal decisions.
-Reports retain private evidence without promising review. Statistical engine
-signals cannot restrict an account. Legacy restrictions expire, and unanswered
+Reports retain private evidence without promising review. Accuracy, shared-IP,
+focus and report-count signals cannot restrict an account. Legacy restrictions expire, and unanswered
 legacy appeals close as `expired-unreviewed` after 14 days without fabricating
 a human decision or reversing historical ratings. Optional reviewed operation
 requires the explicit `reviewed` mode and an available owner.
@@ -372,8 +366,8 @@ accounts or games. Errors include a machine-readable `error` and a short
 | `POST /api/games` | `{id, format, ai?: {modelId, level}}`; creator-bound idempotent casual/Stockfish admission, with the pinned engine build and one named strength |
 | `POST /api/games/:id/join` | Single-claim invitation or authorized participant reopen |
 | `GET /api/games/:id/connect` | Same-origin authenticated WebSocket |
-| `GET /api/admin/operations` | Access and owner protected status/cap/lag counters |
-| `POST /api/admin/operations/maintenance` | Bounded retry of authority, unattended games, and analysis work |
+| `GET /api/admin/operations` | Access and owner protected status/lag counters |
+| `POST /api/admin/operations/maintenance` | Bounded retry of authority and unattended game work |
 | `GET /api/admin/operations/export/manifest` | Fixed journal watermarks and policy versions |
 | `GET /api/admin/operations/export?kind=…&watermark=…&after=…` | At most 50 accepted journal events and a SHA-256 page hash |
 

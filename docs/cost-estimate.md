@@ -9,8 +9,9 @@ The current policy, adopted October 22, is one $100 monthly spending target,
 usage alerts and an emergency stop (thresholds are kept in the private provider record). Earlier service allocations,
 mandatory reserves and repeated financial reviews are superseded. The dated
 calculations below remain estimates, not launch requirements. On 2026-10-31 the
-owner removed arbitrary product caps and retired the private timeout-proof path.
-The proof estimates below are historical and describe no current cost.
+owner removed arbitrary product caps, retired the private timeout-proof path and
+deleted the capacity harness and server-side analysis. The proof and capacity
+estimates below are historical and describe no current cost.
 
 ## Current scope
 
@@ -22,17 +23,14 @@ quantities or trigger the account-wide alerts.
 The private canonical configuration no longer enforces monthly application
 caps and no product caps. Cloudflare budget alerts and the stop webhook are the
 economic control; alerts can lag. Feature gates still disable ranked,
-tournaments, arenas, browser computer games and server analysis until the
-launch release. Counters are usage records, not measured capacity or dollar
+tournaments, arenas and browser computer games until the launch release. Counters are usage records, not measured capacity or dollar
 allowances. The [deployment guide](deployment.md)
 records actual publication and activation state.
 
 The estimate includes Worker traffic, Game and Competition SQLite Durable
 Objects, D1, and account mail. Browser Stockfish runs on the player's device,
 with no model tokens or server-engine inference charge. Its downloaded files
-still use hosting resources. No server-analysis queue or Container is bound in
-the canonical configuration. Enabling those services needs a separate deployed
-cost and cold-start assessment. Observability is disabled in this snapshot.
+still use hosting resources. Observability is disabled in this snapshot.
 
 ## Published rates used
 
@@ -185,8 +183,7 @@ financial policy below does not turn its unresolved checks into passes.
 
 ### Current financial policy
 
-Use the single $100 target, existing alerts and stop described above. The
-isolated capacity run keeps its approved $25 incremental ceiling. Runtime
+Use the single $100 target, existing alerts and stop described above. Runtime
 bounds and source integrity remain required. No per-service financial review is
 a release gate, and there are no product caps.
 
@@ -233,30 +230,20 @@ Ranked activation no longer involves a proof Container; see
 
 ### Other qualification work
 
-The saved 29-game screening evaluation used a network-disabled local Docker
-run. It made no cloud engine or token calls. Local wall time is not billed
-Worker CPU. Deployment, migrations and provider checks may incur usage; their
-actual delta has not been collected, so their cost is not recorded as zero.
+Deployment, migrations and provider checks may incur usage; their actual delta
+has not been collected, so their cost is not recorded as zero.
 
-The proposed 20 unique settlements/second for 15 minutes requires **18,000
-games**. It is follow-up evidence, not a launch gate (2026-10-31).
-The owner approved a separate once-only isolated plan with at most
-20,000 permanently charged synthetic admissions and a $25 incremental ceiling
-inside the $100 monthly target. It requires 18,000 regular native results and 1,000 distinct
-delayed results. Its frozen candidate, fixed UTC schedule and fresh complete
-cost ledger still need separate owner approval before provisioning or load.
-Production has no product ceiling to raise. See the
-[capacity qualification guide](capacity-qualification.md) and
-[arena qualification](arena-design.md#qualification-gates).
-Do not reset counters, refund reservations or recycle IDs to fit the run.
-This estimate alone authorizes no provider action or additional spend.
+Owner decision, 2026-10-31: the 2,000-player capacity harness and its isolated
+$25 run are deleted. The 20 unique settlements/second for 15 minutes plan (18,000
+games) is no longer planned work. If demand ever needs checking, write a small
+staging load script then. Do not reset counters, refund reservations or recycle
+IDs to fit any run. This estimate alone authorizes no provider action or
+additional spend.
 
-Before any cloud drill, record its one-time dollar allowance inside the $100
-monthly envelope, resource IDs, initial usage, stop criteria and headroom for
-accepted work. Start with a bounded canary, read provider usage afterward,
-and reconcile delayed billing before expanding. No defensible dollar estimate
-for the full drill exists until its actual request, duration and SQL profile is
-measured.
+Before any cloud drill or load script, record its one-time dollar allowance
+inside the $100 monthly envelope, resource IDs, initial usage, stop criteria and
+headroom for accepted work. Start with a bounded canary, read provider usage
+afterward, and reconcile delayed billing before expanding.
 
 After opening, collect:
 
@@ -273,8 +260,7 @@ After opening, collect:
 - Real cron/alarm execution, regional recovery, load limits and measured cost
   per 1,000 games and 10,000 spectator-hours.
 
-Public price sources, exact inputs, per-service calculations, local config hash
-and a standard-library reproduction script are retained in
-[`analysis/qualification/costs/`](../analysis/qualification/costs/README.md).
-This doc does not establish deployed costs, capacity, worldwide latency,
+Public price sources are linked in the rates table above. The earlier cost
+reproduction script under `analysis/qualification/costs/` was removed with the
+analysis tooling on 2026-10-31; git history keeps it. This doc does not establish deployed costs, capacity, worldwide latency,
 restoration, or alert delivery.

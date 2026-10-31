@@ -67,13 +67,21 @@ capacity, proof and quota gates in the records above.
   abuse limits, protocol and input bounds, bounded per-request and per-alarm
   work, fair-play rules (including the ranked pair limit), platform-safety
   bounds, ID non-recycling and the explicit stops.
-- The first-tier 2,000-player provider load test is follow-up evidence, not a
-  gate. Measure real demand after opening.
+- The first-tier 2,000-player provider load test is not a gate. Measure real
+  demand after opening.
 - Ranked uses the material timeout rule only, as casual does. The private
   CHA-Solver timeout-proof path is retired.
 - Ranked play and arenas open after task 3.9 (proof path retired), the
   protected-host player checks (3.6, 7.1) including ranked and arena play, and
   the live mail, alert, cron and stop readbacks (6.2, 6.3). Access removal and
   public verification follow, then discovery (7.3).
+
+### Tooling decision, 2026-10-31
+
+Later the same day the owner deleted the 2,000-player capacity harness (no load
+run is planned; write a small staging load script if demand ever needs checking)
+and server-side Stockfish analysis (reports stay informational with no engine
+screening; browser Stockfish practice stays). The restore-and-replay provider
+drill is follow-up only, not a launch gate. Its code stays.
 
 This changes no other owner, account, sender, credential or budget-target rule.

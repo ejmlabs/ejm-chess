@@ -9,8 +9,8 @@ product caps on events, retained games or game IDs (owner decision, 2026-10-31).
 This guide covers the three- or four-player round-robin format. The large-event
 format is `arena-v1`, a timed arena with continuous pairing and its own
 `ARENAS_ENABLED` gate. See the
-[arena design and qualification contract](arena-design.md) for its rules,
-resource bounds, and follow-up evidence. Behavior under heavy load is still
+[arena design](arena-design.md) for its rules, resource bounds, and reference
+workload targets. Behavior under heavy load is still
 being measured.
 
 ## Local page and arena entry
