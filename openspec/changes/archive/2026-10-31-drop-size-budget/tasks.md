@@ -13,7 +13,7 @@
 
 ## 3. Verification
 
-- [ ] 3.1 Against ejm-ui with `add-chess-board`, run `npm run typecheck`, `npm test` and `npm run build`, and verify each passes (if the Stockfish assets or Wrangler configuration are absent, report which steps did not run)
+- [x] 3.1 Against ejm-ui with `add-chess-board`, run `npm run typecheck`, `npm test` and `npm run build`, and verify each passes (if the Stockfish assets or Wrangler configuration are absent, report which steps did not run)
 
 ## Workflow follow-up
 
