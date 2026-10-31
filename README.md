@@ -124,7 +124,6 @@ npm run engine:check
 npm run engine:probe
 npm run build
 npm run worker:check
-npm run budget
 ```
 
 `npm test` runs the native workerd suite, then the Node load-driver suite.
@@ -142,8 +141,7 @@ Worker tests and the Worker dry run require the omitted Wrangler configuration;
 recovery tests also require the recovery-drill configuration. These commands
 are documented entry points, not new passing results for this restored source.
 The Worker check is a dry run. It does not prove bindings, email, Access,
-Turnstile, DNS, or production behavior. Budget checks enforce the configured
-compressed build limits. Do not claim a performance improvement from a budget pass.
+Turnstile, DNS, or production behavior.
 
 `engine:check` checks the vendored browser runtime, source, network, and notices
 against their pins. `engine:probe` starts the real engine in Node and checks a

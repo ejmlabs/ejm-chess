@@ -178,7 +178,6 @@ npm run typecheck
 npm test
 npm run build
 npm run worker:check
-npm run budget
 ```
 
 Record the product/shared-owner revisions, any dirty-source patch, lockfiles,
