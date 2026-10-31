@@ -217,9 +217,9 @@ the deadline as proof the provider stopped billing.
 
 Use the fixed licensed corpus through real Game timeout and Competition
 settlement, including both sides, ordinary difficult flags, independently
-validated witnesses, cold bursts, supported draws and unknown technical voids.
+validated witnesses, cold bursts, supported draws and unknown results that fall back to the material rule.
 Exercise a legitimate second attempt, exhausted credits, stale/duplicate/late
-responses, timeout/void races, admission stop, controller restart, pending
+responses, timeout/fallback races, admission stop, controller restart, pending
 start, mixed stop replies and lost stop acknowledgement. Debt must block new
 native starts while saved results remain readable.
 

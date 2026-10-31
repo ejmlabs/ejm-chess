@@ -173,7 +173,7 @@ This example is arithmetic, not measured provider use. See the measured
 
 Before ranked launch: resolve the versioned rule policy, test position history
 and fifty-move boundaries with any solver, measure workerd or private Container
-limits on a representative difficult corpus, verify unknown/retry/technical-void
+limits on a representative difficult corpus, verify unknown/retry/material-fallback
 handling and automatic recovery, review licenses/source obligations, and run the
 deployed two-player acceptance flow. A fast result on eight positions does not
 complete these gates.
