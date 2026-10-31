@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
-import { canonicalOrigin, readJson, requireAdmin, requireSameOrigin, verifyAccessJwt, verifyTurnstile } from '../src/server/security';
+import { ApiError, canonicalOrigin, errorResponse, readJson, requireAdmin, requireSameOrigin, verifyAccessJwt, verifyTurnstile } from '../src/server/security';
 
 const local = { AUTH_BASE_URL: 'http://localhost:8787', LOCAL_DEV: 'true' };
 
@@ -29,6 +29,23 @@ describe('browser trust boundaries', () => {
     const request = new Request('http://localhost:8787', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: 'x'.repeat(17_000) }) });
     await expect(readJson(request)).rejects.toMatchObject({ status: 413 });
     await expect(readJson(new Request('http://localhost:8787', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '[]' }))).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+describe('errors from a Durable Object', () => {
+  it('keeps the status and code of an ApiError that crossed the object boundary, and nothing else', async () => {
+    // RPC rebuilds a thrown ApiError as a plain Error with its fields and no prototype.
+    const crossed = Object.assign(new Error('The authority exceeds one capture page.'), { name: 'ApiError', status: 409, code: 'RECOVERY_CAPTURE_LIMIT' });
+    const response = errorResponse(crossed);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: 'RECOVERY_CAPTURE_LIMIT', message: 'The authority exceeds one capture page.' });
+    expect(errorResponse(new ApiError(429, 'SLOW_DOWN', 'Wait.', 7)).headers.get('Retry-After')).toBe('7');
+    for (const unknown of [new Error('storage detail'), Object.assign(new Error('storage detail'), { status: 409, code: 'X' }),
+      Object.assign(new Error('storage detail'), { name: 'ApiError' }), Object.assign(new Error('storage detail'), { name: 'ApiError', status: '409', code: 'X' })]) {
+      const generic = errorResponse(unknown);
+      expect(generic.status).toBe(503);
+      expect(await generic.json()).toEqual({ error: 'SERVICE_UNAVAILABLE', message: 'The service is unavailable. Try again later.' });
+    }
   });
 });
 

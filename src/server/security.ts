@@ -138,7 +138,15 @@ export function jsonResponse(value: unknown, status = 200): Response {
   return Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 }
 
-export function errorResponse(error: unknown): Response {
+/** An ApiError thrown inside a Durable Object reaches the Worker as a plain Error that keeps its fields. Restore it so the caller sees the real status and code. */
+function restoreApiError(error: unknown): unknown {
+  if (!(error instanceof Error) || error.name !== 'ApiError') return error;
+  const { status, code, retryAfterSeconds } = error as Error & Partial<ApiError>;
+  return Number.isInteger(status) && typeof code === 'string' ? new ApiError(status!, code, error.message, retryAfterSeconds) : error;
+}
+
+export function errorResponse(thrown: unknown): Response {
+  const error = restoreApiError(thrown);
   if (error instanceof ApiError) {
     const response = jsonResponse({ error: error.code, message: error.message }, error.status);
     if (error.retryAfterSeconds !== undefined) response.headers.set('Retry-After', String(error.retryAfterSeconds));

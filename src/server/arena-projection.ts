@@ -184,8 +184,16 @@ export class ArenaProjection {
     });
   }
 
+  /** A failed publication retries after a second, never on every millisecond. */
+  retryAt = 0;
+
   /** Advance one event and at most 32 version candidates. Publication is retryable. */
   async advance(now: number): Promise<void> {
+    try { await this.step(now); this.retryAt = 0; }
+    catch (error) { this.retryAt = Date.now() + ARENA_POLICY.retryMs; throw error; }
+  }
+
+  private async step(now: number): Promise<void> {
     const sql = this.ctx.storage.sql;
     const last = sql.exec<{ value: string }>("SELECT value FROM arena_meta WHERE key='projection-cursor'").toArray()[0]?.value ?? '';
     const work = sql.exec<{ id: string }>(`SELECT e.id FROM arena_events e LEFT JOIN arena_projection_builds b ON b.event_id=e.id
@@ -312,14 +320,14 @@ export class ArenaProjection {
         this.finishCleanup('version', cursor, versions.length === ARENA_POLICY.workBatch && last
           ? [last.event_id, last.user_id, last.revision] : null);
       }
-      this.wakeCleanup(Date.now() + 1_000, true);
+      this.wakeCleanup(Date.now() + ARENA_POLICY.retryMs, true);
     });
   }
 
   async cleanupPublic(now: number): Promise<void> {
     const sql = this.ctx.storage.sql;
     const epochs = this.cleanupEpochs();
-    if (epochs.requested <= epochs.completed.public) { this.wakeCleanup(now + 1_000); return; }
+    if (epochs.requested <= epochs.completed.public) { this.wakeCleanup(now + ARENA_POLICY.retryMs); return; }
     const due = sql.exec<{ value: string }>("SELECT value FROM arena_meta WHERE key='public-cleanup-at'").toArray()[0];
     if (due && Number(due.value) > now) return;
     const cursor = this.cleanupCursor<CleanupCursor<[string, number, number]>>('public-cleanup-cursor')
@@ -340,7 +348,7 @@ export class ArenaProjection {
         ? [last.event_id, last.generation, last.page_number] : null);
       // A publication during the sweep changes the epoch. Revisit earlier keys
       // in another sweep without repeatedly restarting at a protected prefix.
-      this.wakeCleanup(now + 1_000);
+      this.wakeCleanup(now + ARENA_POLICY.retryMs);
     });
   }
 }

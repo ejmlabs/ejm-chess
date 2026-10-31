@@ -124,6 +124,9 @@ two participants, and lower the legacy live count when its last seat releases.
 This count joins the Competition-owned intents in the shared game and byte
 guards. Missing counter rows close new admission. Apply the migration before
 running this source; do not zero counters to reopen a stopped service.
+The arena stage of a maintenance pass reuses the count Competition read at the
+start of that pass. A casual request reads it only for a new admission, not
+when resuming a saved or admitted one.
 
 ## Schedule and finish rules
 
@@ -168,6 +171,20 @@ Due running and draining events are processed before scheduled starts, within
 the existing bounded lifecycle pass. This lets an empty expired hourly event
 release its slot before the next hourly and daily events start while weekly
 games drain. No cap limits open events.
+
+The Competition alarm is armed for the next real due time only. A running
+event nobody waits in sleeps until its close. While a player is queued, pairing
+retries once a second, so pairing latency is unchanged. A draining event waits
+for its last settlement. Live games are reconciled every 30 seconds or at their
+cutoff, and publication, cleanup and release batches arm their own due times.
+The minute trigger still runs a full pass, so switching `ARENAS_ENABLED` off
+drains running events at the next pass.
+
+Implemented and tested locally with a mocked clock, not staged or released.
+An idle running hourly arena woke 3,665 times from start through close before
+this change and 7 times after. In the first two minutes after a start, an arena
+with one player left waiting woke 123 times before and after, and an arena
+whose queued players all had games woke 7 times, down from 123.
 
 ## Points and opponents
 

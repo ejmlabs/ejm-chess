@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Competition } from '../src/server/competition';
 import type { Env } from '../src/server/env';
 import { GAME_HOT_RETENTION_MS, type Game } from '../src/server/game';
+import { maintainUnattendedGames } from '../src/server/maintenance';
 import type { Actor, InitGame } from '../src/shared/protocol';
 import { STOCKFISH_BUILD } from '../src/shared/engine';
 import { admitGameFixture, player } from './authority-helpers';
@@ -30,6 +31,15 @@ async function quiet(game: DurableObjectStub<Game>, settings: Partial<Env> = {},
     if (suppressFlush) internal.flush = async () => {};
     await state.storage.deleteAlarm();
   });
+}
+
+/** Parks every other ledger row so the four-per-minute recovery budget reaches only the rows under test. */
+async function parkOtherAdmissions(keep: string[]) {
+  const marks = keep.map(() => '?').join(',');
+  for (const ledger of ['casual_game_admissions', 'tournament_game_admissions']) {
+    await env.DB.prepare(`UPDATE ${ledger} SET archive_retry_at=? WHERE game_id NOT IN (${marks})`).bind(Date.now() + 86_400_000 * 30, ...keep).run();
+  }
+  await env.DB.prepare('DELETE FROM maintenance_budgets').run();
 }
 
 describe('Competition-owned casual admission', () => {
@@ -215,5 +225,77 @@ describe('Competition-owned casual admission', () => {
       await expect((instance as Game).init(input)).rejects.toThrow('casual_admission_required');
     });
     expect(await game.status()).toBeNull();
+  });
+
+  it('does not poll healthy games Competition already reconciles, and still recovers those that outlived every clock', async () => {
+    const hour = 3_600_000;
+    const now = Date.now();
+    const rows = {
+      legacyFresh: { ledger: 'casual_game_admissions', createdAt: now - 10_000, reservation: null },
+      legacyHealthy: { ledger: 'casual_game_admissions', createdAt: now - 600_000, reservation: null },
+      watchedHealthy: { ledger: 'casual_game_admissions', createdAt: now - 12 * hour, reservation: 'reservation' },
+      watchedOverdue: { ledger: 'casual_game_admissions', createdAt: now - 25 * hour, reservation: 'reservation' },
+      eventHealthy: { ledger: 'tournament_game_admissions', createdAt: now - 2 * hour, reservation: null },
+      eventOverdue: { ledger: 'tournament_game_admissions', createdAt: now - 25 * hour, reservation: null },
+    } as const;
+    const ids = Object.fromEntries(Object.keys(rows).map(name => [name, crypto.randomUUID()]));
+    for (const [name, row] of Object.entries(rows)) {
+      if (row.ledger === 'casual_game_admissions') await env.DB.prepare('INSERT INTO casual_game_admissions(game_id,creator_id,created_at,reservation_id) VALUES(?,?,?,?)')
+        .bind(ids[name], 'recovery-fixture', row.createdAt, row.reservation).run();
+      else await env.DB.prepare('INSERT INTO tournament_game_admissions(game_id,tournament_id,created_at) VALUES(?,?,?)')
+        .bind(ids[name], 'recovery-fixture', row.createdAt).run();
+    }
+    await parkOtherAdmissions(Object.values(ids));
+    const polled = async () => {
+      const found: string[] = [];
+      for (const [name, row] of Object.entries(rows)) {
+        const retry = await env.DB.prepare(`SELECT archive_retry_at FROM ${row.ledger} WHERE game_id=?`).bind(ids[name]).first<number>('archive_retry_at');
+        if (retry! > 0) found.push(name);
+      }
+      return found.sort();
+    };
+    expect((await maintainUnattendedGames(env, now)).recovery).toMatchObject({ attempted: 3 });
+    expect(await polled()).toEqual(['eventOverdue', 'legacyHealthy', 'watchedOverdue']);
+    // Only the legacy game, once its adjudication wait has passed, joins them. Healthy admitted games never do.
+    expect((await maintainUnattendedGames(env, now + 60_000)).recovery).toMatchObject({ attempted: 1 });
+    expect(await polled()).toEqual(['eventOverdue', 'legacyFresh', 'legacyHealthy', 'watchedOverdue']);
+  });
+
+  it('settles a casual game whose alarm and Competition polling were lost once it is a day old', async () => {
+    const competition = await authority();
+    const actor = await player();
+    const id = crypto.randomUUID();
+    const created = await competition.createCasualGame(actor, { id, format: 'blitz' });
+    expect(created).toMatchObject({ ok: true, created: true });
+    const game = env.GAME.get(env.GAME.idFromName(id));
+    await quiet(game, {}, false);
+    await parkOtherAdmissions([id]);
+    const admitted = await env.DB.prepare('SELECT created_at FROM casual_game_admissions WHERE game_id=?').bind(id).first<number>('created_at');
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(admitted! + 2 * 60 * 60_000);
+    // Past its readiness deadline, but Competition owns this game's recovery.
+    expect((await maintainUnattendedGames(env)).recovery.attempted).toBe(0);
+    expect(await env.DB.prepare('SELECT archive_retry_at FROM casual_game_admissions WHERE game_id=?').bind(id).first('archive_retry_at')).toBe(0);
+    clock.mockReturnValue(admitted! + 25 * 60 * 60_000);
+    expect((await maintainUnattendedGames(env)).recovery).toEqual({ attempted: 1, completed: 1, failed: 0 });
+    expect(await game.status()).toMatchObject({ status: 'finished', result: { outcome: { reason: 'readiness-expired' } } });
+  });
+
+  it('reads the legacy casual count for a new admission only, not when resuming a saved request', async () => {
+    const competition = await authority();
+    const actor = await player();
+    const saved = crypto.randomUUID();
+    const reservationId = crypto.randomUUID();
+    await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec(`INSERT INTO casual_intents(game_id,creator_id,reservation_id,payload,state,created_at,next_at)
+      VALUES(?,?,?,?,'admitting',?,?)`, saved, actor.id, reservationId, JSON.stringify({ id: saved, format: 'blitz', rated: false, white: actor, reservationId }), Date.now(), Date.now()));
+    const reads = await runInDurableObject<Competition, { resumed: number; afterNew: number }>(competition, async instance => {
+      const internal = instance as unknown as { env: Env };
+      const prepared = vi.spyOn(internal.env.DB, 'prepare');
+      const count = () => prepared.mock.calls.filter(([sql]) => sql.includes('legacy_live')).length;
+      expect(await instance.createCasualGame(actor, { id: saved, format: 'blitz' })).toMatchObject({ ok: true, created: true });
+      const resumed = count();
+      expect(await instance.createCasualGame(actor, { id: crypto.randomUUID(), format: 'blitz' })).toMatchObject({ ok: true, created: true });
+      return { resumed, afterNew: count() };
+    });
+    expect(reads).toEqual({ resumed: 0, afterNew: 1 });
   });
 });

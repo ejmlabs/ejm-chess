@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { runInDurableObject } from 'cloudflare:test';
 import { createPlaceholderEmail } from '@better-auth/core/utils/email';
-import type { Actor, GameSnapshot, InitGame } from '../src/shared/protocol';
+import type { Actor, GameResult, GameSnapshot, InitGame } from '../src/shared/protocol';
 import type { Env } from '../src/server/env';
 import type { Competition } from '../src/server/competition';
 import type { Game } from '../src/server/game';
@@ -49,4 +49,35 @@ export async function activeGame(): Promise<{ game: DurableObjectStub<Game>; whi
   const second = await game.command(black, { type: 'ready', id: crypto.randomUUID(), expectedVersion: first.snapshot.version });
   if (!second.ok) throw new Error(second.code);
   return { game, white, black, snapshot: second.snapshot };
+}
+
+/**
+ * For fixtures and qualification harnesses that own the clock: the object must not arm real alarms.
+ * Alarm scheduling is private product code, so this is the one place that reaches it.
+ * `bindings` replace the object's private env bindings.
+ */
+export async function holdAlarms(stub: DurableObjectStub<Competition> | DurableObjectStub<Game>, bindings: Partial<Env> = {}): Promise<void> {
+  await runInDurableObject(stub as DurableObjectStub<Game>, async (instance, state) => {
+    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
+    internal.env = { ...internal.env, ...bindings };
+    internal.schedule = async () => {};
+    await state.storage.deleteAlarm();
+  });
+}
+
+/** Rewrites an active game into the state a flag left before timeouts were resolved at the flag. */
+export async function pendingAdjudicationGame() {
+  const setup = await activeGame();
+  const flaggedAt = setup.snapshot.clocks.deadline!;
+  await env.DB.batch([setup.white, setup.black].map(actor => env.DB.prepare('INSERT INTO active_game_seats(user_id,game_id,acquired_at) VALUES(?,?,?)')
+    .bind(actor.id, setup.snapshot.id, Date.now())));
+  await runInDurableObject(setup.game, (instance, state) => {
+    const stored = JSON.parse(state.storage.sql.exec<{ value: string }>('SELECT value FROM game_state').one().value);
+    Object.assign(stored, { status: 'pending-adjudication', version: stored.version + 1, deadline: null, endedAt: flaggedAt,
+      outcome: { winner: null, score: null, reason: 'timeout-needs-review' }, remaining: { ...stored.remaining, w: 0 } });
+    state.storage.sql.exec('UPDATE game_state SET value=?', JSON.stringify(stored));
+    const result = (instance as unknown as { result(saved: unknown): GameResult }).result(stored);
+    state.storage.sql.exec('INSERT INTO result_delivery(id,value) VALUES(1,?)', JSON.stringify({ result, attempts: 0, nextAttemptAt: flaggedAt }));
+  });
+  return { ...setup, flaggedAt };
 }

@@ -123,6 +123,16 @@ async function standings(id: string) {
 }
 
 describe('timed arena authority', () => {
+  it('leaves the legacy casual count to the Competition pass instead of reading it again in the arena stage', async () => {
+    const { competition } = await prepare(2);
+    await runInDurableObject(competition, async instance => {
+      const internal = instance as unknown as { arenas: { maintenance(): Promise<void> }; env: Env };
+      const prepared = vi.spyOn(internal.env.DB, 'prepare');
+      await internal.arenas.maintenance();
+      expect(prepared.mock.calls.filter(([sql]) => sql.includes('legacy_live'))).toEqual([]);
+    });
+  });
+
   it('skips maintenance for unchanged arena registrations and retries while preserving newly created work', async () => {
     const startsAt = Math.ceil(Date.now() / HOUR) * HOUR + ++index * 4 * HOUR;
     const clock = vi.spyOn(Date, 'now').mockReturnValue(startsAt - 600_000);

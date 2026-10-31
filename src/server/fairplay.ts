@@ -373,6 +373,28 @@ export async function expireReports(env: AuthEnv, now = Date.now()): Promise<voi
     ORDER BY c.created_at,c.id LIMIT 500)`).bind(now, now, now - REPORT_REVIEW_WINDOW_MS, now).run();
 }
 
+/** Most rows one pass removes from one table. Every pass is bounded; the schedule sets the pace. */
+export const EXPIRY_BATCH = 500;
+
+/**
+ * Tables that grow with traffic (account request windows, sessions, sign-in limits, released seats).
+ * The minute schedule gives each table room for EXPIRY_BATCH * 1,440 deletions a day, so a backlog
+ * larger than one batch drains over the next runs instead of waiting for a daily pass.
+ */
+export async function cleanupExpiredRows(env: AuthEnv, now = Date.now()): Promise<number> {
+  const day = now - 86_400_000;
+  const results = await env.DB.batch([
+    env.DB.prepare('DELETE FROM request_limits WHERE key IN (SELECT key FROM request_limits WHERE window_start<? LIMIT ?)').bind(day, EXPIRY_BATCH),
+    env.DB.prepare('DELETE FROM identity_change_leases WHERE user_id IN (SELECT user_id FROM identity_change_leases WHERE expires_at<=? LIMIT ?)').bind(now, EXPIRY_BATCH),
+    env.DB.prepare('DELETE FROM verification WHERE id IN (SELECT id FROM verification WHERE expiresAt<? LIMIT ?)').bind(new Date(day).toISOString(), EXPIRY_BATCH),
+    env.DB.prepare('DELETE FROM session WHERE id IN (SELECT id FROM session WHERE expiresAt<? LIMIT ?)').bind(new Date(now).toISOString(), EXPIRY_BATCH),
+    env.DB.prepare('DELETE FROM rateLimit WHERE id IN (SELECT id FROM rateLimit WHERE lastRequest<? LIMIT ?)').bind(day, EXPIRY_BATCH),
+    env.DB.prepare('DELETE FROM active_game_seats WHERE (user_id,game_id) IN (SELECT user_id,game_id FROM active_game_seats WHERE released_at<? LIMIT ?)')
+      .bind(now - 30 * 86_400_000, EXPIRY_BATCH),
+  ]);
+  return results.reduce((total, result) => total + result.meta.changes, 0);
+}
+
 export async function cleanupPrivateData(env: AuthEnv, now = Date.now()): Promise<void> {
   await expireRestrictions(env.DB, now);
   await expireAppeals(env, now);
@@ -398,12 +420,6 @@ export async function cleanupPrivateData(env: AuthEnv, now = Date.now()): Promis
         AND NOT EXISTS(SELECT 1 FROM fairplay_appeals pending WHERE pending.case_id=c.id AND pending.status='pending' AND pending.automatic_closed_at IS NULL)
         AND NOT EXISTS(SELECT 1 FROM fairplay_evidence e WHERE e.case_id=c.id AND e.hold_until>?)
       ORDER BY c.updated_at,c.id,a.id LIMIT 500)`).bind(now - EVIDENCE_RETENTION_MS, now, now),
-    env.DB.prepare('DELETE FROM request_limits WHERE key IN (SELECT key FROM request_limits WHERE window_start<? LIMIT 500)').bind(now - 86_400_000),
-    env.DB.prepare('DELETE FROM identity_change_leases WHERE user_id IN (SELECT user_id FROM identity_change_leases WHERE expires_at<=? LIMIT 500)').bind(now),
-    env.DB.prepare('DELETE FROM verification WHERE id IN (SELECT id FROM verification WHERE expiresAt<? LIMIT 500)').bind(new Date(now - 86_400_000).toISOString()),
-    env.DB.prepare('DELETE FROM session WHERE id IN (SELECT id FROM session WHERE expiresAt<? LIMIT 500)').bind(new Date(now).toISOString()),
-    env.DB.prepare('DELETE FROM rateLimit WHERE id IN (SELECT id FROM rateLimit WHERE lastRequest<? LIMIT 500)').bind(now - 86_400_000),
-    env.DB.prepare('DELETE FROM active_game_seats WHERE (user_id,game_id) IN (SELECT user_id,game_id FROM active_game_seats WHERE released_at<? LIMIT 500)').bind(now - 30 * 86_400_000),
     env.DB.prepare(`DELETE FROM user WHERE id IN (SELECT id FROM user WHERE isAnonymous=1 AND createdAt<?
       AND NOT EXISTS(SELECT 1 FROM active_game_seats a WHERE a.user_id=user.id)
       AND NOT EXISTS(SELECT 1 FROM games g WHERE g.white_id=user.id OR g.black_id=user.id)

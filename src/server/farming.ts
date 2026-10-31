@@ -6,6 +6,8 @@ const DAY = 86_400_000;
 const NEIGHBORHOOD_LIMIT = 1_000;
 const QUERY_LIMIT = NEIGHBORHOOD_LIMIT + 1;
 const CANDIDATE_LIMIT = 4 * NEIGHBORHOOD_LIMIT;
+/** Status reads at most this many rows from each of its two scans, however many checks are retained. */
+const STATUS_LIMIT = 1_000;
 export const CATCHUP_LIMIT = 8;
 export const FARMING_PATTERNS = ['repeated-pair', 'reciprocal-wins', 'early-resignation', 'account-cluster', 'rating-transfer-candidate'] as const;
 type Pattern = typeof FARMING_PATTERNS[number];
@@ -237,23 +239,29 @@ export function advanceFarmingChecks(sql: SqlStorage, now: number, limit = CATCH
   return { processed: rows.length, pending: farmingWorkPending(sql), cursor };
 }
 
+/**
+ * Totals, pattern counts and recent flags describe the newest checks by insertion order. Open coverage is
+ * found through its own index, so an old pending or incomplete check is never hidden by that window.
+ * `truncated` marks a scan that reached its limit, after which the counts are lower bounds.
+ */
 export function farmingStatus(sql: SqlStorage) {
-  const totals = sql.exec<{ checked: number; flagged: number; pending: number; incomplete: number; candidateLimit: number; updateLimit: number; sourceUnavailable: number }>(`SELECT COUNT(*) AS checked,
-    COALESCE(SUM(json_array_length(patterns_json)>0),0) AS flagged,
-    COALESCE(SUM(coverage='pending'),0) AS pending,COALESCE(SUM(coverage='incomplete'),0) AS incomplete,
-    COALESCE(SUM(coverage_reason='candidate-limit'),0) AS candidateLimit,
-    COALESCE(SUM(coverage_reason='update-limit'),0) AS updateLimit,
-    COALESCE(SUM(coverage_reason='source-unavailable'),0) AS sourceUnavailable FROM rated_result_checks`).one();
-  const counts = new Map(sql.exec<{ pattern: string; count: number }>(`SELECT j.value AS pattern,COUNT(*) AS count
-    FROM rated_result_checks c,json_each(c.patterns_json) j GROUP BY j.value`).toArray().map(row => [row.pattern, row.count]));
-  const recent = sql.exec<{ game_id: string; ended_at: number; checked_at: number; patterns_json: string }>(`SELECT game_id,ended_at,checked_at,patterns_json
-    FROM rated_result_checks WHERE json_array_length(patterns_json)>0 ORDER BY checked_at DESC,game_id LIMIT 20`).toArray();
+  const newest = sql.exec<{ game_id: string; ended_at: number; checked_at: number; patterns_json: string }>(
+    `SELECT game_id,ended_at,checked_at,patterns_json FROM rated_result_checks ORDER BY rowid DESC LIMIT ${STATUS_LIMIT + 1}`).toArray();
+  const open = sql.exec<{ coverage: 'pending' | 'incomplete'; coverage_reason: CoverageReason | null }>(
+    `SELECT coverage,coverage_reason FROM rated_result_checks WHERE coverage IN ('pending','incomplete') LIMIT ${STATUS_LIMIT + 1}`).toArray();
+  const truncated = newest.length > STATUS_LIMIT || open.length > STATUS_LIMIT;
+  const window = newest.slice(0, STATUS_LIMIT).map(row => ({ ...row, patterns: JSON.parse(row.patterns_json) as Pattern[] }));
+  const gaps = open.slice(0, STATUS_LIMIT);
+  const flagged = window.filter(row => row.patterns.length);
+  const incomplete = gaps.filter(row => row.coverage === 'incomplete');
+  const reasonCount = (reason: CoverageReason) => incomplete.filter(row => row.coverage_reason === reason).length;
   return {
-    policy: FARMING_POLICY, informational: true, checked: totals.checked, flagged: totals.flagged,
-    coverage: { complete: !totals.pending && !totals.incomplete, pending: Boolean(totals.pending), incomplete: totals.incomplete,
-      reasons: { 'candidate-limit': totals.candidateLimit, 'update-limit': totals.updateLimit, 'source-unavailable': totals.sourceUnavailable } },
-    limits: { retainedRankedGames: NEIGHBORHOOD_LIMIT, candidateRowsPerCheck: CANDIDATE_LIMIT, rowsPerQuery: QUERY_LIMIT, updatedChecks: NEIGHBORHOOD_LIMIT, catchupPerAlarm: CATCHUP_LIMIT },
-    patterns: Object.fromEntries(FARMING_PATTERNS.map(pattern => [pattern, counts.get(pattern) ?? 0])),
-    recent: recent.map(row => ({ gameId: row.game_id, endedAt: row.ended_at, checkedAt: row.checked_at, patterns: JSON.parse(row.patterns_json) as Pattern[] })),
+    policy: FARMING_POLICY, informational: true, truncated, checked: window.length, flagged: flagged.length,
+    coverage: { complete: !gaps.length, pending: gaps.some(row => row.coverage === 'pending'), incomplete: incomplete.length,
+      reasons: { 'candidate-limit': reasonCount('candidate-limit'), 'update-limit': reasonCount('update-limit'), 'source-unavailable': reasonCount('source-unavailable') } },
+    limits: { retainedRankedGames: NEIGHBORHOOD_LIMIT, candidateRowsPerCheck: CANDIDATE_LIMIT, rowsPerQuery: QUERY_LIMIT, updatedChecks: NEIGHBORHOOD_LIMIT, catchupPerAlarm: CATCHUP_LIMIT, statusRows: STATUS_LIMIT },
+    patterns: Object.fromEntries(FARMING_PATTERNS.map(pattern => [pattern, flagged.filter(row => row.patterns.includes(pattern)).length])),
+    recent: flagged.sort((a, b) => b.checked_at - a.checked_at || (a.game_id < b.game_id ? -1 : 1)).slice(0, 20)
+      .map(row => ({ gameId: row.game_id, endedAt: row.ended_at, checkedAt: row.checked_at, patterns: row.patterns })),
   };
 }

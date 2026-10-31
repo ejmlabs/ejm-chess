@@ -172,9 +172,12 @@ Ordinary alarms retain their backoff. No public HTTP route exposes this method.
 The per-minute scheduled handler runs bounded Competition, game recovery and
 payload retirement maintenance. Independent tasks report safe stage names on
 failure. Authority status retains failed stages,
-projection lag, repair lag, incidents, and pending counts. The daily 03:15 UTC
-trigger also runs bounded private-data cleanup. A
-source schedule is not proof a deployed trigger is operating.
+projection lag, repair lag, incidents, and pending counts. An incident records
+a rejected result (conflicting, unverified, or a ranked result with no matching
+reservation) and changes no rating or outcome. Every minute it also trims
+expired rows (see below). The daily 03:15 UTC trigger adds bounded private-case
+retention cleanup. A source schedule is not proof a deployed trigger is
+operating; read the [cron heartbeat](#cron-heartbeat).
 Wrangler development does not run checked-in cron expressions on its own.
 Use its `--test-scheduled` mode and the displayed local scheduled endpoint to
 dispatch the minute or daily expression, or run an authorized owner maintenance
@@ -182,11 +185,18 @@ cycle. Merely refreshing History reads its D1 projection and does not repair a
 missed local scheduled invocation.
 
 Game recovery checks at most four admitted IDs per UTC minute across repeated
-or concurrent calls. It retries missing terminal projections and overdue
-pending adjudication (games saved under earlier rules versions) through the
-authority's normal status/outbox path. Failed or live
-records have a five-minute poll cooldown so the oldest four cannot starve the
-rest. A large outage backlog may delay this fallback; the stored outcome time
+or concurrent calls. It retries overdue pending adjudication (games saved under
+earlier rules versions) and missing terminal projections through the
+authority's normal status/outbox path. D1 holds no Game deadlines, so it cannot
+tell a healthy game from an overdue one. Competition already reconciles every
+game it admitted through a durable intent (casual, round-robin and arena) at
+least every 30 seconds, so recovery skips those until the admission is a day
+old, longer than any clock allows. A casual game admitted before durable
+intents (no reservation) has no such owner and is polled once 30 seconds have
+passed. Polled records have a five-minute cooldown so the oldest four cannot
+starve the rest. Fifteen healthy admitted games cost 30 recovery polls in ten
+minutes before this change and none after (local run, not staged or released).
+A large outage backlog may delay this fallback; the stored outcome time
 still uses the original deadline. Durable Object alarms remain the first path.
 Competition serializes alarm updates and keeps an earlier pending deadline.
 A full maintenance pass can advance a deadline due when it began, while keeping
@@ -289,9 +299,86 @@ batch. Private operations reports fixed counter keys, not request bodies or
 account identifiers inside those counter objects. Game-specific security
 counters require both the owner account and Access identity. Informational
 ranked farming checks include pending rating-repair results and expose their
-policy, work limits, and pending or incomplete coverage. They never apply a
+policy, work limits, and pending or incomplete coverage. Their status reads a
+bounded window and reports `truncated` beyond it. They never apply a
 penalty or change queue priority. See [fair-play operations](fair-play.md) for
 the exact patterns, public request windows, counter privacy, and retained bounds.
+
+### Cron heartbeat
+
+Each cron invocation records one D1 row per schedule in `cron_heartbeats`
+(migration `0016`): when the run started, when it finished and the stages of the
+latest failure. `GET /api/admin/operations` returns it as `cron.minute` and
+`cron.daily` with `schedule`, `startedAt`, `finishedAt`, `lastError` and
+`lastErrorAt`; all are null for a schedule that has not run. Implemented and
+locally tested; the canary records nothing until migration `0016` is applied and
+this revision is released.
+
+A schedule is healthy when `finishedAt` is not older than `startedAt`, is recent
+(the minute schedule within about three minutes, the daily one within a day plus
+the run), and `lastErrorAt` is null or older than `startedAt`. A run that died
+leaves `startedAt` newer than `finishedAt`. `lastError` lists stage names
+(`competition`, `unattended_games`, `expired_rows`, `private_cleanup`), never
+messages, and a later clean run does not erase it. A failing stage never stops
+the others. A failed heartbeat write is logged as `heartbeat_failed` and never
+stops maintenance. Alarm-driven Competition maintenance is not part of this
+record; `authority.lastMaintenanceError` still reports it.
+
+### Expired-row cleanup
+
+The minute schedule removes one bounded batch of 500 rows per table per run
+(`cleanupExpiredRows`) from the tables that grow with traffic: account request
+windows (`request_limits`), identity-change leases, expired verification
+secrets, expired sessions, sign-in rate limits (`rateLimit`) and seats released
+30 days ago. That is room for 720,000 deletions per table per day, and a backlog
+larger than one batch drains over the next runs. Each statement seeks an index;
+migration `0016` adds the missing released-seat index, so an idle run reads no
+rows. Implemented and locally tested; the released canary still runs the daily
+pass until this revision ships.
+
+Growth measured on a local D1 by driving the real routes:
+
+| Activity | Rows created | Removed |
+| --- | --- | --- |
+| One sign-up or sign-in | 1 `session`, and 1 `rateLimit` per client address and path | Session 7 days after sign-in; limit row 1 day after last request |
+| A signed-in account reading, writing or opening sockets | 1 `request_limits` row per kind used, reused in place, plus 1 `seat:` row when it takes a seat | 1 day after last use |
+| One game | 1 `active_game_seats` row per player | 30 days after release |
+
+The earlier daily pass removed 500 rows per table per day. At 4 rows per active
+account, 2 per game and 1 per sign-in it fell behind above about 125 daily
+active accounts, 250 games or 500 sign-ins a day. Watch `lastError` on the
+minute heartbeat; a table that still lags would show as a rising D1 size, not as
+an error. The daily run keeps private-case retention (report expiry, evidence
+and text minimization) and legacy guest removal (at most 100 a day, no new rows).
+Those grow only with reports, which the 1,000-open-case cap and the daily limit
+per reporter already bound.
+
+### Public read cache
+
+Unauthenticated public JSON reads share one helper (`src/server/public-cache.ts`):
+the arena schedule, summary and standings, the leaderboard and public player
+profiles. The edge keeps a response for 10 seconds in the Cache API; browsers
+receive `public, no-cache` and revalidate against it. The cache key is the path
+plus the route's documented parameters only: `cursor` for arena standings, and
+`pool` and `cursor` for the leaderboard. Cookies, headers and any other query
+parameter never create a variant. A warm read does no D1 query and no session
+lookup, so these routes do not count against the per-account read window. A
+failed or missing read is never stored. Private or per-viewer data and every
+mutation stay outside the helper. Leaderboard and profile caching is implemented
+and locally tested, not yet released.
+
+Not cached, on purpose: `GET /api/config` (reads no storage) and
+`GET /api/tournaments[/:id]` (they carry the caller's own status and a
+`serverNow` clock sample that countdowns depend on).
+
+The cache bounds repeat reads, not distinct ones. Random player IDs, many
+leaderboard cursors and the uncached tournament reads still reach D1 or the
+Competition, and the product adds no cap for them. The Cloudflare-side control
+is a WAF rate-limiting rule on the zone, counted per client IP, for example
+`http.request.method eq "GET" and (starts_with(http.request.uri.path, "/api/players/") or http.request.uri.path eq "/api/leaderboard" or starts_with(http.request.uri.path, "/api/tournaments") or starts_with(http.request.uri.path, "/api/arenas"))`
+with a Managed Challenge once a client passes a threshold the owner picks (120
+requests a minute is a starting point). The owner creates it in the dashboard;
+this repository does not apply it.
 
 ## Recovery
 
@@ -307,8 +394,11 @@ Capture synchronizes one object's storage, inspects its schema/state under a
 concurrency barrier and returns hashes, native bookmark, exact object ID, alarm,
 policy versions, watermarks and pending counts. It never changes a clock,
 receipt, result, epoch or outbox. It returns no raw account, session or evidence
-rows. The format fails closed above 4,096 rows or 2 MiB per object, or when the
-provider cannot supply a bookmark. Production has no restore/restart endpoint.
+rows. A Competition larger than one page (4,096 rows or 2 MiB) captures page by
+page: each response carries a `cursor` to send back until a response is the
+complete envelope. A Game must fit one page and otherwise answers
+`409 RECOVERY_CAPTURE_LIMIT`. Capture fails closed when the provider cannot
+supply a bookmark. Production has no restore/restart endpoint.
 
 See [the exact capture routes and isolated provider drill](recovery-drill.md)
 for protected invocation, resource checks, D1-before-DO ordering, private

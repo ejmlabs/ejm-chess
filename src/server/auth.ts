@@ -271,6 +271,7 @@ export async function requireActor(request: Request, env: AuthEnv): Promise<Acto
   return actor;
 }
 
+/** Test-only: arenas.test.ts and tournaments.test.ts assert the seat guard's state through this one query instead of each repeating its join. */
 export async function hasActiveSeat(db: D1Database, userId: string): Promise<boolean> {
   return Boolean(await db.prepare(`SELECT 1 WHERE EXISTS(SELECT 1 FROM active_game_seats WHERE user_id=? AND released_at IS NULL)
     OR EXISTS(SELECT 1 FROM tournament_account_locks WHERE user_id=?)`).bind(userId, userId).first());

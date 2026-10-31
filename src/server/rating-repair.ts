@@ -54,6 +54,7 @@ export class RatingRepair {
     sql.exec(`CREATE TABLE IF NOT EXISTS corrected_events (epoch INTEGER NOT NULL,sequence INTEGER NOT NULL,pool TEXT NOT NULL,game_id TEXT NOT NULL,policy TEXT NOT NULL,
       pre_white TEXT NOT NULL,pre_black TEXT NOT NULL,post_white TEXT NOT NULL,post_black TEXT NOT NULL,voided INTEGER NOT NULL,decision_id TEXT,PRIMARY KEY(epoch,sequence))`);
     sql.exec(`CREATE TABLE IF NOT EXISTS correction_game_projection (run_id TEXT NOT NULL,game_id TEXT NOT NULL,voided INTEGER NOT NULL,decision_id TEXT,PRIMARY KEY(run_id,game_id))`);
+    sql.exec(`CREATE TABLE IF NOT EXISTS correction_import_retries (decision_id TEXT PRIMARY KEY,retry_at INTEGER NOT NULL)`);
   }
 
   private get sql(): SqlStorage { return this.ctx.storage.sql; }
@@ -94,6 +95,24 @@ export class RatingRepair {
     const queue = await db.prepare('SELECT COUNT(*) AS count,MIN(created_at) AS oldest FROM rating_correction_outbox WHERE completed_at IS NULL').first<{ count: number; oldest: number | null }>();
     const error = await db.prepare('SELECT last_error FROM rating_correction_outbox WHERE completed_at IS NULL AND last_error IS NOT NULL ORDER BY created_at,decision_id LIMIT 1').first<string>('last_error');
     return { pending: queue?.count ?? 0, oldestAt: queue?.oldest ?? null, error };
+  }
+
+  /**
+   * The oldest pending decision that is not waiting out a failed import. A later decision about the same
+   * player waits behind an earlier one, because it can undo or build on it. Decisions about other players
+   * commute, since every replay applies the whole set of voids, so they may pass a failing one. Untried
+   * decisions go before retried ones, so one that keeps failing cannot starve the rest.
+   */
+  private async nextImport(now: number): Promise<string | null> {
+    const tried = this.sql.exec<{ decision_id: string; retry_at: number }>('SELECT decision_id,retry_at FROM correction_import_retries').toArray();
+    const waiting = tried.filter(item => item.retry_at > now).map(item => item.decision_id);
+    const next = await this.getEnv().DB.prepare(`SELECT o.decision_id FROM rating_correction_outbox o
+      WHERE o.completed_at IS NULL AND o.decision_id NOT IN (SELECT value FROM json_each(?))
+        AND NOT EXISTS(SELECT 1 FROM rating_correction_outbox e WHERE e.subject_id=o.subject_id AND e.completed_at IS NULL
+          AND (e.created_at,e.decision_id)<(o.created_at,o.decision_id))
+      ORDER BY o.decision_id IN (SELECT value FROM json_each(?)),o.created_at,o.decision_id LIMIT 1`)
+      .bind(JSON.stringify(waiting), JSON.stringify(tried.map(item => item.decision_id))).first<{ decision_id: string }>();
+    return next?.decision_id ?? null;
   }
 
   /** Imports only an immutable, human-reviewed decision already present in the private outbox. */
@@ -319,13 +338,15 @@ export class RatingRepair {
           await this.getEnv().DB.prepare('UPDATE rating_correction_outbox SET last_error=? WHERE decision_id=?').bind(reason, run.decision_id).run();
         }
       } else if (!this.active()) {
-        const db = this.getEnv().DB;
-        const next = await db.prepare('SELECT decision_id FROM rating_correction_outbox WHERE completed_at IS NULL ORDER BY created_at,decision_id LIMIT 1').first<{ decision_id: string }>();
+        const next = await this.nextImport(Date.now());
         if (next) {
-          try { await this.request(next.decision_id); }
-          catch (error) {
+          try {
+            await this.request(next);
+            this.sql.exec('DELETE FROM correction_import_retries WHERE decision_id=?', next);
+          } catch (error) {
             const reason = error instanceof Error ? error.message.slice(0, 160) : 'retry_later';
-            await db.prepare('UPDATE rating_correction_outbox SET last_error=? WHERE decision_id=?').bind(reason, next.decision_id).run();
+            this.sql.exec('INSERT INTO correction_import_retries(decision_id,retry_at) VALUES(?,?) ON CONFLICT(decision_id) DO UPDATE SET retry_at=excluded.retry_at', next, Date.now() + RETRY_MS);
+            await this.getEnv().DB.prepare('UPDATE rating_correction_outbox SET last_error=? WHERE decision_id=?').bind(reason, next).run();
           }
         }
       }

@@ -9,7 +9,7 @@ import type { Env } from '../src/server/env';
 import type { Actor, GameSnapshot } from '../src/shared/protocol';
 import type { Competition } from '../src/server/competition';
 import type { Game } from '../src/server/game';
-import { enableRanked } from './authority-helpers';
+import { enableRanked, holdAlarms } from './authority-helpers';
 
 const origin = 'http://localhost:8787';
 let address = 1;
@@ -48,14 +48,7 @@ async function user(verified = false) {
   return { cookie, actor };
 }
 
-async function quiet(game: DurableObjectStub<Game>, ai = false) {
-  await runInDurableObject(game, async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-    if (ai) internal.env = { ...internal.env, AI_ENABLED: 'true' };
-    internal.schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
-}
+const quiet = (game: DurableObjectStub<Game>, ai = false) => holdAlarms(game, ai ? { AI_ENABLED: 'true' } : {});
 
 async function ready(game: DurableObjectStub<Game>, white: Actor, black: Actor, initial: GameSnapshot) {
   const first = await game.command(white, { type: 'ready', id: crypto.randomUUID(), expectedVersion: initial.version });

@@ -74,15 +74,18 @@ version and completion time, without credentials or email.
 
 Ages below are cleanup eligibility, not a promise of deletion at that instant.
 Scheduled cleanup is bounded and can be delayed. Appeal and evidence holds apply.
+The edge keeps public leaderboard, profile and arena reads for 10 seconds. They
+carry no cookie, session or private field, and the cache key ignores both.
 
 | Records | Policy |
 | --- | --- |
 | Credentials and recovery email | Account lifetime; removed on accepted closure |
 | Minimized account identity and closure receipt | Permanent competition and minimal audit exceptions |
-| Sessions, including stored IP/user-agent fields | Seven-day validity; daily bounded cleanup; removed on closure |
+| Sessions, including stored IP/user-agent fields | Seven-day validity; cleanup every minute in bounded batches; removed on closure |
 | Reset/verification secrets | Fifteen-minute validity; cleanup after expiry plus one day; account-owned reset rows removed on closure |
-| Request windows | One-day cleanup eligibility |
-| Released seat records | 30-day cleanup eligibility |
+| Request windows and sign-in rate limits | One-day cleanup eligibility; minute-schedule batches |
+| Released seat records | 30-day cleanup eligibility; minute-schedule batches |
+| Cron heartbeat | One row per schedule with run times and failed stage names; no personal data |
 | Ordinary evidence and report text | 90 days, subject to appeal and evidence holds |
 | Private reviewer notes, corroboration and appeal text | Minimized 90 days after final case action, once appeal windows and holds end |
 | Email budget receipts | 62-day cleanup eligibility |

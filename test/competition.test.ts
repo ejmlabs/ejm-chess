@@ -111,6 +111,41 @@ async function settledMatch() {
   return { ...match, result };
 }
 
+/** A finished result that no real Game produced, for driving settlement past its verification step. */
+function syntheticResult(overrides: Partial<GameResult> = {}): GameResult {
+  const id = crypto.randomUUID();
+  const now = Date.now();
+  return {
+    id, eventId: `${id}:2`, format: 'blitz', rated: false, reservationId: null,
+    white: { id: 'account-a', name: 'A', isAnonymous: false, ready: true },
+    black: { id: 'account-b', name: 'B', isAnonymous: false, ready: true },
+    status: 'finished', version: 2, rulesVersion: RULES_VERSION, terminalDigest: id,
+    outcome: { winner: 'w', score: 1, reason: 'checkmate' },
+    createdAt: now - 120_000, startedAt: now - 60_000, endedAt: now, pgn: '', plies: 30,
+    ...overrides,
+  };
+}
+
+/** Settles `result` on a fresh Competition whose Game reports it as final, running `beforeReply` as the Game answers. */
+async function settleAgainstGame(result: GameResult, beforeReply: (sql: SqlStorage) => void = () => {}) {
+  const competition = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
+  const outcome = await runInDurableObject(competition, async (instance, state) => {
+    const internal = instance as unknown as { env: typeof env };
+    internal.env = { ...internal.env, GAME: {
+      idFromName: (name: string) => name,
+      get: () => ({ status: async () => { beforeReply(state.storage.sql); return { result }; } }),
+    } as unknown as typeof env.GAME };
+    let error = 'unexpected_success';
+    try { await instance.settle(result); } catch (thrown) { error = (thrown as Error).message; }
+    return {
+      error,
+      incidents: state.storage.sql.exec<{ kind: string }>('SELECT kind FROM incidents WHERE game_id=?', result.id).toArray().map(row => row.kind),
+      events: state.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM result_events WHERE game_id=?', result.id).one().count,
+    };
+  });
+  return { competition, ...outcome };
+}
+
 describe('competitive authority', () => {
   it('drains scored ranked projections', async () => {
     const { competition, result, white, black } = await settledMatch();
@@ -396,6 +431,20 @@ describe('competitive authority', () => {
     expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM active_game_seats WHERE game_id=? AND released_at IS NULL').bind(initial.id).first('count')).toBe(0);
   });
 
+  it('records an incident for a ranked result without a matching reservation and accepts nothing', async () => {
+    const outcome = await settleAgainstGame(syntheticResult({ rated: true, reservationId: crypto.randomUUID() }));
+    expect(outcome).toMatchObject({ error: 'unregistered_ranked_game', incidents: ['unregistered_ranked_game'], events: 0 });
+    expect(await outcome.competition.health()).toMatchObject({ incidents: 1, outbox: 0 });
+  });
+
+  it('records the conflict when another delivery commits a different final result while the Game is being asked', async () => {
+    const result = syntheticResult();
+    const outcome = await settleAgainstGame(result, sql => sql.exec(
+      'INSERT INTO processed_results(game_id,event_id,digest,sequence) VALUES(?,?,?,1)', result.id, 'other-event', 'other-digest'));
+    expect(outcome).toMatchObject({ error: 'conflicting_result', incidents: ['conflicting_final_result'], events: 0 });
+    expect(await outcome.competition.health()).toMatchObject({ incidents: 1 });
+  });
+
   it('projects a game and both ratings atomically and prevents an older result from replacing it', async () => {
     const { competition, result, white, black } = await finishedMatch();
     await competition.settle(result);
@@ -484,6 +533,36 @@ describe('competitive authority', () => {
     expect(await env.DB.prepare('SELECT rating_voided FROM games WHERE id=?').bind(one.result.id).first('rating_voided')).toBe(0);
     expect(await env.DB.prepare('SELECT epoch FROM competition_generations WHERE pool=?').bind('blitz').first('epoch')).toBe(originalEpoch + 2);
     expect(await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('SELECT sequence FROM corrected_events WHERE game_id IN (?,?,?)', one.result.id, two.result.id, resultThree.id).toArray())).toHaveLength(5);
+  });
+
+  it('imports correction decisions around a failing one and keeps each player in order', async () => {
+    const competition = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
+    await pauseAutomaticAlarms(competition);
+    const [a, b] = await Promise.all([player(), player()]);
+    // An unknown game ID leaves nothing to replay, so each decision completes as soon as it is imported.
+    const failing = await reviewedDecision(a, crypto.randomUUID(), ['x']);
+    const behind = await reviewedDecision(a, crypto.randomUUID(), ['unreplayed-game-a']);
+    const other = await reviewedDecision(b, crypto.randomUUID(), ['unreplayed-game-b']);
+    const createdAt = Date.now() - 60_000;
+    for (const [index, decision] of [failing, behind, other].entries()) {
+      await env.DB.prepare('UPDATE rating_correction_outbox SET created_at=? WHERE decision_id=?').bind(createdAt + index, decision.id).run();
+    }
+    const completed = async (decision: { id: string }) => Boolean(await env.DB.prepare('SELECT completed_at FROM rating_correction_outbox WHERE decision_id=?').bind(decision.id).first('completed_at'));
+    const drain = async (done: () => Promise<boolean>) => { for (let step = 0; step < 12 && !await done(); step++) await competition.processCorrections(); };
+
+    await drain(() => completed(other));
+    expect(await completed(other)).toBe(true);
+    for (let step = 0; step < 3; step++) await competition.processCorrections();
+    expect([await completed(failing), await completed(behind)]).toEqual([false, false]);
+    expect(await env.DB.prepare('SELECT last_error FROM rating_correction_outbox WHERE decision_id=?').bind(failing.id).first('last_error')).toBe('invalid_affected_games');
+
+    await env.DB.prepare('UPDATE fairplay_decisions SET affected_game_ids=? WHERE id=?').bind('["unreplayed-game-c"]', failing.id).run();
+    await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('UPDATE correction_import_retries SET retry_at=0'));
+    await drain(() => completed(behind));
+    expect([await completed(failing), await completed(behind)]).toEqual([true, true]);
+    const mine = new Set([failing.id, behind.id, other.id]);
+    const order = await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec<{ decision_id: string }>('SELECT decision_id FROM correction_decisions ORDER BY rowid').toArray().map(row => row.decision_id));
+    expect(order.filter(id => mine.has(id))).toEqual([other.id, failing.id, behind.id]);
   });
 
   it('publishes both repaired pools together and restores their ratings through a linked appeal overturn', async () => {

@@ -155,6 +155,9 @@ npx wrangler versions view "$CHESS_DEPLOYED_VERSION" --env '' --json
 ```
 
 Apply any pending migration first, as in the [deployment guide](deployment.md).
+This revision adds `0016_cron_heartbeats.sql`. Operations status reads its
+table and the minute run trims seats by its index, so apply it before this
+deploy; without it the scheduled handler only logs `heartbeat_failed`.
 Open `/api/config`, `/api/arenas`, `/api/tournaments` and
 `/api/admin/operations` in the owner browser.
 
@@ -206,7 +209,6 @@ retest.
 ```sh
 npx wrangler secret list --env ''
 npx wrangler d1 time-travel info DB --env '' --json
-npx wrangler tail --env '' --format json --status ok
 ```
 
 - Secrets: `secret list` shows the four canary secret names. Add none.
@@ -218,16 +220,27 @@ npx wrangler tail --env '' --format json --status ok
   with the latest `expectedVersion`. Compare account usage with the $100
   envelope and update the [cost estimate](cost-estimate.md). Alerts and the
   webhook are the economic limit; they are not a hard invoice cap.
-- Cron: `tail` shows a scheduled event with cron `* * * * *`, outcome `ok` and no
-  `maintenance_failed` log. The daily `15 3 * * *` event needs a wait past 03:15
-  UTC. No stored heartbeat exists, so these logs are the evidence.
+- Cron: read the stored heartbeat in `/api/admin/operations` (`cron.minute` and
+  `cron.daily`, from D1 `cron_heartbeats`, migration `0016`). The minute
+  schedule passes when `finishedAt` is within the last three minutes, is not
+  older than `startedAt`, and `lastErrorAt` is null or older than `startedAt`.
+  Read it twice a few minutes apart: `startedAt` must advance. The daily
+  schedule needs a wait past 03:15 UTC and then the same check. A `lastError`
+  names the failed stage; see [operations](operations.md#cron-heartbeat).
 - Stops: set `gamesStopped`; a new signup and a new queue join are refused and a
   running game still moves; clear it. Read `outboxLagMs`, `outboxFailures`,
   `correctionLagMs` and `lastMaintenanceError`. The `NEW_WORK_STOPPED` deploy
   path stays unexercised; record it.
 - Recovery without restore: `POST /api/admin/operations/recovery/competition`
-  returns a bookmark and Time Travel info reads. Export and close one throwaway
+  with `{}` returns a bookmark and Time Travel info reads. A response with
+  `"complete": false` is one page of a larger Competition: repeat with its
+  `cursor` until the response has a `bookmark`. Export and close one throwaway
   account with its password. Production restore stays unrun.
+- Public read protection: create the zone rate-limiting rule for `/api/players/`,
+  `/api/leaderboard`, `/api/tournaments` and `/api/arenas` described in
+  [operations](operations.md#public-read-cache), with a threshold you choose.
+  The 10-second edge cache covers repeat reads only. Record the rule, or record
+  that it was skipped, before step 6 removes full-host Access.
 
 **Pass:** each bullet recorded. **Stop:** an alert, webhook or cron failure.
 Do not remove Access until it is fixed and reread.

@@ -6,17 +6,17 @@ import { getEngineLevel, STOCKFISH_BUILD } from '../shared/engine';
 import { acquireSeatGuard, authHandler, casualGameLimit, completeAccount, currentActor, hasRecoveryEmail, knownGame, PASSWORD_ACCOUNT_SQL, rankedEligibility, type Actor } from './auth';
 import { accountRequestStatus, consumeAccountRequest } from './abuse';
 import { budgetStatus } from './budget';
-import { setBudgetStops } from './operations';
+import { CRON, cronStatus, runScheduled, setBudgetStops } from './operations';
 import { budgetStopWebhook } from './budget-webhook';
-import { admittedRecoveryGame, recoveryInventory } from './recovery';
+import { admittedRecoveryGame, recoveryCaptureBody, recoveryInventory } from './recovery';
 import { readArenaList, readArenaStandings, readArenaSummary } from './arena-projection';
-import { publicArenaJson } from './public-arena-cache';
+import { PUBLIC_BROWSER_CACHE, publicJson } from './public-cache';
 import { arenaRegistrationAdmission } from './arena-registration-admission';
-import { cleanupPrivateData, fairPlayHandler, reviewAvailable } from './fairplay';
+import { cleanupExpiredRows, cleanupPrivateData, fairPlayHandler, reviewAvailable } from './fairplay';
 import { maintainUnattendedGames } from './maintenance';
 import { ESTABLISHED } from './leaderboard';
 import { aiEnabled } from './env';
-import type { JournalKind } from './competition';
+import { JOURNALS, type JournalKind } from './competition';
 import { publicProfile } from './profile';
 import { closeAccount, exportAccount } from './privacy';
 import { ApiError, canonicalOrigin, errorResponse, isLocalRequest, jsonResponse, readJson, requireAdmin, requireSameOrigin } from './security';
@@ -128,15 +128,25 @@ async function route(request: Request, env: Env, ctx: ExecutionContext): Promise
   if (url.pathname === '/api/config' && request.method === 'GET') {
     return jsonResponse({ ranked: env.RANKED_ENABLED === 'true', ai: aiEnabled(env), tournaments: env.TOURNAMENTS_ENABLED === 'true', reviewAvailable: reviewAvailable(env), local: isLocalRequest(request, env), turnstileSiteKey: env.TURNSTILE_SITE_KEY ?? null });
   }
-  if (url.pathname === '/api/arenas' && request.method === 'GET') return publicArenaJson(request, ctx, () => readArenaList(env));
+  // Unauthenticated reads share one edge cache and never resolve a session. Everything personal stays below.
+  if (url.pathname === '/api/arenas' && request.method === 'GET') return publicJson(request, ctx, [], () => readArenaList(env));
   const arenaRoute = /^\/api\/arenas\/([a-z0-9-]{1,80})(?:\/(standings|me|register|withdraw|queue|pause|resume))?$/.exec(url.pathname);
   if (arenaRoute && request.method === 'GET' && (!arenaRoute[2] || arenaRoute[2] === 'standings')) {
-    return publicArenaJson(request, ctx, async () => {
+    return publicJson(request, ctx, arenaRoute[2] === 'standings' ? ['cursor'] : [], async () => {
       const value = arenaRoute[2] === 'standings'
         ? await readArenaStandings(env.DB, arenaRoute[1], url.searchParams.get('cursor'))
         : await readArenaSummary(env.DB, arenaRoute[1]);
       if (!value) throw new ApiError(404, 'ARENA_NOT_FOUND', 'This arena was not found.');
       return value;
+    });
+  }
+  if (url.pathname === '/api/leaderboard' && request.method === 'GET') return publicJson(request, ctx, ['pool', 'cursor'], () => leaderboard(env, url));
+  const profileRoute = /^\/api\/players\/([^/]+)$/.exec(url.pathname);
+  if (profileRoute && request.method === 'GET') {
+    return publicJson(request, ctx, [], async () => {
+      const profile = await publicProfile(env, profileRoute[1]);
+      if (!profile) throw new ApiError(404, 'PLAYER_NOT_FOUND', 'This player profile was not found.');
+      return profile;
     });
   }
   if (request.method !== 'GET' && request.method !== 'HEAD') requireSameOrigin(request, env);
@@ -190,13 +200,6 @@ async function authenticatedRoute(request: Request, env: Env, ctx: ExecutionCont
     if (response) return response;
   }
   if (url.pathname === '/api/history' && request.method === 'GET') return history(env, signedIn(requestActor));
-  if (url.pathname === '/api/leaderboard' && request.method === 'GET') return leaderboard(env, url);
-  const profileRoute = /^\/api\/players\/([^/]+)$/.exec(url.pathname);
-  if (profileRoute && request.method === 'GET') {
-    const profile = await publicProfile(env, profileRoute[1]);
-    if (!profile) throw new ApiError(404, 'PLAYER_NOT_FOUND', 'This player profile was not found.');
-    return jsonResponse(profile);
-  }
   if (url.pathname === '/api/queue' || url.pathname === '/api/queue/cancel') {
     const response = await queue(request, env, url.pathname, signedIn(requestActor));
     if (response) return response;
@@ -345,7 +348,7 @@ async function history(env: Env, actor: Actor): Promise<Response> {
   return jsonResponse({ games: rows.results.map(({ score, status, pgn, ...row }) => ({ ...row, result: status === 'pending-adjudication' ? 'Pending adjudication' : score === 1 ? '1-0' : score === 0 ? '0-1' : score === 0.5 ? '½-½' : 'Void', ...(status === 'finished' ? { pgn } : {}) })) });
 }
 
-async function leaderboard(env: Env, url: URL): Promise<Response> {
+async function leaderboard(env: Env, url: URL) {
   const format = pool(url.searchParams.get('pool') ?? 'blitz');
   let cursor: { rating: number; id: string } | null = null;
   const token = url.searchParams.get('cursor');
@@ -367,8 +370,8 @@ async function leaderboard(env: Env, url: URL): Promise<Response> {
       cursor?.rating ?? null, cursor?.rating ?? null, cursor?.rating ?? null, cursor?.id ?? '').all<{ id: string; name: string; rating: number; games: number; updatedAt: number }>();
   const page = rows.results.slice(0, 50);
   const last = page.at(-1);
-  return jsonResponse({ pool: format, entries: page.map(({ updatedAt: _, ...row }) => row), updatedAt: page.length ? Math.max(...page.map(row => row.updatedAt)) : null,
-    nextCursor: rows.results.length > 50 && last ? btoa(JSON.stringify({ rating: last.rating, id: last.id })) : null });
+  return { pool: format, entries: page.map(({ updatedAt: _, ...row }) => row), updatedAt: page.length ? Math.max(...page.map(row => row.updatedAt)) : null,
+    nextCursor: rows.results.length > 50 && last ? btoa(JSON.stringify({ rating: last.rating, id: last.id })) : null };
 }
 
 async function queue(request: Request, env: Env, path: string, actor: Actor): Promise<Response | undefined> {
@@ -388,13 +391,14 @@ async function queue(request: Request, env: Env, path: string, actor: Actor): Pr
 /** The caller has already checked the owner. Returns nothing for an unknown route, so the router answers 404. */
 async function adminOperations(request: Request, env: Env, url: URL, actor: Actor): Promise<Response | undefined> {
   if (url.pathname === '/api/admin/operations' && request.method === 'GET') {
-    const [authority, casual, budget, security] = await Promise.all([
+    const [authority, casual, budget, security, cron] = await Promise.all([
       competition(env).health(),
       env.DB.prepare("SELECT COUNT(*) AS retained FROM casual_game_admissions WHERE storage_state='retained'").first(),
       budgetStatus(env),
       accountRequestStatus(env.DB),
+      cronStatus(env.DB),
     ]);
-    return jsonResponse({ authority, budget, security, casual: { ...casual, limit: casualGameLimit(env) }, ai: { enabled: aiEnabled(env), build: STOCKFISH_BUILD, execution: 'browser' } });
+    return jsonResponse({ authority, budget, security, cron, casual: { ...casual, limit: casualGameLimit(env) }, ai: { enabled: aiEnabled(env), build: STOCKFISH_BUILD, execution: 'browser' } });
   }
   if (url.pathname === '/api/admin/operations/budget' && request.method === 'POST') {
     return jsonResponse(await setBudgetStops(env, actor.id, await readJson(request, 1024)));
@@ -411,8 +415,10 @@ async function adminOperations(request: Request, env: Env, url: URL, actor: Acto
     return jsonResponse(await recoveryInventory(env, url.searchParams.get('after') ?? '', Number(limit)));
   }
   if (url.pathname === '/api/admin/operations/recovery/competition' && request.method === 'POST') {
-    await readJson(request, 1024);
-    return jsonResponse(await competition(env).captureRecoveryPoint());
+    // A large Competition captures one bounded page per request. Send each response's cursor back until the capture completes.
+    const { cursor } = await readJson<{ cursor?: unknown }>(request);
+    if (cursor !== undefined && typeof cursor !== 'string') throw new ApiError(400, 'INVALID_RECOVERY_CURSOR', 'Send the cursor from the previous capture page, or an empty object to start.');
+    return jsonResponse(recoveryCaptureBody(await competition(env).captureRecoveryPoint(cursor)));
   }
   const captureGame = /^\/api\/admin\/operations\/recovery\/games\/([^/]+)$/.exec(url.pathname);
   if (captureGame && request.method === 'POST') {
@@ -424,7 +430,7 @@ async function adminOperations(request: Request, env: Env, url: URL, actor: Acto
     const kind = url.searchParams.get('kind');
     const after = url.searchParams.get('after') ?? '0';
     const watermark = url.searchParams.get('watermark');
-    const kinds: JournalKind[] = ['results', 'ratings', 'correctedRatings', 'corrections', 'voids', 'restorations', 'checkpoints', 'arenaScores'];
+    const kinds = Object.keys(JOURNALS) as JournalKind[];
     if (!kinds.includes(kind as JournalKind) || !/^\d{1,16}$/.test(after) || !watermark || !/^\d{1,16}$/.test(watermark)
       || !Number.isSafeInteger(Number(after)) || !Number.isSafeInteger(Number(watermark)) || Number(after) > Number(watermark)) {
       throw new ApiError(400, 'INVALID_EXPORT_CURSOR', 'Use a journal kind and watermark from the export manifest.');
@@ -438,8 +444,8 @@ export default {
     try {
       const response = await route(request, env, ctx);
       const path = new URL(request.url).pathname;
-      const publicArenaRead = response.ok && request.method === 'GET' && /^\/api\/arenas(?:\/[a-z0-9-]{1,80}(?:\/standings)?)?$/.test(path);
-      return secure(response, request, env, !publicArenaRead && (path.startsWith('/api/') || ['admin', 'account'].includes(pageRoot(path))));
+      const publicRead = response.headers.get('Cache-Control') === PUBLIC_BROWSER_CACHE;
+      return secure(response, request, env, !publicRead && (path.startsWith('/api/') || ['admin', 'account'].includes(pageRoot(path))));
     } catch (error) {
       let safeError: unknown = error;
       if (error instanceof Error) {
@@ -454,11 +460,9 @@ export default {
     const work: [string, () => Promise<unknown>][] = [
       ['competition', () => competition(env).maintenance()],
       ['unattended_games', () => maintainUnattendedGames(env)],
+      ['expired_rows', () => cleanupExpiredRows(env)],
     ];
-    if (event.cron === '15 3 * * *') work.push(['private_cleanup', () => cleanupPrivateData(env)]);
-    ctx.waitUntil((async () => {
-      const results = await Promise.allSettled(work.map(([, run]) => run()));
-      results.forEach((result, index) => { if (result.status === 'rejected') console.error('maintenance_failed', work[index][0]); });
-    })());
+    if (event.cron === CRON.daily) work.push(['private_cleanup', () => cleanupPrivateData(env)]);
+    ctx.waitUntil(runScheduled(env, event.cron, work));
   },
 } satisfies ExportedHandler<Env>;

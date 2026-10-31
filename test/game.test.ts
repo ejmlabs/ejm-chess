@@ -5,7 +5,7 @@ import { Chess } from 'chess.js';
 import { parseReplay } from '../src/client/replay';
 import { positionOutcome, timeoutOutcome } from '../src/server/adjudication';
 import { ADJUDICATION_WAIT_MS } from '../src/server/game';
-import { activeGame, admitGameFixture, player } from './authority-helpers';
+import { activeGame, admitGameFixture, holdAlarms, pendingAdjudicationGame, player } from './authority-helpers';
 import type { GameCommand, GameResult, InitGame, ServerMessage } from '../src/shared/protocol';
 
 afterEach(() => { vi.restoreAllMocks(); });
@@ -45,10 +45,7 @@ describe('durable game authority', () => {
 
   it('preserves the stored export of a legacy terminal game without a header format marker', async () => {
     const { game, white, snapshot } = await activeGame();
-    await runInDurableObject(game, async (instance, state) => {
-      (instance as unknown as { schedule(): Promise<void> }).schedule = async () => {};
-      await state.storage.deleteAlarm();
-    });
+    await holdAlarms(game);
     const ended = await game.command(white, { type: 'resign', id: crypto.randomUUID(), expectedVersion: snapshot.version });
     expect(ended.ok).toBe(true);
     const legacyName = 'Old "nickname"\\club\nPlayer';
@@ -106,6 +103,48 @@ describe('durable game authority', () => {
     expect(await env.DB.prepare('SELECT score,settlement FROM games WHERE id=?').bind(id).first()).toEqual({ score: null, settlement: 'unrated' });
   });
 
+  it('answers a repeated Ready with the current state at any version and changes nothing', async () => {
+    const [white, black] = await Promise.all([player(), player()]);
+    const id = crypto.randomUUID();
+    const game = env.GAME.get(env.GAME.idFromName(id));
+    await admitGameFixture({ id, format: 'blitz', rated: false, white, black });
+    const initial = await game.init({ id, format: 'blitz', rated: false, white, black });
+    const ready = (actor: typeof white, expectedVersion: number) =>
+      game.command(actor, { type: 'ready', id: crypto.randomUUID(), expectedVersion });
+    const stored = () => runInDurableObject(game, (_instance, state) => ({
+      game: state.storage.sql.exec<{ value: string }>('SELECT value FROM game_state').one().value,
+      receipts: state.storage.sql.exec('SELECT id FROM command_receipts').toArray().length,
+    }));
+    const first = await ready(white, initial.version);
+    const waiting = await stored();
+    for (const version of [0, first.snapshot.version]) {
+      expect(await ready(white, version)).toMatchObject({ ok: true, receipt: { version: first.snapshot.version },
+        snapshot: { status: 'ready', version: first.snapshot.version, white: { ready: true }, black: { ready: false } } });
+    }
+    expect(await stored()).toEqual(waiting);
+    const started = await ready(black, first.snapshot.version);
+    expect(started.snapshot.status).toBe('active');
+    const running = await stored();
+    for (const [actor, version] of [[white, 0], [black, 0], [white, started.snapshot.version], [black, started.snapshot.version]] as const) {
+      expect(await ready(actor, version)).toMatchObject({ ok: true, receipt: { version: started.snapshot.version },
+        snapshot: { status: 'active', version: started.snapshot.version, startedAt: started.snapshot.startedAt,
+          clocks: { deadline: started.snapshot.clocks.deadline }, moves: [] } });
+    }
+    expect(await stored()).toEqual(running);
+    const ended = await game.command(white, { type: 'resign', id: crypto.randomUUID(), expectedVersion: started.snapshot.version });
+    expect(await ready(black, ended.snapshot.version)).toMatchObject({ ok: false, code: 'game_over', snapshot: { status: 'finished' } });
+  });
+
+  it('refuses Ready while no opponent has joined', async () => {
+    const white = await player();
+    const id = crypto.randomUUID();
+    const game = env.GAME.get(env.GAME.idFromName(id));
+    await admitGameFixture({ id, format: 'blitz', rated: false, white });
+    await game.init({ id, format: 'blitz', rated: false, white });
+    expect(await game.command(white, { type: 'ready', id: crypto.randomUUID(), expectedVersion: 0 }))
+      .toMatchObject({ ok: false, code: 'waiting_for_opponent', snapshot: { status: 'waiting', version: 0, white: { ready: false } } });
+  });
+
   it('accepts one of two simultaneous moves at the same board version', async () => {
     const { game, white, snapshot } = await activeGame();
     const commands: GameCommand[] = ['e4', 'd4'].map(target => ({ type: 'move', id: crypto.randomUUID(),
@@ -124,10 +163,7 @@ describe('durable game authority', () => {
 
   it('keeps one immutable terminal result when draw acceptance and resignation overlap', async () => {
     const { game, white, black, snapshot } = await activeGame();
-    await runInDurableObject(game, async (instance, state) => {
-      (instance as unknown as { schedule(): Promise<void> }).schedule = async () => {};
-      await state.storage.deleteAlarm();
-    });
+    await holdAlarms(game);
     const offer = await game.command(black, { type: 'offer-draw', id: crypto.randomUUID(), expectedVersion: snapshot.version });
     if (!offer.ok) throw new Error(offer.code);
     const replies = await Promise.all([
@@ -250,10 +286,7 @@ describe('durable game authority', () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
     const id = crypto.randomUUID();
     const game = env.GAME.get(env.GAME.idFromName(id));
-    await runInDurableObject(game, async (instance, state) => {
-      (instance as unknown as { schedule(): Promise<void> }).schedule = async () => {};
-      await state.storage.deleteAlarm();
-    });
+    await holdAlarms(game);
     const tournament = { id: 'hourly:blitz:flag-first', round: 1, deadlineAt: now + 900_000 };
     const initial = await game.init({ id, white, black, rated: false, format: 'blitz', reservationId: `event:${id}`, tournament });
     const first = await game.command(white, { type: 'ready', id: crypto.randomUUID(), expectedVersion: initial.version });
@@ -355,23 +388,6 @@ describe('durable game authority', () => {
     expect(await closed).toBe(1000);
   });
 });
-
-/** Rewrites an active game into the state a flag left before timeouts were resolved at the flag. */
-async function pendingAdjudicationGame() {
-  const setup = await activeGame();
-  const flaggedAt = setup.snapshot.clocks.deadline!;
-  await env.DB.batch([setup.white, setup.black].map(actor => env.DB.prepare('INSERT INTO active_game_seats(user_id,game_id,acquired_at) VALUES(?,?,?)')
-    .bind(actor.id, setup.snapshot.id, Date.now())));
-  await runInDurableObject(setup.game, (instance, state) => {
-    const stored = JSON.parse(state.storage.sql.exec<{ value: string }>('SELECT value FROM game_state').one().value);
-    Object.assign(stored, { status: 'pending-adjudication', version: stored.version + 1, deadline: null, endedAt: flaggedAt,
-      outcome: { winner: null, score: null, reason: 'timeout-needs-review' }, remaining: { ...stored.remaining, w: 0 } });
-    state.storage.sql.exec('UPDATE game_state SET value=?', JSON.stringify(stored));
-    const result = (instance as unknown as { result(saved: unknown): GameResult }).result(stored);
-    state.storage.sql.exec('INSERT INTO result_delivery(id,value) VALUES(1,?)', JSON.stringify({ result, attempts: 0, nextAttemptAt: flaggedAt }));
-  });
-  return { ...setup, flaggedAt };
-}
 
 const openSeats = (id: string) => env.DB.prepare('SELECT COUNT(*) AS count FROM active_game_seats WHERE game_id=? AND released_at IS NULL')
   .bind(id).first('count');

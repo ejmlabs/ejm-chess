@@ -5,7 +5,7 @@ export const ARENA_POLICY = {
   version: 'arena-v1', registrationMs: REGISTRATION_MS,
   historyMs: HISTORY_MS, candidateWindow: 64, pairBatch: 8, initBatch: 8,
   externalConcurrency: 4, workBatch: 32, pageRows: 32, pageBytes: 32 * 1024,
-  snapshotIntervalMs: 10_000, startRate: 32, registrationRate: 50, registrationBurst: 100,
+  snapshotIntervalMs: 10_000, retryMs: 1_000, startRate: 32, registrationRate: 50, registrationBurst: 100,
   registrationAuthConcurrency: 16, registrationConcurrency: 256,
   resultReserveBytes: 1_310_720,
   entryReserveBytes: 32 * 1024,

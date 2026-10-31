@@ -20,9 +20,13 @@ tournament activation uses a separately checked release build with its own
 version readback; source changes and these instructions do not claim
 publication. The ordered launch sequence is in [live-ready prep](live-ready-prep.md).
 
-D1 migrations `0001` through `0015` are applied remotely. They include
-bookkeeping tables from the retired timeout-proof path (migrations are never
-rewritten), account-closure fences and the signup-attempt counter.
+D1 migrations `0001` through `0015` are applied remotely. `0016_cron_heartbeats.sql`
+is checked in and not yet applied: the owner applies it, after a Time Travel
+bookmark, before deploying the revision that records cron heartbeats. It is
+additive (one table and one index) and changes no existing row. The earlier
+migrations include bookkeeping tables from the retired timeout-proof path
+(migrations are never rewritten), account-closure fences and the signup-attempt
+counter.
 Migration `0015_signup_budget.sql` passed on 2026-10-21 UTC after a native
 Time Travel bookmark was saved. On October 22, the owner enabled 10,000 signup
 attempts and games and 5,000 account emails per UTC month, with 100,000 lifetime
@@ -241,7 +245,10 @@ npx wrangler d1 migrations apply DB --remote --env ''
 npx wrangler d1 migrations list DB --remote --env ''
 ```
 
-Apply the checked-in migrations in order. Keep earlier migration files and
+Apply the checked-in migrations in order. Migration `0016` adds the
+`cron_heartbeats` table that Operations status reads and an index the
+minute-schedule seat cleanup uses; apply it before deploying the Worker that
+needs it. Keep earlier migration files and
 the provider migration ledger. Existing databases need a private backup and
 compatible additive migration review before application. Do not reset tables,
 rewrite accepted migration history, or import local fixtures into production.

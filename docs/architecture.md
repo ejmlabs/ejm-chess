@@ -125,7 +125,9 @@ turn, legal move, and server deadline. A repeated accepted command returns its
 receipt instead of applying its effect twice. A stale command receives the
 current snapshot for recovery.
 
-The game starts only after both players confirm readiness. Unused invitations
+The game starts only after both players confirm readiness. A repeated Ready,
+for example from a second tab or after a reconnect, succeeds with the current
+snapshot at any version and changes nothing. Unused invitations
 expire after ten minutes. Once paired, players have two minutes to get ready.
 An active disconnect does not stop the clock. Clocks use server deadlines;
 there is no network delay allowance.
@@ -227,6 +229,8 @@ Existing snapshot builds remain compatible. D1 publishes complete generations
 in pages of at most 32 rows. Public schedule,
 summary, and standings responses skip session lookup and use a ten-second edge
 cache; private entry and queue actions remain authenticated and `no-store`.
+The leaderboard and public profiles share that one helper
+(`src/server/public-cache.ts`); see [operations](operations.md#public-read-cache).
 See [the arena contract and qualification targets](arena-design.md).
 
 The Worker sheds arena registration overflow before primary authentication.
@@ -280,7 +284,10 @@ a human decision or reversing historical ratings. Optional reviewed operation
 requires the explicit `reviewed` mode and an available owner.
 
 Competition reconciles at most 16 due casual intents per maintenance pass.
-The minute trigger attempts at most four legacy D1 game recoveries. Payload
+Each cron run records its start, finish and failed stages in the D1
+`cron_heartbeats` row for its schedule, which Operations status returns. The
+minute trigger also deletes one bounded batch of expired growth-path rows per
+table. It attempts at most four legacy D1 game recoveries. Payload
 retirement defaults to a separate four-attempt minute budget. Exact
 `GAME_RETIREMENT_MODE=scaled` routes cron, alarms and manual calls through the
 existing global Competition single-flight coordinator. Its indexed D1 queue
@@ -316,6 +323,12 @@ Queue status renews a 120-second ticket lease. Rating preference starts within
 30 seconds. A pair may start at most two ranked games in a rolling 24 hours.
 Cancelled unstarted games and AI games do not earn competitive credit.
 
+A pairing retries creating its Game with backoff. Ten minutes after pairing,
+if an answered status call shows no Game, the match is cancelled: both seats
+and account slots are released and both players can queue again. A Game that
+exists is never cancelled this way, and an unanswered status call never
+cancels. No result is invented. Health reports `creationLifetimeMs`.
+
 Color assignment prefers the queued player with the lower White balance. Equal
 balances flip a coin. When the ranked game starts, White’s balance increases by
 one and Black’s decreases by one. The balance is per account across blitz and
@@ -334,11 +347,17 @@ publishes atomically before later finishes drain once. Unknown policy versions
 leave repair paused for investigation. Do not edit current ratings, subtract
 historical point deltas, or delete reservations to bypass a repair.
 
+A reviewed decision that fails to import waits 30 seconds and shows its error
+in operations status. Decisions about other players still import meanwhile,
+untried ones first. Decisions about the same player stay in order behind it.
+
 ## Client read contracts
 
 The API is same-origin. JSON responses must remain private where they concern
 accounts or games. Errors include a machine-readable `error` and a short
-`message`; the client presents retry or recovery guidance.
+`message`; the client presents retry or recovery guidance. An `ApiError` thrown
+inside a Durable Object keeps its status and code at the Worker; any other
+failure is a generic `503`.
 
 | Request | Consumer |
 | --- | --- |
@@ -350,8 +369,8 @@ accounts or games. Errors include a machine-readable `error` and a short
 | `POST /api/auth/send-verification-email`, `GET /api/auth/verify-email` | Security-only email verification; no marketing subscription |
 | `POST /api/auth/sign-out` | End the browser session after the active-seat identity guard permits it |
 | `POST /api/account/complete` | Existing signed-in explicit account sets username/password while preserving its player ID |
-| `GET /api/leaderboard?pool=blitz\|rapid&cursor=…` | Bounded leaderboard entries, update time, and next cursor |
-| `GET /api/players/:id` | Public credential-backed player profile and two bounded rating-pool states; no guest, private email or private case records |
+| `GET /api/leaderboard?pool=blitz\|rapid&cursor=…` | Bounded leaderboard entries, update time, and next cursor; ten-second edge cache keyed by `pool` and `cursor` |
+| `GET /api/players/:id` | Public credential-backed player profile and two bounded rating-pool states; no guest, private email or private case records; ten-second edge cache |
 | `GET /api/history` | Current account’s latest 50 terminal games, its own color (`w` or `b`), AI labels, and available PGN |
 | `GET /api/games/:id/pgn` | Participant-only completed PGN from D1, including retired games |
 | `GET /api/tournaments` | Bounded public schedule/standings and current caller’s event status |
@@ -367,7 +386,7 @@ accounts or games. Errors include a machine-readable `error` and a short
 | `GET /api/games/open` | `{ids}`: games the current account still holds a seat in, newest first, at most 10 |
 | `POST /api/games/:id/join` | Single-claim invitation or authorized participant reopen |
 | `GET /api/games/:id/connect` | Same-origin authenticated WebSocket |
-| `GET /api/admin/operations` | Access and owner protected status/lag counters |
+| `GET /api/admin/operations` | Access and owner protected status/lag counters and cron heartbeats |
 | `POST /api/admin/operations/maintenance` | Bounded retry of authority and unattended game work |
 | `GET /api/admin/operations/export/manifest` | Fixed journal watermarks and policy versions |
 | `GET /api/admin/operations/export?kind=…&watermark=…&after=…` | At most 50 accepted journal events and a SHA-256 page hash |

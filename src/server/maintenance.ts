@@ -1,6 +1,7 @@
 import type { Env } from './env';
 import { ADJUDICATION_WAIT_MS, GAME_HOT_RETENTION_MS } from './game';
 import { cleanupBudgetReceipts } from './budget';
+import { DAY } from './schedule';
 
 const GAME_MAINTENANCE_BATCH = 4;
 const GAME_MAINTENANCE_RETRY_MS = 300_000;
@@ -15,6 +16,13 @@ interface Candidate { ledger: Ledger; game_id: string; result_version: number; t
 export interface MaintenanceResult { attempted: number; completed: number; failed: number }
 
 const ledgers: Ledger[] = ['casual_game_admissions', 'tournament_game_admissions'];
+/** No game outlives its clocks: two initial allowances plus an increment for every ply of the cap is about 18 hours. */
+const GAME_MAX_AGE_MS = DAY;
+/** Competition polls every game it admitted through a durable intent. Only older casual admissions have none. */
+const UNWATCHED: Record<Ledger, string> = {
+  casual_game_admissions: 'casual_game_admissions.reservation_id IS NULL',
+  tournament_game_admissions: '0',
+};
 
 async function takeBudget(env: Env, kind: 'game-retirement' | 'game-recovery', now: number): Promise<boolean> {
   const window = Math.floor(now / 60_000) * 60_000;
@@ -156,14 +164,20 @@ export async function retireGamePayloads(env: Env, now = Date.now()): Promise<Ma
   return retirePreviewPayloads(env, now);
 }
 
-/** Retry expired authority work even after a Durable Object alarm has exhausted retries. */
+/**
+ * Retry expired authority work even after a Durable Object alarm has exhausted retries.
+ * D1 holds no Game deadlines, so a healthy game cannot be told from an overdue one. Competition already
+ * reconciles each game it admitted every 30 seconds, so this fallback skips those until they are older than
+ * any game can be. A game Competition cannot see is polled from the end of the adjudication wait.
+ */
 async function recoverUnattendedGames(env: Env, now: number): Promise<MaintenanceResult> {
   const select = ledgers.map(ledger => `SELECT '${ledger}' AS ledger,${ledger}.game_id,
       COALESCE(g.ended_at,${ledger}.created_at) AS due_at
     FROM ${ledger} LEFT JOIN games g ON g.id=${ledger}.game_id
     WHERE ${ledger}.storage_state='retained' AND ${ledger}.archive_retry_at<=?
-      AND ${ledger}.created_at<=? AND (g.id IS NULL OR (g.status='pending-adjudication' AND g.ended_at<=?))`).join(' UNION ALL ');
-  const args = ledgers.flatMap(() => [now, now - ADJUDICATION_WAIT_MS, now - ADJUDICATION_WAIT_MS]);
+      AND ((g.status='pending-adjudication' AND g.ended_at<=?)
+        OR (g.id IS NULL AND ${ledger}.created_at<=CASE WHEN ${UNWATCHED[ledger]} THEN ? ELSE ? END))`).join(' UNION ALL ');
+  const args = ledgers.flatMap(() => [now, now - ADJUDICATION_WAIT_MS, now - ADJUDICATION_WAIT_MS, now - GAME_MAX_AGE_MS]);
   const candidates = (await env.DB.prepare(`${select} ORDER BY due_at,game_id LIMIT ?`)
     .bind(...args, GAME_MAINTENANCE_BATCH).all<Pick<Candidate, 'ledger' | 'game_id'>>()).results;
   const result = { attempted: 0, completed: 0, failed: 0 };

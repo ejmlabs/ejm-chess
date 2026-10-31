@@ -476,18 +476,21 @@ export class Game extends DurableObject<Env> {
       }
       this.expire(state, now);
       if (state.outcome) return error('game_over');
+      const player = color === 'w' ? state.white : state.black;
+      // A second tab or a reconnect can repeat Ready after it took effect. Nothing is left to change, so any version succeeds.
+      if (command.type === 'ready' && (state.status === 'active' || (state.status === 'ready' && player?.ready))) {
+        return { ok: true, receipt: { id: command.id, version: state.version, acceptedAt: now }, snapshot: this.view(state, now) };
+      }
       if (command.expectedVersion !== state.version) return error('stale_version');
       const chess = this.engine(state);
       if (command.type === 'ready') {
-        if (state.status !== 'ready' || !state.black) return error('waiting_for_opponent');
+        if (state.status !== 'ready' || !player) return error('waiting_for_opponent');
         if (!canStart) {
           this.finish(state, { winner: null, score: null, reason: 'eligibility-revoked' }, now);
           return error('ranked_eligibility_changed');
         }
-        const player = color === 'w' ? state.white : state.black;
-        if (player.ready) return error('already_ready');
         player.ready = true;
-        if (state.white.ready && state.black.ready) {
+        if (state.white.ready && state.black?.ready) {
           state.status = 'active';
           state.startedAt = now;
           state.deadline = now + state.remaining.w;

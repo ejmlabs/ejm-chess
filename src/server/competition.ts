@@ -17,6 +17,7 @@ import { captureNativePoint } from './recovery';
 import { LEADERBOARD_COLUMNS, LEADERBOARD_VALUES, leaderboardRow } from './leaderboard';
 import { initialRating, rateMatch } from './rating';
 import { RatingRepair, RECORD_ID, REPAIR_BATCH } from './rating-repair';
+import type { EventBridge } from './events';
 import type { Env } from './env';
 import {
   FORMATS, PRIOR_RULES_VERSIONS, RATING_VERSION, RULES_VERSION,
@@ -26,6 +27,8 @@ import {
 const DAY = 86_400_000;
 const QUEUE_LEASE_MS = 120_000;
 const RETRY_MS = 30_000;
+/** A pairing whose Game still does not exist after this long is cancelled, so both players can queue again. */
+export const CREATION_LIFETIME_MS = 600_000;
 /** After this wait a ticket also matches across regions. */
 const REGION_WIDENS_MS = 30_000;
 /** Ranked pairs may start at most this many games in a rolling day. */
@@ -34,7 +37,7 @@ const POOLS = Object.keys(FORMATS) as Pool[];
 /** Per-request and per-alarm work bounds, reported by health. */
 const WORK_BOUNDS = { pairScan: 128, pairBatchPerPool: 8, creationBatch: 8, reconciliationBatch: 16, projectionBatch: 16, exportPage: 50 } as const;
 const JOURNAL_SCHEMA = 'ejm-chess-authority-v1';
-const JOURNALS = {
+export const JOURNALS = {
   results: { table: 'result_events', columns: 'sequence,event_id,game_id,payload,accepted_at' },
   ratings: { table: 'rating_events', columns: 'sequence,game_id,pool,policy,epoch,white_id,black_id,score,pre_white,pre_black,post_white,post_black,accepted_at' },
   correctedRatings: { table: 'corrected_events', columns: 'epoch,sequence,pool,game_id,policy,pre_white,pre_black,post_white,post_black,voided,decision_id' },
@@ -166,37 +169,15 @@ export class Competition extends DurableObject<Env> {
     sql.exec(`CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY,value TEXT NOT NULL)`);
     sql.exec("INSERT OR IGNORE INTO meta(key,value) VALUES('epoch','1')");
     this.tournaments = new TournamentControl(ctx, () => this.env, {
-      closing: userId => this.accountClosing(userId),
-      busy: (userId, tournamentId) => {
-        const slot = this.slot(userId);
-        return this.accountClosing(userId) || Boolean(slot && (slot.state !== 'tournament' || slot.game_id !== tournamentId));
-      },
-      reserve: (userId, tournamentId, pool) => {
-        if (this.accountClosing(userId)) throw new ApiError(409, 'ACCOUNT_CLOSING', 'Account closure is pending. Try again shortly.');
-        sql.exec("INSERT INTO slots(user_id,state,pool,game_id) VALUES(?,'tournament',?,?) ON CONFLICT(user_id) DO NOTHING", userId, pool, tournamentId);
-      },
-      releaseMember: (userId, tournamentId) => { sql.exec("DELETE FROM slots WHERE user_id=? AND state='tournament' AND game_id=?", userId, tournamentId); },
+      ...this.eventBridge(),
       release: tournamentId => { sql.exec("DELETE FROM slots WHERE state='tournament' AND game_id=?", tournamentId); },
-      rating: (pool, userId) => this.rating(pool, userId, Date.now()).rating,
-      settle: result => this.settle(result),
       canReserve: count => this.arenas.canReserveGames(count),
       start: () => this.arenas.claimStart(),
     });
     this.arenas = new ArenaControl(ctx, () => this.env, {
-      closing: userId => this.accountClosing(userId),
-      busy: (userId, eventId) => {
-        const slot = this.slot(userId);
-        return this.accountClosing(userId) || Boolean(slot && (slot.state !== 'tournament' || slot.game_id !== eventId));
-      },
-      reserve: (userId, eventId, pool) => {
-        if (this.accountClosing(userId)) throw new ApiError(409, 'ACCOUNT_CLOSING', 'Account closure is pending. Try again shortly.');
-        sql.exec("INSERT INTO slots(user_id,state,pool,game_id) VALUES(?,'tournament',?,?) ON CONFLICT(user_id) DO NOTHING", userId, pool, eventId);
-      },
-      releaseMember: (userId, eventId) => { sql.exec("DELETE FROM slots WHERE user_id=? AND state='tournament' AND game_id=?", userId, eventId); },
-      rating: (pool, userId) => this.rating(pool, userId, Date.now()).rating,
+      ...this.eventBridge(),
       otherGames: () => this.casuals.active() + this.unsettledGames() + sql.exec<{ count: number }>(`SELECT COUNT(*) AS count FROM tournament_games g
         JOIN tournaments t ON t.id=g.tournament_id WHERE t.status IN ('starting','running','intermission')`).one().count,
-      settle: result => this.settle(result),
     });
     this.casuals = new CasualControl(ctx, () => this.env, {
       closing: userId => this.accountClosing(userId),
@@ -213,6 +194,25 @@ export class Competition extends DurableObject<Env> {
       },
     });
     if (farmingWorkPending(sql)) ctx.waitUntil(this.schedule());
+  }
+
+  /** Slots, closure fences and ratings are Competition's; tournaments and arenas reach them only through this bridge. */
+  private eventBridge(): EventBridge {
+    const sql = this.ctx.storage.sql;
+    return {
+      closing: userId => this.accountClosing(userId),
+      busy: (userId, eventId) => {
+        const slot = this.slot(userId);
+        return this.accountClosing(userId) || Boolean(slot && (slot.state !== 'tournament' || slot.game_id !== eventId));
+      },
+      reserve: (userId, eventId, pool) => {
+        if (this.accountClosing(userId)) throw new ApiError(409, 'ACCOUNT_CLOSING', 'Account closure is pending. Try again shortly.');
+        sql.exec("INSERT INTO slots(user_id,state,pool,game_id) VALUES(?,'tournament',?,?) ON CONFLICT(user_id) DO NOTHING", userId, pool, eventId);
+      },
+      releaseMember: (userId, eventId) => { sql.exec("DELETE FROM slots WHERE user_id=? AND state='tournament' AND game_id=?", userId, eventId); },
+      rating: (pool, userId) => this.rating(pool, userId, Date.now()).rating,
+      settle: result => this.settle(result),
+    };
   }
 
   async createCasualGame(actor: Actor, input: CasualGameInput): Promise<CasualGameResult> {
@@ -541,22 +541,32 @@ export class Competition extends DurableObject<Env> {
     }
   }
 
+  /**
+   * Frees both players and their seats. D1 goes first, so a failed release leaves the match
+   * creating and the retry repeats it. Only a creating match is cancelled, never a Game that exists.
+   */
+  private async cancelCreating(match: Match, now: number): Promise<void> {
+    await this.env.DB.prepare('UPDATE active_game_seats SET released_at=? WHERE game_id=? AND released_at IS NULL').bind(now, match.id).run();
+    this.ctx.storage.transactionSync(() => {
+      const cancelled = this.ctx.storage.sql.exec("UPDATE matches SET status='cancelled' WHERE id=? AND status='creating' RETURNING id", match.id).toArray();
+      if (cancelled.length) this.ctx.storage.sql.exec('DELETE FROM slots WHERE game_id=?', match.id);
+    });
+  }
+
   private async initialize(match: Match): Promise<void> {
     const now = Date.now();
     const game = this.env.GAME.get(this.env.GAME.idFromName(match.id));
     try {
       const actual = await game.status();
       if (actual) { await this.reconcile(match.id, actual); return; }
+      // Only an answered status call proves the Game is absent. A failed call retries and never cancels.
+      if (now - match.created_at >= CREATION_LIFETIME_MS) { await this.cancelCreating(match, now); return; }
       const white = JSON.parse(match.white_actor) as Actor;
       const black = JSON.parse(match.black_actor) as Actor;
       const eligibility = await Promise.all([revalidateActor(white, this.env, true), revalidateActor(black, this.env, true)]);
       if (!eligibility.every(Boolean) || this.repair.paused(match.pool)
         || !await reserveMonthlyWork(this.env, 'games', `ranked:${match.id}`, now)) {
-        this.ctx.storage.transactionSync(() => {
-          this.ctx.storage.sql.exec("UPDATE matches SET status='cancelled' WHERE id=? AND status='creating'", match.id);
-          this.ctx.storage.sql.exec('DELETE FROM slots WHERE game_id=?', match.id);
-        });
-        await this.env.DB.prepare('UPDATE active_game_seats SET released_at=? WHERE game_id=? AND released_at IS NULL').bind(now, match.id).run();
+        await this.cancelCreating(match, now);
         return;
       }
       if (!await acquireSeatGuard(this.env, white, match.id, true)) throw new Error('ranked_admission_denied');
@@ -601,11 +611,12 @@ export class Competition extends DurableObject<Env> {
     });
   }
 
-  private async pump(): Promise<void> {
+  /** `legacyFresh` skips the legacy count read when this maintenance pass already refreshed it. */
+  private async pump(legacyFresh = false): Promise<void> {
     if (this.pumping) return;
     this.pumping = true;
     try {
-      await this.arenas.refreshLegacyGames();
+      if (!legacyFresh) await this.arenas.refreshLegacyGames();
       this.expireTickets(Date.now());
       for (const pool of POOLS) {
         for (let count = 0; count < WORK_BOUNDS.pairBatchPerPool && await this.pair(pool); count++) { /* bounded admission work */ }
@@ -628,30 +639,35 @@ export class Competition extends DurableObject<Env> {
       : { conflict: 'conflicting_event' };
   }
 
+  /** Answers a duplicate delivery, or records the conflict and refuses it. */
+  private async answerKnown(result: GameResult, prior: Acknowledgement | { conflict: string }, now: number): Promise<Acknowledgement> {
+    if ('conflict' in prior) {
+      this.incident(result, prior.conflict, now);
+      await this.ctx.storage.sync();
+      throw new Error('conflicting_result');
+    }
+    await this.ctx.storage.sync();
+    return prior;
+  }
+
   async settle(result: GameResult): Promise<Acknowledgement> {
     const now = Date.now();
     if (!result || !RECORD_ID.test(result.id) || ![RULES_VERSION, ...PRIOR_RULES_VERSIONS].includes(result.rulesVersion) || (result.ai && result.rated)) throw new Error('invalid_result');
     if (result.black && result.white.id === result.black.id) throw new Error('self_play_result');
     const prior = this.known(result);
-    if (prior) {
-      if ('conflict' in prior) { this.incident(result, prior.conflict, now); throw new Error('conflicting_result'); }
-      await this.ctx.storage.sync();
-      return prior;
-    }
+    if (prior) return this.answerKnown(result, prior, now);
     const actual = await this.env.GAME.get(this.env.GAME.idFromName(result.id)).status();
     if (!actual?.result || JSON.stringify(actual.result) !== JSON.stringify(result)) {
       this.incident(result, 'unverified_result', now);
       throw new Error('unverified_result');
     }
-    let response: Acknowledgement;
+    let response: Acknowledgement | { conflict: string };
     try {
       response = this.ctx.storage.transactionSync(() => {
-        // Another delivery may have committed while the Game was being asked.
+        // Another delivery may have committed while the Game was being asked. A thrown error rolls the
+        // transaction back, so a conflict returns here and its incident is recorded after it.
         const prior = this.known(result);
-        if (prior) {
-          if ('conflict' in prior) throw new Error('conflicting_result');
-          return prior;
-        }
+        if (prior) return prior;
         const match = result.rated ? this.match(result.id) : null;
         if (result.rated && (!match || match.reservation_id !== result.reservationId || match.pool !== result.format
           || match.white_id !== result.white.id || match.black_id !== result.black?.id || match.status === 'cancelled')) throw new Error('unregistered_ranked_game');
@@ -674,12 +690,13 @@ export class Competition extends DurableObject<Env> {
         return { accepted: true, pending: false };
       });
     } catch (error) {
-      if (error instanceof Error && ['conflicting_arena_result', 'unregistered_arena_game', 'arena_reservation_conflict', 'conflicting_casual_result'].includes(error.message)) {
+      if (error instanceof Error && ['conflicting_arena_result', 'unregistered_arena_game', 'arena_reservation_conflict', 'conflicting_casual_result', 'unregistered_ranked_game'].includes(error.message)) {
         this.incident(result, error.message, now);
         await this.ctx.storage.sync();
       }
       throw error;
     }
+    if ('conflict' in response) return this.answerKnown(result, response, now);
     await this.ctx.storage.sync();
     await this.schedule();
     return response;
@@ -804,14 +821,15 @@ export class Competition extends DurableObject<Env> {
     return Object.fromEntries(POOLS.map(pool => [pool, this.repair.publishedEpoch(pool)])) as Record<Pool, number>;
   }
 
-  async captureRecoveryPoint() {
+  /** The cursor resumes a paged capture of a Competition larger than one page. See recovery.ts. */
+  async captureRecoveryPoint(cursor?: string) {
     return captureNativePoint(this.ctx, { kind: 'Competition', name: 'global', policies: { rules: RULES_VERSION, ratings: RATING_VERSION } }, () => ({
       watermarks: this.journalWatermarks(),
       publishedEpochs: this.publishedEpochs(),
       matches: this.ctx.storage.sql.exec<{ status: string; count: number }>('SELECT status,COUNT(*) AS count FROM matches GROUP BY status ORDER BY status').toArray(),
       pending: Object.fromEntries((['queue', 'outbox', 'pending_results', 'slots'] as const).map(table => [table, this.count(table)])),
       repairInProgress: this.repair.active(),
-    }), this.recoveryDrill);
+    }), this.recoveryDrill, { cursor });
   }
 
   /** An owner-only event export. It does not export live game, auth, or private review state. */
@@ -864,7 +882,7 @@ export class Competition extends DurableObject<Env> {
       correctionLagMs: correction.oldestAt === null ? 0 : Math.max(0, now - correction.oldestAt), correctionError: correction.error,
       pendingResults: this.count('pending_results'),
       pausedPools: POOLS.filter(pool => this.repair.paused(pool)),
-      limits: { ...this.admissionLimits(), queueLeaseMs: QUEUE_LEASE_MS, ...WORK_BOUNDS, replayBatch: REPAIR_BATCH, farmingCatchUpBatch: CATCHUP_LIMIT },
+      limits: { ...this.admissionLimits(), queueLeaseMs: QUEUE_LEASE_MS, creationLifetimeMs: CREATION_LIFETIME_MS, ...WORK_BOUNDS, replayBatch: REPAIR_BATCH, farmingCatchUpBatch: CATCHUP_LIMIT },
       lastMaintenanceError: maintenance ? JSON.parse(maintenance.value) as { at: number; stages: string[] } : null,
     };
   }
@@ -957,7 +975,7 @@ export class Competition extends DurableObject<Env> {
         if (!errors.includes('reconciliation')) errors.push('reconciliation');
       }
     }
-    try { await this.pump(); } catch { errors.push('admission'); }
+    try { await this.pump(!errors.includes('capacity')); } catch { errors.push('admission'); }
     try { await this.flush(); } catch { errors.push('projection'); }
     if (retirementMode(this.env) === 'scaled') {
       try { await this.retirePayloads(); } catch { errors.push('retirement'); }

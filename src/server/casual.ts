@@ -73,9 +73,12 @@ export class CasualControl {
         if (existing?.state === 'finished') throw new ApiError(410, 'GAME_ARCHIVED', 'Open this game from your completed history.');
       }
       if (!existing && !admitted && !current.accountReady) throw new ApiError(403, 'ACCOUNT_REQUIRED', 'Create or complete your account to play a new game.');
-      await this.bridge.refresh();
-      if (!existing && !admitted && !await newWorkAllowed(env, 'games')) throw new ApiError(409, 'SEAT_UNAVAILABLE', 'New games are paused. Existing games will finish.');
-      if (!existing && !admitted && input.ai && !aiEnabled(env)) throw new ApiError(503, 'AI_UNAVAILABLE', 'Computer practice is unavailable. Try a casual invitation.');
+      // Only a new admission consults capacity. A saved or admitted request just resumes.
+      if (!existing && !admitted) {
+        await this.bridge.refresh();
+        if (!await newWorkAllowed(env, 'games')) throw new ApiError(409, 'SEAT_UNAVAILABLE', 'New games are paused. Existing games will finish.');
+        if (input.ai && !aiEnabled(env)) throw new ApiError(503, 'AI_UNAVAILABLE', 'Computer practice is unavailable. Try a casual invitation.');
+      }
       this.ctx.storage.transactionSync(() => {
         assertNotClosing(this.bridge, actor.id);
         const before = this.intent(input.id);

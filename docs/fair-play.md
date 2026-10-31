@@ -242,7 +242,12 @@ permits at most two started games for an unordered pair in a rolling 24 hours.
 
 `authority.farming` in the private operations response includes the policy,
 checked and flagged totals, pattern counts, coverage, lookup limits, and at
-most 20 recent flagged game references. Account IDs and raw check records stay
+most 20 recent flagged game references. Totals, pattern counts and recent
+references describe the newest 1,000 checks by insertion order. Coverage
+counts read at most 1,000 pending or incomplete checks through their index, so
+an old gap is never hidden. When either scan reaches its limit, `truncated` is
+true and the counts are lower bounds. Status returns at most 2,002 rows
+however many checks are retained. Account IDs and raw check records stay
 inside the Competition authority. A fixed guard of 1,000 retained check rows
 bounds checks. A normal check visits at most 4,000 candidate rows
 through indexed pair, account, and winner windows, and updates at most 1,000
@@ -256,12 +261,12 @@ public throughput or latency claim.
 
 Older v1 records upgrade from their accepted result journal through a
 versioned keyset cursor, at most eight per maintenance alarm. The cursor
-survives restart. Indexed pending probes keep scheduling work small; the
-private full status still scans the capped retained checks for aggregates.
-Coverage reports pending upgrades and incomplete checks separately. A missing
-accepted source or a lookup/update guard leaves an explicit reason. Neither
-condition denies game settlement or invents a farming result. Coverage is
-complete only when neither pending nor incomplete records remain.
+survives restart. Indexed pending probes keep scheduling work small, and the
+private status stays within the bounded reads above. Coverage reports pending
+upgrades and incomplete checks separately. A missing accepted source or a
+lookup/update guard leaves an explicit reason. Neither condition denies game
+settlement or invents a farming result. Coverage is complete only when neither
+pending nor incomplete records remain.
 
 These records remain with the authority; ordinary evidence cleanup does not
 erase them. Production retention and backup expiry remain launch gates.

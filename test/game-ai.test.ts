@@ -2,21 +2,13 @@ import { env } from 'cloudflare:workers';
 import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Chess } from 'chess.js';
-import { admitGameFixture, enableRanked, player } from './authority-helpers';
+import { admitGameFixture, enableRanked, holdAlarms, player } from './authority-helpers';
 import { STOCKFISH_BUILD } from '../src/shared/engine';
 import { publicProfile } from '../src/server/profile';
-import type { Env } from '../src/server/env';
 import type { Game } from '../src/server/game';
 import type { Actor, GameCommand, GameSnapshot, InitGame } from '../src/shared/protocol';
 
-async function quiet(game: DurableObjectStub<Game>, enabled = true): Promise<void> {
-  await runInDurableObject(game, async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-    internal.env = { ...internal.env, AI_ENABLED: String(enabled), RANKED_ENABLED: 'true' };
-    internal.schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
-}
+const quiet = (game: DurableObjectStub<Game>, enabled = true) => holdAlarms(game, { AI_ENABLED: String(enabled), RANKED_ENABLED: 'true' });
 
 async function activeComputer(firstMove = true) {
   const white = await player();
@@ -74,10 +66,7 @@ describe('authoritative browser Stockfish practice', () => {
     expect((await game.command(white, { ...command, to: 'e6' })).ok).toBe(false);
     expect((await game.command(white, engineCommand(snapshot.version))).ok).toBe(false);
     const competition = env.COMPETITION.get(env.COMPETITION.idFromName('global'));
-    await runInDurableObject(competition, async (instance, state) => {
-      (instance as unknown as { schedule(): Promise<void> }).schedule = async () => {};
-      await state.storage.deleteAlarm();
-    });
+    await holdAlarms(competition);
     const end = await game.command(white, { type: 'resign', id: crypto.randomUUID(), expectedVersion: moved.snapshot.version });
     expect(end.snapshot.status).toBe('finished');
     const repeatedAfterFinish = await game.command(white, command);
