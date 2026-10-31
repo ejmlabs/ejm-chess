@@ -32,7 +32,7 @@ export default function Profile() {
 
   return <Page variant="application"><AppSection>
     <SectionHead purpose="application" as="h1" title={state.status === 'ready' ? state.profile.name : 'Player'}>
-      <Text as="p">Public ratings count settled ranked games. Casual and AI games add no rating credit.</Text>
+      <Text as="p">Ratings from settled ranked games only.</Text>
     </SectionHead>
     <AppFlow aria-live="polite" aria-busy={state.status === 'loading'}>
       {state.status === 'loading' && <StateBlock kind="loading" message="Loading this player." density="compact" />}
@@ -54,6 +54,6 @@ export default function Profile() {
         </Text></li>)}</AppGroup>}
       </>}
     </AppFlow>
-    <Text as="p" variant="muted">Read the <Link href="/rules/">rating rules</Link> for provisional and active status, or return to the <Link href="/leaderboard/">leaderboard</Link>.</Text>
+    <Text as="p" variant="muted"><Link href="/leaderboard/">Leaderboard</Link> · <Link href="/rules/">Rating rules</Link></Text>
   </AppSection></Page>;
 }

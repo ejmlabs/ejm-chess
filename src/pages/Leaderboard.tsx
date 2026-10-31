@@ -50,7 +50,7 @@ export default function Leaderboard() {
 
   return <Page variant="application"><AppSection>
     <SectionHead purpose="application" as="h1" title="Leaderboard">
-      <Text as="p">One field for each pace. Ratings use Glicko-2 and count settled ranked games.</Text>
+      <Text as="p">Glicko-2 ratings from settled ranked games.</Text>
     </SectionHead>
     <Rule />
     <AppActions role="group" aria-label="Leaderboard time control">
@@ -67,7 +67,7 @@ export default function Leaderboard() {
       {state.status === 'ready' && <>
         {!state.ranked && <Status status="info" label="Ranked play is closed." />}
         {state.page.entries.length === 0
-          ? <StateBlock kind="empty" message="No players qualify for this view yet." density="compact" />
+          ? <AppFlow><StateBlock kind="empty" message="No players qualify for this view yet." density="compact" /><AppActions>{state.ranked && <Button asChild><Link href={`/play/?mode=ranked&format=${pool}`}>Play ranked</Link></Button>}<Link href="/rules/">How to qualify</Link></AppActions></AppFlow>
           : <Table label="Leaderboard ratings" caption={`${pool === 'blitz' ? 'Blitz' : 'Rapid'} ratings`}
             columns={[{ key: 'player', label: 'Player' }, { key: 'rating', label: 'Rating', align: 'right' }, { key: 'games', label: 'Games', align: 'right' }]}
             rows={state.page.entries.map(player => ({ id: player.id, player: <Link href={`/player/?id=${encodeURIComponent(player.id)}`}>{player.name}</Link>, rating: Math.round(player.rating), games: player.games }))}
@@ -82,7 +82,6 @@ export default function Leaderboard() {
         </AppActions>}
       </>}
     </AppFlow>
-    <Text as="p" variant="muted">A pending game does not change a rating. Read the{' '}
-      <Link href="/rules/">rating rules</Link> and <Link href="/fair-play/">fair play policy</Link>.</Text>
+    <Text as="p" variant="muted">Pending games do not change ratings. <Link href="/rules/">Rating rules</Link> · <Link href="/fair-play/">Fair play</Link></Text>
   </AppSection></Page>;
 }

@@ -1,6 +1,10 @@
 import { isGameId } from '../shared/gamePath';
 
-/** Authentication may return only to Play with a validated invitation and format. */
+export const PLAY_MODES = ['casual', 'ranked', 'ai'] as const;
+export type PlayMode = typeof PLAY_MODES[number];
+export const isPlayMode = (value: unknown): value is PlayMode => PLAY_MODES.includes(value as PlayMode);
+
+/** Authentication may return only to Play with a validated invitation, format and mode. */
 export function playReturnPath(value: string | null): string | null {
   if (!value?.startsWith('/') || value.startsWith('//')) return null;
   try {
@@ -14,6 +18,8 @@ export function playReturnPath(value: string | null): string | null {
     }
     const format = url.searchParams.get('format');
     if (format === 'blitz' || format === 'rapid') query.set('format', format);
+    const mode = url.searchParams.get('mode');
+    if (isPlayMode(mode)) query.set('mode', mode);
     return '/play/' + (query.size ? `?${query}` : '');
   } catch { return null; }
 }

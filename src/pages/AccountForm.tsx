@@ -36,7 +36,7 @@ export default function AccountForm({ view, title, config, returnTo, busy, usern
       {view !== 'sign-in' && <Button variant="link" disabled={busy} onClick={() => changeView('sign-in')}>Sign in</Button>}
       {view !== 'sign-up' && <Button variant="link" disabled={busy} onClick={() => changeView('sign-up')}>Create account</Button>}
     </AppActions>}
-    {returnTo && view !== 'reset' && <Text as="p">Your invitation is saved for after sign-in.</Text>}
+    {returnTo?.includes('game=') && view !== 'reset' && <Text as="p">Your invitation is saved for after sign-in.</Text>}
     <AppForm aria-busy={busy} onSubmit={onSubmit}>
       {(view === 'sign-up' || view === 'sign-in') && <AppField>
         <label htmlFor="account-username">Username</label>

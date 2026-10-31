@@ -56,7 +56,7 @@ export default function AccountSession({ me, config, returnTo, busy, username, p
         <div><Button type="submit" disabled={busy || !token}>{busy ? 'Saving…' : 'Finish account'}</Button></div>
       </AppForm>
     </> : <>
-      <Text as="p">{!me.hasRecoveryEmail ? 'No recovery email is set. Email password reset is unavailable. You cannot add or change recovery email in this preview.' : me.emailVerified ? 'Your recovery email is verified.' : 'Your recovery email is unverified. Verification is optional and does not affect play.'}</Text>
+      <Text as="p">{!me.hasRecoveryEmail ? 'No recovery email. A lost password cannot be reset, so keep it in a password manager. Adding a recovery email is unavailable.' : me.emailVerified ? 'Your recovery email is verified.' : 'Your recovery email is not verified yet. Verification is optional and does not affect play.'}</Text>
       {me.hasRecoveryEmail && !me.emailVerified && <Disclosure summary="Verify recovery email">
         <AppFlow>
           <Text as="p">Send a link to confirm the private recovery email you used at signup. Password reset can use this address before verification.</Text>

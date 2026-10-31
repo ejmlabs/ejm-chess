@@ -46,6 +46,12 @@ describe('account return paths', () => {
     expect(playReturnPath('/play/?format=unsupported&next=https%3A%2F%2Foutside.example')).toBe('/play/');
   });
 
+  it('keeps a known play mode and drops an unknown one', () => {
+    expect(playReturnPath('/play/?format=rapid&mode=ranked')).toBe('/play/?format=rapid&mode=ranked');
+    expect(playReturnPath('/play/?mode=ai')).toBe('/play/?mode=ai');
+    expect(playReturnPath('/play/?mode=admin')).toBe('/play/');
+  });
+
   it('builds account links with only an approved return path', () => {
     const url = new URL(accountPath(`/play/?game=${game}&format=rapid&token=private`, 'sign-up'), 'https://chess.ejmlabs.com');
     expect(url.pathname).toBe('/account/');

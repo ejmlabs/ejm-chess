@@ -1,27 +1,21 @@
-import { AppActions, AppSection } from '@ejm/ui/layout/Application';
+import { AppSection } from '@ejm/ui/layout/Application';
 import { Link } from '@ejm/ssg';
-import { Button } from '@ejm/ui/components/ui/button';
 import { Page } from '@ejm/ui/layout/Band';
-import { Prose } from '@ejm/ui/layout/Prose';
-import { Rule } from '@ejm/ui/layout/Rule';
+import { Row, Rows } from '@ejm/ui/layout/Rows';
 import { SectionHead } from '@ejm/ui/layout/SectionHead';
 import { Text } from '@ejm/ui/layout/Text';
 
 export default function Home() {
   return <Page variant="application"><AppSection>
-    <SectionHead purpose="application" as="h1" kicker="Chess by ejmlabs" title="Chess">
-      <Text as="p">Play a friend, challenge Stockfish, or compete in ranked chess.</Text>
+    <SectionHead purpose="application" as="h1" title="Chess">
+      <Text as="p">Blitz 5 + 3 and rapid 10 + 5.</Text>
     </SectionHead>
-    <Rule />
-    <AppActions role="group" aria-label="Choose a time control">
-      <Button asChild arrow><Link href="/play/?format=blitz">Blitz 5 + 3</Link></Button>
-      <Button asChild variant="ghost" arrow><Link href="/play/?format=rapid">Rapid 10 + 5</Link></Button>
-    </AppActions>
-    <Rule />
-    <Text as="p" variant="muted">Minutes to start. Seconds added after each move.</Text>
-    <Prose>
-      <p>New games require an account. Read <Link href="/help/">how to play</Link> and the{' '}
-        <Link href="/rules/">online rules</Link>, including how a timeout is scored.</p>
-    </Prose>
+    <Rows aria-label="Ways to play">
+      <Row title="Play a friend" description="Send an invitation link. Unrated." href="/play/?mode=casual" />
+      <Row title="Ranked" description="Get matched with a player. Rated." href="/play/?mode=ranked" />
+      <Row title="Stockfish" description="Practice in your browser. Unrated." href="/play/?mode=ai" />
+      <Row title="Events" description="Hourly arenas and round-robins. Unrated." href="/tournaments/" />
+    </Rows>
+    <Text as="p" variant="muted">Games need a free account; recovery email is optional. <Link href="/account/?view=sign-up">Create account</Link> · <Link href="/account/">Sign in</Link> · <Link href="/help/">Help</Link></Text>
   </AppSection></Page>;
 }

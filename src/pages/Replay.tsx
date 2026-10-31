@@ -44,10 +44,9 @@ export default function Replay() {
 
   const retry = () => setAttempt(value => value + 1);
 
+  const heading = <SectionHead purpose="application" as="h1" id="replay-heading" title="Replay" />;
   return <Page variant="application"><AppFlow as="section" aria-labelledby="replay-heading">
-    <SectionHead purpose="application" as="h1" id="replay-heading" title="Match replay">
-      <Text as="p">Step through the recorded moves of your completed game.</Text>
-    </SectionHead>
+    {state.status !== 'ready' && heading}
     <AppFlow aria-busy={state.status === 'loading'}>
       {state.status === 'loading' && <StateBlock kind="loading" density="compact" skeleton={false} message="Loading your recorded game…" />}
       {state.status === 'invalid-link' && <>
@@ -68,14 +67,14 @@ export default function Replay() {
       {state.status === 'too-large' && <StateBlock kind="error" density="compact" message="This replay exceeds the 1 MiB record limit; you can still download the PGN." />}
       {state.status === 'invalid-record' && <StateBlock kind="error" density="compact" message="This recorded PGN is invalid and cannot be replayed; you can still download the source." />}
       {state.status === 'ready' && <Suspense fallback={<StateBlock kind="loading" density="compact" skeleton={false} message="Opening your replay…" />}>
-        <GameReplay key={state.id} pgn={state.pgn} />
+        <GameReplay key={state.id} pgn={state.pgn} heading={heading} />
       </Suspense>}
     </AppFlow>
-    {'id' in state && <Button asChild variant="link" density="compact"><a href={gamePath(state.id, 'pgn')} download>Download PGN</a></Button>}
-    <Text as="p" variant="muted">Replays are private to the players and make no changes to the game.</Text>
     <AppActions>
-      <Button asChild variant="link" density="compact"><Link href="/history/">Your games</Link></Button>
-      <Button asChild variant="link" density="compact"><Link href="/play/">Play chess</Link></Button>
+      {'id' in state && <Button asChild variant="secondary" density="compact"><a href={gamePath(state.id, 'pgn')} download>Download PGN</a></Button>}
+      <Button asChild variant="ghost" density="compact"><Link href="/history/">Your games</Link></Button>
+      <Button asChild variant="ghost" density="compact"><Link href="/play/">Play</Link></Button>
     </AppActions>
+    <Text as="p" variant="muted">Only the players can open this replay.</Text>
   </AppFlow></Page>;
 }
