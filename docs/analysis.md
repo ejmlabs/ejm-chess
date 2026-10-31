@@ -8,7 +8,7 @@ python-chess. It has no harness dependency and adds no browser engine.
 
 The implementation and local checks below are complete. No analysis Container,
 Queue, paid plan, or public hostname was provisioned or deployed by this work.
-`ANALYSIS_ENABLED=false` is the default. Ranked admission remains closed.
+`ANALYSIS_ENABLED=false` is the default. Ranked play does not depend on analysis.
 These summaries have not been calibrated to distinguish human play from engine
 assistance. They never trigger sanctions or rating changes.
 
@@ -260,5 +260,5 @@ Before enabling analysis, approve the resource/spending scope, configure a
 private one-instance binding, and measure native deployed cold starts, CPU,
 memory, timeout rate, queue lag, and real costs. Then evaluate representative
 authorized human games and controlled assistance examples, estimate review
-capacity, and verify reports, appeals, privacy, and recovery. Ranked play stays
-closed until those launch gates pass.
+capacity, and verify reports, appeals, privacy, and recovery. Analysis stays
+disabled until those checks pass.

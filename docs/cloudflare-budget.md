@@ -1,12 +1,14 @@
 # Cloudflare budget and admission stops
 
-## Current policy, 2026-10-30
+## Current policy, 2026-10-31
 
 The owner set one economic control: Cloudflare budget alerts and the automatic
-stop. The application no longer enforces monthly game, signup, email or
-analysis caps. Usage counters remain for the private Operations page; they do
-not deny new work. Billing alerts can lag, so this is not a guaranteed invoice
-cap.
+stop. The application enforces no monthly game, signup, email or analysis cap
+and no arbitrary product cap on ranked, arena, tournament or casual play (owner
+decision, 2026-10-31; first set 2026-10-30). Usage counters remain for the
+private Operations page; they do not deny new work. Billing alerts can lag, so
+this is not a guaranteed invoice cap. Security and abuse limits, input bounds,
+fair-play rules and platform safety bounds are not spending controls and stay.
 
 The Cloudflare account has saved budget alerts at $10, $45, $70 and $85 account
 usage, plus the $85 stop webhook. The $100 monthly target is the envelope. The
@@ -19,7 +21,8 @@ under their normal checks.
 The owner approved a $100 monthly spending envelope for chess. This is an
 operating limit, not a capacity tier, provider invoice cap, or proof that the
 configured workload costs less than $100. Keep server analysis disabled.
-Ranked correctness and tournament checks are separate release decisions.
+Ranked, arenas and tournaments open under the 2026-10-31 launch policy; see
+[live-ready prep](live-ready-prep.md).
 
 The approved 2026-10-20 provisioning confirmed the existing Workers Paid
 subscription and enabled the sender domain for `chess@ejmlabs.com`, with body
@@ -66,13 +69,10 @@ twelve stored month records; an inactive slot can retain an older month.
 Receipts contain private work IDs, timestamps, and unit counts.
 They contain no email address, sign-in token, engine position, or report text.
 
-Game receipts remain permanent, with a separate 111,000-row ceiling. It can
-close admission before a larger configured ID ceiling, including arena
-qualification settings. Unused charged reservations also count. Email and
-analysis receipts expire after 62 days.
+Game receipts remain permanent, and unused charged reservations also count.
+Email and analysis receipts expire after 62 days.
 The normal minute maintenance cycle removes at most 100 expired receipts per
-call. Separate retained-receipt ceilings of 15,000 email and 3,000 analysis
-receipts close admission if cleanup falls behind. Cleanup does not refund
+call. No receipt row count closes admission. Cleanup does not refund
 monthly usage or delete game history. Stale operator changes cannot overwrite
 a newer control version. The latest 64 changes retain actor ID, time, stop
 settings, and a short reason; export records privately if longer audit retention
@@ -82,7 +82,7 @@ is required.
 
 The October 22 policy replaces the earlier proof/core/email allocations,
 mandatory recovery and unknown-cost reserves, and repeated financial reviews.
-The [dated cost worksheet](cost-estimate.md#current-proof-financial-policy)
+The [dated cost worksheet](cost-estimate.md#historical-allocation-worksheet-2026-10-21)
 retains those assumptions for comparison. They are not current operating caps
 or launch requirements. The isolated capacity run retains its approved $25
 incremental ceiling within the single $100 target.
@@ -123,7 +123,7 @@ these application counters.
 | Second usage alert, or unexpectedly rising unit cost | Stop server analysis; investigate before allowing more optional work |
 | Final usage alert | The associated dedicated webhook stops new games, email, and analysis when Cloudflare delivers the notification; reporting and delivery can be delayed |
 | Spending threatens the $100 envelope before that alert | Use the private stop controls, preserve accepted work, and inspect billing |
-| Exhausted allowance or retained-receipt ceiling | Keep the stop, inspect reservations and cleanup, and reconcile actual spend before resuming |
+| Stop set, or receipt cleanup behind | Keep the stop, inspect reservations and cleanup, and reconcile actual spend before resuming |
 | Failed result outbox or correction, or lag above two minutes | Inspect authority status and provider health; run one bounded retry cycle and investigate persistent failures |
 | Analysis queue age above ten minutes while enabled | Check its daily/monthly allowance, lease, provider response, and dead letters; do not enable more concurrency |
 

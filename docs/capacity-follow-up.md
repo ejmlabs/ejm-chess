@@ -1,5 +1,9 @@
 # Capacity measurements after the short run
 
+> **Superseded 2026-10-31.** Capacity work is follow-up only. The first-tier
+> run gates nothing, product caps are removed and the timeout-proof path is
+> retired, so ignore ranked-proof scopes below. Measure demand after opening.
+
 These are bounded preparation scopes for OpenSpec task 18.6. None is armed,
 approved for provider work, implemented as a runnable harness, or measured.
 They preserve the original arena acceptance targets. The approved
@@ -37,7 +41,7 @@ and mandatory recovery reserves no longer apply. Each future run still needs
 an explicit finite spending ceiling within available monthly headroom. The
 first-tier run keeps its approved $25 incremental ceiling. These proposals
 grant no additional work and are not required for initial release.
-Use the [common-cycle ledger](cost-estimate.md#current-proof-financial-policy)
+Use the [common-cycle ledger](cost-estimate.md#historical-allocation-worksheet-2026-10-21)
 for started billing units counted once; differing cycles or quantities need a
 rebuilt ledger and savings grant no work. A workload stop is not a hard provider
 invoice cap.

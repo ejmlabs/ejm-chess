@@ -42,7 +42,7 @@ export default function Profile() {
       </>}
       {state.status === 'error' && <StateBlock kind="error" message="This profile could not be loaded." action={{ label: 'Retry' }} onAction={() => setAttempt(value => value + 1)} density="compact" />}
       {state.status === 'ready' && <>
-        {!state.profile.rankedOpen && <Status status="info" label="New ranked play is closed while the launch checks remain." />}
+        {!state.profile.rankedOpen && <Status status="info" label="New ranked play is closed." />}
         <Table label="Player ratings" caption="Settled ratings by time control"
           columns={[{ key: 'format', label: 'Format' }, { key: 'rating', label: 'Rating', align: 'right' }, { key: 'games', label: 'Games', align: 'right' }, { key: 'status', label: 'Status' }]}
           rows={state.profile.pools.map(pool => ({ id: pool.pool, format: `${pool.pool === 'blitz' ? 'Blitz' : 'Rapid'} ${FORMATS[pool.pool].label}`, rating: pool.rating ?? 'Not rated', games: pool.games, status: labels[pool.status] }))}

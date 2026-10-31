@@ -1,5 +1,11 @@
 # Private timeout proofs
 
+> **Superseded 2026-10-31.** The owner retired the private timeout-proof path.
+> Ranked uses the material timeout rule only, as casual does: no proof
+> Container, qualification, proof limit, `PROVER` binding or
+> `TIMEOUT_PROOF_PROFILE`/`MONTHLY_PROOF_LIMIT` setting. This guide is history;
+> read its requirements as retired.
+
 ## Status
 
 The source implements a separate, default-off timeout proof path for new ranked
@@ -12,9 +18,7 @@ The private default Wrangler configuration has `TIMEOUT_PROOF_PROFILE=off`,
 `MONTHLY_PROOF_LIMIT=0` and no `PROVER` binding. The final release configuration
 uses a separate private proof service. Ranked enablement requires recorded
 native corpus, Game/Competition settlement, failure/recovery and physical
-shutdown checks for the chosen tier. See the published
-[timeout-proof qualification report](https://chess.ejmlabs.com/qualification/timeout-proofs.json)
-for release measurements. The [earlier provider report](qualification/provider-proof-20261021.md)
+shutdown checks for the chosen tier. The [earlier provider report](qualification/provider-proof-20261021.md)
 and completed [feasibility probe](adjudication-feasibility.md) retain their
 historical scope; neither alone establishes the final release result.
 
@@ -194,7 +198,7 @@ runtime limits still apply. Optional server analysis remains disabled.
 Reservation counts and short jobs cannot guarantee the invoice. Alerts can lag,
 accepted work must drain, and provider stop failures can add charges. Retain
 the dated estimates as historical evidence and check actual usage when operating
-the service. See [the ledger](cost-estimate.md#current-proof-financial-policy),
+the service. See [the ledger](cost-estimate.md#historical-allocation-worksheet-2026-10-21),
 [budget controls](cloudflare-budget.md) and [operations](operations.md).
 
 ### Separate financial, source and provider gates

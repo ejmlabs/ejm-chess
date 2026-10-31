@@ -1,5 +1,10 @@
 # Private native capacity qualification
 
+> **Superseded 2026-10-31.** The 2,000-player provider run no longer gates
+> ranked play or arenas, and there are no product caps. It is kept as follow-up
+> evidence only; measure demand after opening. Read launch-gate language below
+> as retired. The retired timeout-proof path is not part of this run.
+
 This guide describes the approved isolated capacity harness and its fixed
 workload. Each provider run retains its source identity, resource records,
 measurements, failures and shutdown evidence. The implementation alone does

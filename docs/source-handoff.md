@@ -54,29 +54,26 @@ establish compatibility before release; retention is not that evidence.
 
 ## Configuration gap
 
-Six private provider configurations were intentionally excluded and are ignored
+Three private provider configurations were intentionally excluded and are ignored
 by Git:
 
 - `wrangler.jsonc`
 - `wrangler.capacity.jsonc`
-- `wrangler.proof-acceptance.jsonc`
-- `wrangler.proof-qualification.jsonc`
-- `wrangler.proof-service.jsonc`
 - `wrangler.recovery-drill.jsonc`
 
 Reconstruct them from reviewed current provider state and the retained private
-records. Preserve distinct production, local, recovery, proof and capacity
-boundaries. Do not paste provider identifiers, private destinations, credentials
+records. The three `wrangler.proof-*.jsonc` configs of the retired timeout-proof
+path (2026-10-31) are no longer needed. Preserve distinct production, local,
+recovery and capacity boundaries. Do not paste provider identifiers, private destinations, credentials
 or old execution windows into public source. Keep secrets in local variables
 or the provider secret store.
 
 Status on 2026-10-30: a reviewed local `wrangler.jsonc` (gitignored) exists with
 production bindings plus `env.local` for Worker tests and the protected canary
-deploy. The five specialty configs remain absent as private copies in this
+deploy. The two specialty configs remain absent as private copies in this
 checkout. Non-secret templates live under [`config-examples/`](../config-examples/README.md);
 copy an example to the matching gitignored filename, then fill IDs from private
-records before capacity, proof-acceptance, proof-qualification, proof-service or
-recovery-drill commands. Matching shared UI source for chess contracts is the
+records before capacity or recovery-drill commands. Matching shared UI source for chess contracts is the
 sibling `ejm-ui` branch `wip/preserve-all-20261025`; keep discovery publication
 behind an approved public opening. See [live-ready prep](live-ready-prep.md).
 

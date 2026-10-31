@@ -33,21 +33,20 @@ const guides: Record<string, GuideContent> = server ? {
       <p>Return to the same game link in the same browser. The clock keeps running during a lost connection.
         Wait for the server position before trying another move. Sign in to the same account to return to your seat. Legacy guest seats still require their original browser cookie.</p>
       <AppHeading as="h2">After the game</AppHeading>
-      <p>Open <Link href="/history/">Your games</Link> and choose Replay. Step through moves, select a move, flip the board, or download PGN. The focused replay accepts Left, Right, Home, and End. Records stay private to the players and are limited to 1 MiB and 12,700 half-moves.
-        A ranked timeout waits at most 30 seconds for a private proof and does not change ratings until it is settled.</p>
+      <p>Open <Link href="/history/">Your games</Link> and choose Replay. Step through moves, select a move, flip the board, or download PGN. The focused replay accepts Left, Right, Home, and End. Records stay private to the players and are limited to 1 MiB and 12,700 half-moves.</p>
       <AppHeading as="h2">Accounts and competition</AppHeading>
       <p>Create an account with a unique username and a password of 8 to 128 characters. Sign in with your username and password. Password managers and pasted passwords work. A private recovery email is optional for signup, play, ranked eligibility and tournaments. Email is used only for verification and recovery. We send no marketing.</p>
       <p>Signup pauses only when the owner sets a stop. Existing accounts can still sign in.</p>
       <p>If you skip recovery email, email password reset is unavailable. Keep your password in a password manager. Adding or changing a recovery email is unavailable. If you supplied an email, you can request password reset with it before verification. Verification confirms the mailbox; it does not affect player eligibility.</p>
       <p>Choose Ranked to find an opponent and compete in the blitz or rapid rating pool. Casual invitations and computer games remain unrated.</p>
-      <p>Ranked admission remains closed until the owner opens it. When open, the Cloudflare budget stop is the limit; there is no monthly game cap.</p>
+      <p>Ranked play and arenas are open. Apart from the fair-play rules, including two ranked games per pair in a rolling 24 hours, there are no product limits. Behavior under heavy load is still being measured.</p>
       <p>Use <Link href="/account/">Account</Link> to sign out or view recovery options. Finish active games before changing sign-in. Legacy guests can finish their existing games and replay their records; new guest games are closed. Signing up does not transfer a guest's history or ratings.</p>
       <AppHeading as="h2">When new games pause</AppHeading>
       <p>The service pauses new work only when the owner sets a stop or the Cloudflare budget stop fires. There are no monthly game, signup or email caps.
         Accepted games keep their clocks, results, and private replays. Clearing a stop resumes new work; it does not free retained storage.</p>
       <AppHeading as="h2">Automatic tournaments</AppHeading>
       <p>Visit <Link href="/tournaments/">Tournaments</Link> for automatic schedules, entry, and standings. Timed arenas use a queue between games. The small round-robin format runs with three or four players over three rounds. Both formats are unrated, and their points stay within the event.</p>
-      <p>Arenas have no product entrant or unfinished-game cap. The Cloudflare budget stop and platform limits are the only bounds. They pair for one hour in blitz or two hours in rapid. Register with a username and password account, then choose Queue when play opens. Recovery email is optional. After each game, queue again when ready, or pause. A no-show pauses your entry until you resume. One account can hold only one ranked or tournament reservation at a time.</p>
+      <p>Arenas have no product entrant or unfinished-game cap; the Cloudflare budget stop and platform limits are the only bounds. They pair for one hour in blitz or two hours in rapid. Register with a username and password account, then choose Queue when play opens. Recovery email is optional. After each game, queue again when ready, or pause. A no-show pauses your entry until you resume. One account can hold only one ranked or tournament reservation at a time.</p>
       <p>An arena win earns one point and a draw half a point. Losses, no-shows, and technical voids earn zero; there are no bye or streak points. Equal points share a rank. A pair may meet twice only with a different opponent between meetings.</p>
       <p>New pairings stop at the cutoff. Accepted games finish within their 18-minute blitz or 40-minute rapid wall deadline. Standings remain provisional while games or updates are pending. Public pages show their update time and use bounded pages, so a refresh may briefly show an older complete snapshot.</p>
       <AppHeading as="h2">Play Stockfish</AppHeading>
@@ -64,7 +63,7 @@ const guides: Record<string, GuideContent> = server ? {
   '/rules': {
     title: 'Online rules',
     body: <>
-      <p>Casual and tournament rule version: <code>{RULES_VERSION}</code>. Ranked games use the timeout-proof policy below.
+      <p>Rule version: <code>{RULES_VERSION}</code>, for casual, tournament, arena and ranked games.
         It does not claim full FIDE tournament compliance.</p>
       <AppHeading as="h2">Moves and results</AppHeading>
       <p>The server uses chess.js to validate moves, including castling, en passant, and promotion.
@@ -79,11 +78,7 @@ const guides: Record<string, GuideContent> = server ? {
       <AppHeading as="h2">Timeouts need care</AppHeading>
       <p>A timeout is a draw when the rules library proves insufficient material, or when the player with time left has only a king.
         Otherwise the player who ran out of time loses. This applies to casual, tournament, arena and ranked games, and a disconnect does not stop the clock.</p>
-      <p>The current rules library cannot recognise a fully blocked position where no side could ever mate, so a timeout there is scored as a loss unless a ranked proof shows a draw.</p>
-      <p>Ranked games use the <code>online-2026-10-v3-proof</code> policy and reserve bounded proof capacity before they start.
-        For a timeout, a private service can prove a win by finding and independently checking a legal path to checkmate for the player with time left.
-        A supported no-mate proof gives a draw. The check includes the saved game history and this site's automatic draw rules.
-        An unknown, failed, or late proof keeps the original 30-second deadline and the game then follows the material timeout rule. Games that started under an earlier policy keep its recorded version, but a clock that runs out in a game still unfinished follows this rule.</p>
+      <p>The current rules library cannot recognise a fully blocked position where no side could ever mate, so a timeout there is scored as a loss.</p>
       <AppHeading as="h2">Ratings and leaderboards</AppHeading>
       <p>Blitz and rapid use separate Glicko-2 pools. Casual invitations do not affect ratings.
         A ranked game changes ratings only after the server accepts its final result.</p>
@@ -174,15 +169,11 @@ const guides: Record<string, GuideContent> = server ? {
       <p>Cloudflare handles network traffic and security challenges. Authentication and challenge checks can use connection
         information such as an IP address. It is not proof of cheating.</p>
       <p>Request windows and private denial counters support abuse limits. Ranked farming records retain game identifiers, account pairs, result order, and pattern facts inside the competition authority.
-        Their current storage ceilings bound growth. Permanent competition and minimal audit records remain under the retention rules below.</p>
+        Platform storage bounds limit growth. Permanent competition and minimal audit records remain under the retention rules below.</p>
       <AppHeading as="h2">Computer practice</AppHeading>
       <p>Stockfish runs in your browser using engine files served by this site. No position or account data is sent to an external inference provider.
         The service still receives accepted moves and records the selected engine and difficulty with your private game history and replay.</p>
       <p>Historical games retain their original AI metadata. The earlier OpenRouter catalog and inference paths have been removed.</p>
-      <AppHeading as="h2">Private timeout proofs</AppHeading>
-      <p>Ranked timeout proofs send a game identifier, position and complete accepted move history to a private service hosted on Cloudflare.
-        It sends no usernames, recovery addresses, passwords or session credentials. The service independently checks a proposed mating path against that history and the online draw rules.
-        It uses no model API or token billing.</p>
       <AppHeading as="h2">Visibility</AppHeading>
       <p>Leaderboards show eligible players’ names, ratings, and game counts. Tournament schedules, entrant display names, event points, and standings are public. Registration needs an account. Game positions, PGNs, and replays remain limited to the players.
         This site has no public chat, spectator mode, advertising, or configured analytics.</p>
@@ -209,13 +200,13 @@ const guides: Record<string, GuideContent> = server ? {
       <AppHeading as="h2">Hosting and access</AppHeading>
       <p>The canonical host is chess.ejmlabs.com. Cloudflare hosts the application, static assets, D1 database and SQLite Durable Objects. Production uses LOCAL_DEV=false, a 50-millisecond public Worker CPU limit, and disabled workers.dev and preview URLs.</p>
       <p>Private administration requires both the verified owner account and Cloudflare Access. The exact budget-stop callback requires its separate secret. Public player access grants neither permission. The repository deployment guide and qualification reports record exact release versions, bindings and measured limits.</p>
-      <p>Minute and daily triggers recover saved work. Longer calendar, full-hour endurance and regional measurements remain separate qualification; configured ceilings do not prove worldwide performance.</p>
+      <p>Minute and daily triggers recover saved work. Longer calendar, full-hour endurance, regional and 2,000-player provider measurements are follow-up evidence, not launch gates. Behavior under heavy load is still being measured.</p>
       <AppHeading as="h2">Owners</AppHeading>
       <p>ejm-chess owns chess rules, game state, matchmaking, ratings, account policy, and fair play composition.
         ejm-ui owns shared visuals and site infrastructure. The lab owns project discovery.
         The product does not depend on the agent harness.</p>
       <AppHeading as="h2">Player accounts</AppHeading>
-      <p>Better Auth owns username and password authentication in native D1. Recovery email is optional. Private account state returns accountReady and hasRecoveryEmail without exposing an address. New game seats require a completed username and password account. Player ranked and tournament eligibility uses credentials, restrictions and launch gates, not email verification. Owner administration still requires a real verified email and Cloudflare Access.</p>
+      <p>Better Auth owns username and password authentication in native D1. Recovery email is optional. Private account state returns accountReady and hasRecoveryEmail without exposing an address. New game seats require a completed username and password account. Player ranked and tournament eligibility uses credentials, restrictions and feature flags, not email verification. Owner administration still requires a real verified email and Cloudflare Access.</p>
       <p>Accounts without recovery email cannot use email password reset or request verification. Adding or changing email is unavailable. A supplied recovery email can receive password reset before verification. The service sends only verification and recovery messages, with generic reset receipts and no marketing subscription.</p>
       <AppHeading as="h2">Server authority</AppHeading>
       <p>A Durable Object owns each game. The browser sends versioned commands with unique identifiers.
@@ -223,7 +214,7 @@ const guides: Record<string, GuideContent> = server ? {
         Reconnection receives a server snapshot.</p>
       <p>The product uses chess.js to compute legal destinations and check moves against the full saved position before submitting its version. Premoves are checked after the opponent moves. The lazy public ejm-ui Chessboard draws dots and capture rings through cm-chessboard and owns input, promotion, orientation, focus, and cleanup. The kit imports no product rules or state types. The public Switch controls the browser preference. No engine or extra server request is needed, and every submitted move still needs server acceptance. GameClock displays the product’s local estimate without announcing each tick.</p>
       <p>The competition owner serializes ranked admission, tournament reservations and rounds, and rating settlement. D1 holds account and review records.
-        A pending timeout cannot be promoted to a rated result by a browser request.</p>
+        A browser request cannot supply a game result.</p>
       <p>The repository's local capacity runner exercises the full fixed workload through native authorities, real clocks and loopback HTTP and WebSockets. Source hashes, usage, missed schedules and failures remain in its report. It changes no production gate and proves no deployed capacity, regional latency or provider cost. A frozen provider run needs separate approval.</p>
       <p>The offline capacity sealer checks the reviewed source, local evidence, provider bindings, fixed UTC schedule, finite workload and actual client egress. Run <code>node scripts/seal-capacity-provider.mjs --describe</code> for its records, <code>--check --review PRIVATE_REVIEW_JSON</code> to check inputs, or <code>--seal --review PRIVATE_REVIEW_JSON --output NEW_PRIVATE_DIRECTORY</code> to prepare a frozen candidate. Sealing records integrity and does not execute load. Keep review inputs private; record the actual run and its failures in the qualification reports.</p>
       <AppHeading as="h2">Computer practice and private analysis</AppHeading>
@@ -234,10 +225,7 @@ const guides: Record<string, GuideContent> = server ? {
         One worker searches for at most 1.2 seconds per normal turn, with no pondering, and is terminated when its game closes.</p>
       <p>Postgame review uses a separate private Stockfish Container, disabled by default.
         It has fixed inputs, compute caps, durable retries, and bounded summaries. It cannot sanction players.
-        Ranked timeout proofs use a separate private native CHA-Solver service. Neither private engine runs during live move processing or sends solver code to the browser.</p>
-      <p>Ranked games reserve one of four shared slots before they start, with at most two proof attempts per game and 1,000 admissions per UTC month.
-        A slot stays reserved through proof and rating settlement. Unknown, failed, exhausted or late proofs cannot extend the original 30-second deadline. Existing games keep their recorded rules.</p>
-      <p>See the <a href="/qualification/timeout-proofs.json">technical qualification report</a> for source pins, native checks and measured limits.</p>
+        It does not run during live move processing or send engine code to the browser.</p>
       <AppHeading as="h2">Local development</AppHeading>
       <p>Use Node 24, install the sibling public ejm-ui packages, then install this product’s dependencies.
         The repository README and operations guide give the local commands, bindings, migration steps, and launch gates.</p>
@@ -247,7 +235,7 @@ const guides: Record<string, GuideContent> = server ? {
         Tests must protect a real rule or failure risk.</p>
       <AppHeading as="h2">Automatic operation</AppHeading>
       <p>Competition schedules bounded hourly, daily, and weekly tournaments. Durable game identities and result receipts prevent duplicate pairings or event points. Cron recovers scheduled work and retries outboxes. Timeouts end with a win or a draw under the material rule.</p>
-      <p>Settled casual game payloads retire after at least one hour, at most four per minute, only after matching terminal version, rules version, and digest checks. Durable tombstones prevent ID reuse; D1 keeps completed replays. Permanent game and rating records still grow. A stop can pause new admission; there is no product retention cap.</p>
+      <p>Settled casual game payloads retire after at least one hour, at a bounded rate, only after matching terminal version, rules version, and digest checks. Durable tombstones prevent ID reuse; D1 keeps completed replays. Permanent game and rating records still grow. A stop can pause new admission; there is no product retention cap.</p>
       <p>CASUAL_GAME_LIMIT and CASUAL_GAME_ID_LIMIT are optional. Both default to no cap. Retirement frees a payload slot and keeps the old ID reserved.</p>
       <AppHeading as="h2">Budget controls</AppHeading>
       <p>The monthly spending target is $100. Cloudflare budget alerts give notice. When delivered, the final alert stops new work and leaves headroom for active games and recovery. Billing alerts can lag, so this is not a guaranteed invoice cap.</p>
@@ -296,8 +284,6 @@ const guides: Record<string, GuideContent> = server ? {
       <p>The private analysis Container includes Stockfish 17.1 under GPLv3 and Python chess 1.11.2 under GPLv3 or later,
         with corresponding source archives and notices retained in the image. Analysis is disabled by default.
         This private screening engine is separate from the browser practice engine.</p>
-      <p>The private timeout-proof service uses unchanged MIT-licensed CHA-Solver at revision <code>3484c7e65247003fac8705a9290dc2b5d0978b94</code> and Python chess 1.11.2 under GPLv3 or later for independent validation.
-        Its image retains source and license notices. No timeout solver is sent to the browser.</p>
       <AppHeading as="h2">Browser Stockfish</AppHeading>
       <p>Computer practice uses the unmodified Stockfish.js 19.0.1 lite single-thread build, maintained by Nathan Rugg and Chess.com, under GPL-3.0.
         The exact source revision is 0d5dd7944f88c817c07a26bc4fb1905d5f9c46d6. Its source and required network are available with the engine:</p>

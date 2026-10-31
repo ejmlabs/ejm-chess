@@ -65,7 +65,7 @@ export default function Leaderboard() {
       {state.status === 'loading' && <StateBlock kind="loading" message="Loading the leaderboard." density="compact" />}
       {state.status === 'error' && <StateBlock kind="error" message="The leaderboard could not be loaded." action={{ label: 'Retry' }} onAction={() => setAttempt(value => value + 1)} density="compact" />}
       {state.status === 'ready' && <>
-        {!state.ranked && <Status status="info" label="Ranked play is closed while the launch checks remain." />}
+        {!state.ranked && <Status status="info" label="Ranked play is closed." />}
         {state.page.entries.length === 0
           ? <StateBlock kind="empty" message="No players qualify for this view yet." density="compact" />
           : <Table label="Leaderboard ratings" caption={`${pool === 'blitz' ? 'Blitz' : 'Rapid'} ratings`}

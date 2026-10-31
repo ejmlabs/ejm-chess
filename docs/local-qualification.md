@@ -5,9 +5,10 @@ Objects on one developer machine. They establish local behavior and measured
 service times for the workloads below. They do not establish a public arena
 capacity, deployed resource limit, worldwide latency or monthly cost.
 
-The public admission limits remain closed. Keep the conservative defaults in
-[the arena design](arena-design.md#configuration-and-conservative-defaults).
-The production release and regional gates remain separate.
+Since 2026-10-31 these results are follow-up evidence. They gate no opening,
+and there are no product admission caps; see
+[the arena design](arena-design.md#configuration). Regional measurements remain
+separate.
 
 ## Reproduce the checks
 
@@ -199,12 +200,11 @@ Game objects, admissions or monthly work receipts. It does not measure
 production admission, credential load, participant sockets, rated Glicko work
 or provider alarm delivery.
 
-This distinction is required by the current allowance: 20 new game results
-per second for 15 minutes needs 18,000 games, exceeding the 10,000-game hard
-monthly maximum. The synthetic fixture isolates settlement throughput. It
-does not bypass or qualify that production admission limit.
+This distinction keeps the run small: 20 new game results per second for 15
+minutes needs 18,000 games. The synthetic fixture isolates settlement
+throughput. It does not qualify production admission.
 
-## Gates still open
+## Measurements still open
 
 - Public HTTP, account creation and password hashing under load, Turnstile,
   recovery email delivery, authentication limits and D1 contention.
@@ -219,5 +219,5 @@ does not bypass or qualify that production admission limit.
 - Measured cost per 1,000 games and per 10,000 spectator-hours, including auth,
   retries, storage and active-object duration, within the $100 monthly scope.
 
-Use these local results to plan the next bounded qualification. Do not raise
-public ceilings, open ranked play or advertise worldwide capacity from them.
+Use these local results to plan the next bounded qualification. Do not
+advertise worldwide capacity from them.

@@ -54,7 +54,7 @@ Pending optional analysis does not extend the seven-day review window.
 
 Closure and deletion are separate. Existing evidence keeps its ordinary 90-day
 expiry and any valid hold. Receipts and permitted case/audit metadata remain;
-permanent storage still grows and is subject to the documented admission ceiling.
+permanent storage still grows; platform storage bounds and the budget stop apply.
 
 ## Optional human review
 
@@ -172,27 +172,28 @@ ranked admission. If reviewed operation is proposed, first define the staffed
 case capacity, response window, corroboration standard and appeal coverage;
 this unattended evaluation supplies no review-capacity plan.
 
-## Competitive launch evidence still needed
+## Competitive evidence still needed
+
+Ranked opens with `RANKED_ENABLED=true` (owner decision, 2026-10-31). The
+launch path in [live-ready prep](live-ready-prep.md) covers live mail, cron and
+player flows. The rest is evidence to gather after opening.
 
 - Tested objective abuse controls, private report access, expiry, and recovery.
 - An accepted timeout policy, including the blocked-position limit of the material timeout rule.
-  Casual and unattended flags use that material rule (loss with mating material, otherwise draw).
-  Ranked proof games may wait up to 30 seconds for a private proof, then fall back to the same
-  rule, rated. Technical voids remain for unfinished tournament/arena wall-clock cases and for
-  an owner admin void of a still-pending proof game; they are not the ordinary timeout outcome.
+  Every mode, ranked included, uses that rule at the flag: a loss for the player who ran out
+  when the opponent has mating material, otherwise a draw. Technical voids remain for unfinished
+  tournament/arena wall-clock cases; they are not the ordinary timeout outcome.
 - Verified production retention and recovery under the published
   [privacy policy](privacy.md), including saved later-closure reapplication.
   Password-confirmed export and closure replace a staffed account-request
   promise; their bounded isolated drill is not production acceptance.
-- Measured queue, CPU, memory, storage, latency, and cost under the intended load.
+- Measured queue, CPU, memory, storage, latency, and cost under real load, after opening.
 - Live email, Turnstile, hostname, and deployed schedule checks.
 - If screening is enabled, approved Container resources, a reproducible public
   game and controlled-assistance evaluation, and an accepted uncertainty policy.
   Unknown labels cannot supply a measured false-positive rate.
 - If reviewed mode is enabled, staffed review, corroboration, notices, appeals,
   correction/reversal, and recovery acceptance checks.
-
-Do not open ranked admission by changing only `RANKED_ENABLED`.
 
 ## Objective request and protocol limits
 
@@ -281,8 +282,8 @@ permits at most two started games for an unordered pair in a rolling 24 hours.
 `authority.farming` in the private operations response includes the policy,
 checked and flagged totals, pattern counts, coverage, lookup limits, and at
 most 20 recent flagged game references. Account IDs and raw check records stay
-inside the Competition authority. The retained ranked-game ceiling bounds
-checks to 1,000 game rows. A normal check visits at most 4,000 candidate rows
+inside the Competition authority. A fixed guard of 1,000 retained check rows
+bounds checks. A normal check visits at most 4,000 candidate rows
 through indexed pair, account, and winner windows, and updates at most 1,000
 distinct check records. Each lookup returns at most 1,001 rows. Its extra row
 detects an unexpected breach of the retained bound, after which motif work

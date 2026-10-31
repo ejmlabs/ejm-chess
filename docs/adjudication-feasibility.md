@@ -1,5 +1,8 @@
 # Adjudication feasibility
 
+> Superseded 2026-10-31: the private proof adoption is retired. Ranked uses the
+> material timeout rule and opens with `RANKED_ENABLED=true`. This report is history.
+
 This report records completed feasibility work. The separate default-off
 [private native adoption](timeout-proofs.md) implements a stricter executable
 contract and has its own local/provider qualification gate. None of the probe

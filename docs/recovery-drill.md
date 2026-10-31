@@ -9,13 +9,13 @@ restart method. The separate `wrangler.recovery-drill.jsonc` entry point owns
 those methods on separate classes and resources.
 
 The capture and isolated restore guards recognize historical
-`online-2026-10-v2-unattended`, current `online-2026-10-v4-unattended` and additive `online-2026-10-v3-proof` policy
-metadata with the existing rating policy. Unknown policies still fail closed.
+`online-2026-10-v2-unattended` and current `online-2026-10-v4-unattended` policy
+metadata with the existing rating policy. Unknown policies, including the
+retired `online-2026-10-v3-proof`, fail closed.
 The authority fingerprint format and historical v2 evidence remain unchanged.
 An updated source with new tables needs its own capture and source approval.
-The isolated config rejects an enabled proof profile, a positive proof limit or
-a prover binding. Synthetic proof receipts are fixture data, not proof execution
-or qualification.
+The timeout-proof path was retired on 2026-10-31 and the isolated config no
+longer checks proof settings.
 
 Focused workerd tests protect capture, bounded inventory, access denial,
 manifest checks, later-work refusal and undo-before-restart. The guard tests use
@@ -130,10 +130,8 @@ protected synthetic fixture route can create drill work. Synthetic actors use
 invalid email addresses and real package-generated password hashes. Passwords,
 tokens and session values are never returned. The isolated Game/Competition
 adapters can exercise ranked settlement without opening a public ranked route.
-Ranked fixture setup writes two explicitly synthetic proof credits and the
-normal reservation metadata, then calls the normal Game initialization and
-account-seat guard. It makes no native solver call. These records exercise v3
-recovery only. The private adapter records that optional postgame analysis was
+Ranked fixture setup writes the normal reservation metadata, then calls the
+normal Game initialization and account-seat guard. The private adapter records that optional postgame analysis was
 omitted and drains only synthetic analysis outboxes, so the absence of an
 analysis binding cannot be mistaken for a completed analysis job.
 

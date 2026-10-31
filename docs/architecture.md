@@ -154,15 +154,9 @@ disconnect does not stop the clock. No process may infer a win from a positive
 displayed clock. This bounded online policy does not prove all possible mating
 paths, so a fully blocked position with no possible mate scores as a loss.
 
-New ranked games may use the separate default-off `online-2026-10-v3-proof`
-profile only after qualification. Competition holds four shared proof slots and
-reserves two finite native credits per permanent game before initialization.
-One private Container runs unchanged pinned CHA-Solver with independent
-complete-history/witness validation. Only an exact, timely supported proof can
-settle a pending v3 result. Unknown keeps the original 30-second deadline and
-then applies the same material timeout rule, which is rated; historical and unrated games retain their saved rules. There is no public proof
-API or engine-score substitute. See [timeout proofs](timeout-proofs.md) for the
-private contract, per-process limits, retention and unrun provider gates.
+Ranked games use this same material timeout rule at the flag, and the result
+is rated. The earlier private timeout-proof path was retired on 2026-10-31; see
+[timeout proofs](timeout-proofs.md) for its history.
 
 ## Accounts and active seats
 
@@ -278,9 +272,9 @@ ready player receives one event point for a no-show, without a played win.
 
 Alarms and the existing minute trigger recover pending work. Recovery creates
 only bounded current/next events, with a five-minute start grace after outages.
-It never replays every missed cadence. Caps are three active events, 256 retained
-events, no product cap on retained tournament payloads or permanent game IDs,
-and seven days of public event history. See [tournaments](tournaments.md).
+It never replays every missed cadence. No product cap limits active events,
+retained events, retained tournament payloads or permanent game IDs. Public
+event history lasts seven days. See [tournaments](tournaments.md).
 
 ### Unattended operation and retained records
 
@@ -317,7 +311,7 @@ the [qualification methods and evidence](local-qualification.md).
 `CASUAL_GAME_LIMIT` and `CASUAL_GAME_ID_LIMIT` have no product cap by default.
 Retirement and the Cloudflare budget stop bound growth. Retirement frees a payload
 slot, never an ID. Permanent
-records still grow, so reaching a journal ceiling closes admission. Local checks
+records still grow, and platform storage bounds still apply. Local checks
 do not establish unlimited unattended capacity. See [operations](operations.md).
 
 ### Matchmaking and ratings

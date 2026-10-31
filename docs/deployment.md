@@ -15,13 +15,14 @@ The protected canary at `https://chess.ejmlabs.com` runs Worker version
 It retains the redesign, 8-character password minimum, single account-form
 submit action, explicit Join and the material timeout rule. The
 [provider inventory](provider-inventory.md) retains earlier versions and source
-hashes. This section records that protected baseline. Final ranked and arena
-activation uses a separately checked release build with its own version
-readback; source changes and these instructions do not claim publication. The
-ordered Level 2 release sequence is in [live-ready prep](live-ready-prep.md).
+hashes. This section records that protected baseline. Ranked, arena and
+tournament activation uses a separately checked release build with its own
+version readback; source changes and these instructions do not claim
+publication. The ordered launch sequence is in [live-ready prep](live-ready-prep.md).
 
-D1 migrations `0001` through `0015` are applied remotely. They include bounded
-proof bookkeeping, account-closure fences and the signup-attempt counter.
+D1 migrations `0001` through `0015` are applied remotely. They include
+bookkeeping tables from the retired timeout-proof path (migrations are never
+rewritten), account-closure fences and the signup-attempt counter.
 Migration `0015_signup_budget.sql` passed on 2026-10-21 UTC after a native
 Time Travel bookmark was saved. On October 22, the owner enabled 10,000 signup
 attempts and games and 5,000 account emails per UTC month, with 100,000 lifetime
@@ -50,10 +51,9 @@ resources and alert policies are preserved.
 Production `wrangler.jsonc` now binds the dedicated D1 database, restricted
 email sender and canonical domain. Public access is protected during release
 checks. Queues and server-analysis Containers remain absent. The local
-placeholder is confined to `env.local`. The final release keeps the existing
-production D1, Game and Competition identities and adds a fresh private
-timeout-proof service, bound as `PROVER` through a cross-script Durable Object
-binding. Never attach an acceptance namespace to production.
+placeholder is confined to `env.local`. The launch release keeps the existing
+production D1, Game and Competition identities and adds no binding. Never
+attach an isolated drill or capacity namespace to production.
 
 The owner approved one $100 monthly chess target, with alerts and an emergency
 stop. Earlier per-service allocations no longer gate launch. Record the exact
@@ -74,7 +74,6 @@ recipient addresses, credentials, or unrelated resource names.
 | Worker and static assets | `ejm-chess`, built from this product and its declared public UI packages |
 | D1 | A dedicated `ejm-chess` database bound as `DB`; auth, replay, admissions, evidence, and budget records stay together in its checked-in schema |
 | SQLite Durable Objects | `Game` through `GAME`, and `Competition` through `COMPETITION`, created by the Worker's `v1` migration |
-| Private timeout proofs | `ejm-chess-timeout-proofs`, with a fresh `TimeoutProver` namespace, the same production `DB`, one qualified image instance, and no public route or aliases |
 | Custom domain | Only `chess.ejmlabs.com` in the approved `ejmlabs.com` zone |
 | Access | One full-host private canary policy and a separate owner policy covering the admin page and API |
 | Turnstile | A chess widget restricted to the canonical hostname, with server-side action checks |
@@ -154,7 +153,8 @@ to use explicit `--env local` and `--local`.
 
 Prepare a reviewable production configuration with the following initial
 values. Keep the reviewed CPU limit and any retained-storage, permanent-ID or
-queue limit the owner sets. Application monthly caps no longer exist.
+queue limit the owner sets. Application monthly caps and product limits no
+longer exist.
 
 ```jsonc
 "AUTH_BASE_URL": "https://chess.ejmlabs.com",
@@ -171,10 +171,9 @@ queue limit the owner sets. Application monthly caps no longer exist.
 Those values describe the initial stopped deployment. The recorded protected
 build has `NEW_WORK_STOPPED=false`, no application monthly caps,
 `AI_ENABLED=true` and scaled retirement, with ranked, tournaments and arenas
-closed. The Level 2 release enables ranked, arenas and browser Stockfish; its
-exact values are in [live-ready prep](live-ready-prep.md#level-2-production-values).
-`TOURNAMENTS_ENABLED` stays an owner choice there. Keep server analysis
-disabled. A stop preserves accepted games, clocks, result delivery, replay,
+closed. The launch release enables ranked, arenas, tournaments and browser
+Stockfish; its exact values are in [live-ready prep](live-ready-prep.md#production-values).
+Keep server analysis disabled. A stop preserves accepted games, clocks, result delivery, replay,
 receipts and scheduled recovery.
 
 Run the normal checks and finish the frontend build before the Worker dry run:
@@ -197,7 +196,7 @@ sending-domain status, Access policies, and notification permissions. If a
 chess resource already exists, establish its ownership and current data before
 reusing it. Keep all unrelated resources intact.
 
-Present the concrete configuration, resource list, caps, cost assumptions,
+Present the concrete configuration, resource list, cost assumptions,
 private canary protections, rollback choice, and remaining gates for the exact
 deployment approval. Run the remote steps below only within that scope.
 
@@ -368,10 +367,10 @@ the fixed fee allocation. A Save/Test notification alone is not proof of a
 real billing policy or automatic dollar stop. Delayed usage reporting, public
 traffic, subscriptions, storage, and accepted work can exceed the envelope.
 
-Keep public ranked admission, large arenas, analysis, shared project discovery,
-and release claims closed until their own documented gates pass. Remove the
-full-host canary restriction only under the approved release scope, retaining
-the owner protection on admin page/API paths. The order and checks are in
+Keep analysis, shared project discovery and release claims closed until their
+own documented checks pass. Ranked, arenas and tournaments open through the
+launch sequence. Remove the full-host canary restriction only under the approved
+release scope, retaining the owner protection on admin page/API paths. The order and checks are in
 [live-ready prep](live-ready-prep.md#sequence).
 
 ## Rollback and recovery
@@ -483,8 +482,9 @@ protected deployment. Command examples elsewhere are instructions, not evidence
 that each action ran. The approved recipient completed verification and password
 recovery; the budget callback destination and association passed their bounded
 test. The dated recovery and privacy reports record the extended isolated
-native restores, undo and one account's closure reapplication. The separate
-proof report records 31 native corpus/cold transport cases and partial usage.
+native restores, undo and one account's closure reapplication. The dated
+proof report for the retired timeout-proof path records 31 native corpus/cold
+transport cases and partial usage.
 Broad mail delivery, actual scheduled execution, a real billing threshold
 event, service-wide recovery acceptance, regional behavior and complete
 operating cost remain open.

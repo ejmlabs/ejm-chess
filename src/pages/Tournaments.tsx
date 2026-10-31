@@ -18,6 +18,8 @@ import type { TournamentList, TournamentView } from '../shared/tournaments';
 const date = new Intl.DateTimeFormat('en', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
 const title = (event: Pick<TournamentView, 'cadence' | 'pool'>) => `${event.cadence === 'hourly' ? 'Hourly' : event.cadence === 'daily' ? 'Daily' : 'Weekly'} ${event.pool === 'blitz' ? 'blitz' : 'rapid'}`;
 const status = (value: string) => value.replaceAll('-', ' ').replaceAll('_', ' ');
+// No product cap reports Number.MAX_SAFE_INTEGER; show only a real limit.
+const entrantCount = (entrants: number, max: number) => Number.isSafeInteger(max) && max < Number.MAX_SAFE_INTEGER ? `${entrants} / ${max}` : String(entrants);
 const active = (event: TournamentView) => ['starting', 'running', 'intermission'].includes(event.status);
 
 function timeLeft(deadline: number, now: number) {
@@ -217,7 +219,7 @@ function ArenaEvents({ me, accountReady, now }: { me: Me | null; accountReady: b
         : <AppFlow><Rule />{data.events.map(event => <div key={event.id}><AppFlow as="article">
           <AppGroup><AppHeading as="h3"><Button variant="link" aria-expanded={event.id === selectedId} onClick={() => select(event)}>{title(event)} arena</Button></AppHeading>
             <Text as="p"><time dateTime={new Date(event.startsAt).toISOString()}>{date.format(event.startsAt)}</time> · {FORMATS[event.pool].label}</Text>
-            <Text as="p" variant="muted">{status(event.status)} · {event.entrants} / {event.maxEntrants} registered
+            <Text as="p" variant="muted">{status(event.status)} · {entrantCount(event.entrants, event.maxEntrants)} registered
               {event.status === 'running' && <> · Pairing closes in {timeLeft(event.closesAt, now)}</>}
               {event.status === 'draining' && <> · {event.unresolvedGames} accepted games still resolving</>}
             </Text>
@@ -287,7 +289,7 @@ function ArenaEvents({ me, accountReady, now }: { me: Me | null; accountReady: b
       <p>Accepted games finish after pairing closes, with an 18-minute blitz or 40-minute rapid wall limit including readiness.
         Games unfinished at the wall limit become technical voids. Service delays can keep an event draining while accepted results recover.</p>
       <p>Games are unrated and do not affect the global leaderboard. Published standings may lag your private score.
-        The shown entrant limit is a configured admission cap; larger public capacity has not been verified.</p>
+        Arenas have no product entrant limit. Behavior under heavy load is still being measured.</p>
     </Prose></section>
   </AppFlow>;
 }

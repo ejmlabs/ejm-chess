@@ -92,8 +92,9 @@ Scheduled cleanup is bounded and can be delayed. Appeal and evidence holds apply
 | Raw synthetic drill files | Delete after acceptance within 30 days; retain sanitized reports and hashes |
 
 Proved eligible unrated Game payloads can retire after one hour. Permanent
-replay, IDs and audit remain. Ranked authority remains stored. Storage ceilings
-bound admission; retention does not imply unlimited service capacity.
+replay, IDs and audit remain. Ranked authority remains stored. Platform storage
+bounds and the budget stop limit admission; retention does not imply unlimited
+service capacity.
 
 Your account actions require your current session and password. Private case
 and operational access requires the verified owner account and Cloudflare

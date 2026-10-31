@@ -11,8 +11,8 @@ or establish a current result. See [source handoff](source-handoff.md) and the
 
 This document retains dated local and protected-host checks. Entries below are
 historical, not a live status page. The [deployment guide](deployment.md) and
-published [timeout-proof report](https://chess.ejmlabs.com/qualification/timeout-proofs.json)
-record release boundaries and proof measurements.
+[live-ready prep](live-ready-prep.md) record release boundaries. The timeout-proof
+path and its public status report were retired on 2026-10-31.
 
 The original implementation was checked locally. A later protected canonical
 preview is deployed; public play remains closed. Product source has not been
