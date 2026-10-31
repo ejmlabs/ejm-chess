@@ -4,7 +4,7 @@
 
 - [x] 1.1 Remove `&& npm run budget:guides` from `build` and delete the `budget` and `budget:guides` scripts in `package.json`, and verify `git grep -n "ejm-ssg budget"` finds nothing outside archived OpenSpec changes and `docs/provider-inventory.md`
 - [x] 1.2 Refresh `package-lock.json` with `npm install --ignore-scripts --no-audit --no-fund` against ejm-ui with `add-chess-board`, and verify the lock diff is limited to the `../ejm-ui/packages/*` entries
-- [ ] 1.3 Remove the `budget` option from `defineSite` in `src/site.tsx`, and verify `npm run typecheck` passes with no TS2353 error
+- [x] 1.3 Remove the `budget` option from `defineSite` in `src/site.tsx`, and verify `npm run typecheck` passes with no TS2353 error
 
 ## 2. Docs and guide page
 

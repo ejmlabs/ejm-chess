@@ -11,10 +11,9 @@ shared ejm-ui design, including account, replay and private review workflows.
 > remain closed. A clean checkout still needs the matching shared UI source and
 > reviewed private configuration:
 >
-> - The matching shared UI source, checked out as `../ejm-ui` (`@ejm/*` packages
->   are `file:` dependencies). It must provide `@ejm/ui/components/Chessboard` and
->   a `useSearch` export from `@ejm/ssg`; without them typecheck reports two
->   errors (`src/client/Board.tsx`, `src/pages/Play.tsx`) and the build fails.
+> - ejm-ui checked out as `../ejm-ui` at the revision pinned in
+>   [`.github/ui-source.json`](.github/ui-source.json) (`@ejm/*` packages are
+>   `file:` dependencies). See [local setup](#local-setup).
 > - The six private Worker configurations (`wrangler.jsonc`,
 >   `wrangler.capacity.jsonc`, `wrangler.proof-acceptance.jsonc`,
 >   `wrangler.proof-qualification.jsonc`, `wrangler.proof-service.jsonc`,
@@ -79,9 +78,9 @@ Known limits:
 
 Use Node 24. The repository declares public `@ejm/*` packages through portable
 sibling `file:../ejm-ui/packages/<package>` dependencies in the manifest and
-lockfile. Use the matching retained shared source described in the
-[source handoff](docs/source-handoff.md#shared-ui-dependency). A package version
-alone does not identify the unpublished owner changes this source consumed:
+lockfile. Check out [ejm-ui](https://github.com/ejmlabs/ejm-ui) beside this
+repository at the full commit in [`.github/ui-source.json`](.github/ui-source.json).
+A package version alone does not identify the source:
 
 ```text
 workspace/
@@ -89,17 +88,17 @@ workspace/
   ejm-chess/
 ```
 
-Install the sibling workspace with its lockfile, then this product:
+From this repository, install the pinned ejm-ui with its lockfile, then this product:
 
 ```sh
-cd ../ejm-ui
-npm ci
-cd ../ejm-chess
+git clone https://github.com/ejmlabs/ejm-ui.git ../ejm-ui
+git -C ../ejm-ui checkout --detach "$(node -p "require('./.github/ui-source.json').revision")"
+(cd ../ejm-ui && npm ci --ignore-scripts)
 npm ci
 ```
 
-If the shared token outputs are absent, run the token build in `ejm-ui` before
-building the product. Do not import private sibling source or copy shared components.
+Move the pin and regenerate `package-lock.json` in the same change. Do not import
+private sibling source or copy shared components.
 
 The private Wrangler configurations are excluded from this source handoff.
 Restore reviewed local bindings as described in the
@@ -160,8 +159,9 @@ recorded upstream URL. Keep the source and license files with any distribution.
 All pages, guides, game surfaces, fields, actions, tables, disclosures, and
 states compose public ejm-ui exports. Shared application recipes also own
 widths, spacing, forms, game columns and move lists. The product stylesheet
-only imports public UI styles. The public `ejmSite` build guard rejects local visual
-classes, inline styles and CSS rules. Native semantic HTML retains labels and
+only imports public UI styles. The `ejmlabs` preset from `@ejm/site/vite` rejects local visual
+classes, inline styles and CSS rules, and fails the build on a page that breaks the
+shared page rules. Native semantic HTML retains labels and
 validation inside those recipes.
 The kit owns maintained cm-chessboard rendering and input; chess owns legality,
 clock estimation, and authoritative commands. Static guides keep prose in HTML

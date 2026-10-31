@@ -38,19 +38,14 @@ workspace/
   ejm-chess/
 ```
 
-The matching retained `ejm-ui` source archive has SHA-256
-`544d5bd1fad6261600190c4b19a777a73b34906cbf9a4abc556a34fc178fa90c`
-and 1,085 files. Its recorded base HEAD is
-`7ac2b2d4e3540d0e216a5200b67770c5f6d30aeb`, with additional working-source
-changes. That commit or package version alone is not an exact source pin.
-The archive remains private pending its owner's source review and delivery.
-No shared implementation is vendored into this product.
-
-Restore that matching owner source beside this checkout, install its lockfile,
-and build required token outputs before installing or checking chess. Registry
-versions and integrity fields in the product lockfile are unchanged by the
-path rebinding. Fresh owner acceptance, installation, typecheck and build must
-establish compatibility before release; retention is not that evidence.
+The source is [ejmlabs/ejm-ui](https://github.com/ejmlabs/ejm-ui) at the full
+commit in [`.github/ui-source.json`](../.github/ui-source.json), as in ejm-cli
+and ejmlabs. A package version alone is not a source pin. Check out that commit
+beside this repository and install its lockfile before installing or checking
+chess (see [local setup](../README.md#local-setup)). Move the pin and the
+product lockfile in the same change, then run typecheck, tests and the build
+against the new revision. No shared implementation is vendored into this
+product.
 
 ## Configuration gap
 
@@ -76,9 +71,8 @@ deploy. The five specialty configs remain absent as private copies in this
 checkout. Non-secret templates live under [`config-examples/`](../config-examples/README.md);
 copy an example to the matching gitignored filename, then fill IDs from private
 records before capacity, proof-acceptance, proof-qualification, proof-service or
-recovery-drill commands. Matching shared UI source for chess contracts is the
-sibling `ejm-ui` branch `wip/preserve-all-20261025`; keep discovery publication
-behind an approved public opening. See [live-ready prep](live-ready-prep.md).
+recovery-drill commands. Keep discovery publication behind an approved public
+opening. See [live-ready prep](live-ready-prep.md).
 
 Worker tests read `wrangler.jsonc` in the local environment. Recovery tests also
 read `wrangler.recovery-drill.jsonc`. Worker dry-run packaging and preview need
