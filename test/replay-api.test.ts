@@ -91,7 +91,7 @@ async function proofGame() {
   await enableRanked(competition);
   await competition.joinQueue(first.actor, 'blitz');
   const queue = await competition.joinQueue(second.actor, 'blitz');
-  expect(['reserved', 'live']).toContain(queue.status);
+  if (queue.status !== 'reserved' && queue.status !== 'live') throw new Error('Expected a reserved ranked game.');
   const id = queue.gameId;
   const game = env.GAME.get(env.GAME.idFromName(id));
   await enableRanked(game);
