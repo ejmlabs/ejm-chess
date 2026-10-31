@@ -33,7 +33,6 @@ function App({ children }: { children: ReactNode }) {
 
 export default defineSite({
   ...siteDefaults('chess', { titleTemplate: '%s | chess', description: 'A clear board. A real opponent. Multiplayer chess by ejmlabs.' }),
-  budget: { js: 180, css: 20, fonts: 70, html: 30 },
   App,
   routes: [
     { path: '/', load: () => import('./pages/Home'), head: { title: 'Chess' } },

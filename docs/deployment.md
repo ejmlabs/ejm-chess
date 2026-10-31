@@ -196,8 +196,10 @@ npm run typecheck
 npm test
 npm run build
 npm run worker:check
-npm run budget
 ```
+
+`ejm-ui` removed the route size budget; load time is checked from the `ejm-ui`
+repository with `node scripts/perf.mjs <dist>` (see its `scripts/PERF.md`).
 
 Record the product/shared-owner revisions, any dirty-source patch, lockfiles,
 test results, route bytes, artifact hashes, and unrun gates. Inspect the built

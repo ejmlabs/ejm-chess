@@ -107,7 +107,6 @@ npm run typecheck
 npm test
 npm run build
 npm run worker:check
-npm run budget
 ```
 
 Inspect the generated public guides, navigation, metadata, piece credits, and

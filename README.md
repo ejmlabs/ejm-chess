@@ -13,9 +13,9 @@ shared ejm-ui design, including account, replay and private review workflows.
 > the matching shared UI source and reviewed private configuration:
 >
 > - The shared UI source, checked out as `../ejm-ui` (`@ejm/*` packages are
->   `file:` dependencies), on branch `codex/chess-public-contracts` at `d476d1c`
->   or later. That published commit provides `@ejm/ui/components/Chessboard` and
->   the `useSearch` export from `@ejm/ssg` that `src/pages/Play.tsx` needs.
+>   `file:` dependencies), on `main` at `5a88e6a` or later. That commit provides
+>   `@ejm/ui/components/Chessboard`, the `useSearch` export from `@ejm/ssg` that
+>   `src/pages/Play.tsx` needs, and the shared accessibility fixes.
 > - The private Worker configurations (`wrangler.jsonc`,
 >   `wrangler.recovery-drill.jsonc`), which are git-ignored. Worker tests, the
 >   Worker dry run and recovery tests cannot run without them. They also supply `PRODUCTION_RESOURCE_IDS`, the
@@ -72,8 +72,8 @@ Known limits:
 
 Use Node 24. The repository declares public `@ejm/*` packages through portable
 sibling `file:../ejm-ui/packages/<package>` dependencies in the manifest and
-lockfile. Check out `ejm-ui` branch `codex/chess-public-contracts` at `d476d1c`
-or later beside this repository; see the
+lockfile. Check out `ejm-ui` `main` at `5a88e6a` or later beside this
+repository; see the
 [source handoff](docs/source-handoff.md#shared-ui-dependency). A package version
 alone does not identify that commit:
 
@@ -118,7 +118,6 @@ npm run engine:check
 npm run engine:probe
 npm run build
 npm run worker:check
-npm run budget
 ```
 
 `npm test` runs the native workerd suite. Use

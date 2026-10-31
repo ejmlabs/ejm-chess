@@ -13,6 +13,7 @@ import { StateBlock } from '@ejm/ui/components/StateBlock';
 import { Page } from '@ejm/ui/layout/Band';
 import { SectionHead } from '@ejm/ui/layout/SectionHead';
 import { Text } from '@ejm/ui/layout/Text';
+import { VisuallyHidden } from '@ejm/ui/layout/SiteContent';
 import { api, RequestFailure, type Me, type PublicConfig } from '../client/api';
 import { accountPath, isPlayMode, type PlayMode } from '../client/accountPath';
 import Challenge from '../client/Challenge';
@@ -50,10 +51,10 @@ function Clock({ state, color, receivedAt, mine }: { state: GameSnapshot; color:
   const seconds = Math.ceil(remaining / 1000);
   const low = remaining < LOW_CLOCK_MS;
   return <>
-    <GameClock value={clockText(remaining)} running={running} low={low} role="timer"
+    <GameClock value={clockText(remaining)} running={running} low={low}
       label={`${sideName(color)} clock, ${Math.floor(seconds / 60)} minutes ${seconds % 60} seconds${running ? ', running' : ''}${low ? ', low time' : ''}`} />
     {/* The only clock announcement: once as a running clock falls under the limit, never per tick. */}
-    <span role="status" className="sr-only">{running && low ? `${mine ? 'Your' : 'Opponent'} clock is low.` : ''}</span>
+    <span role="status"><VisuallyHidden>{running && low ? `${mine ? 'Your' : 'Opponent'} clock is low.` : ''}</VisuallyHidden></span>
   </>;
 }
 
@@ -340,7 +341,7 @@ function PlaySession({ search }: { search: string }) {
       </AppGroup>}>
         <SectionHead purpose="application" as="h1" title={FORMATS[state.format].label}><Text as="p" variant="muted">{poolName(state.format)} · {kind} · {rating}</Text></SectionHead>
         <AppGroup>
-          <Text as="p" id="game-status" tabIndex={-1} role="status" aria-live="polite">{status}{active && <span className="sr-only"> {lastMoveText(state.moves)}</span>}{premove && <> Premove {premove.from} to {premove.to}. <Button variant="link" density="compact" onClick={() => setPremove(null)}>Cancel premove</Button></>}</Text>
+          <Text as="p" id="game-status" tabIndex={-1} role="status" aria-live="polite">{status}{active && <VisuallyHidden> {lastMoveText(state.moves)}</VisuallyHidden>}{premove && <> Premove {premove.from} to {premove.to}. <Button variant="link" density="compact" onClick={() => setPremove(null)}>Cancel premove</Button></>}</Text>
           {connection === 'replaced' && state.status !== 'finished' && <AppActions><Button onClick={() => { resume(); focusStatus(); }}>Use this tab</Button></AppActions>}
           {state.status === 'waiting' && <AppGroup>
             <AppActions><Button onClick={() => void run(async () => { await navigator.clipboard.writeText(inviteUrl); setMessage('Link copied.'); })}>Copy invitation link</Button></AppActions>

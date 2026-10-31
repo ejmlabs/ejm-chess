@@ -74,9 +74,8 @@ deploy. The specialty config remains absent as a private copy in this
 checkout. Non-secret templates live under [`config-examples/`](../config-examples/README.md);
 copy an example to the matching gitignored filename, then fill IDs from private
 records before recovery-drill commands. Matching shared UI source for chess contracts is the
-published `ejm-ui` branch `codex/chess-public-contracts` at `d476d1c` or later
-(PR #51, 2026-10-31); keep discovery publication behind an approved public
-opening. See [live-ready prep](live-ready-prep.md).
+`ejm-ui` `main` at `5a88e6a` or later (PRs #55 and #58, 2026-10-31); keep
+discovery publication behind an approved public opening. See [live-ready prep](live-ready-prep.md).
 
 Worker tests read `wrangler.jsonc` in the local environment. Recovery tests also
 read `wrangler.recovery-drill.jsonc`. Worker dry-run packaging and preview need
