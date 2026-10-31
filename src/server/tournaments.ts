@@ -147,7 +147,7 @@ export class TournamentControl {
     if (!this.enabled()) throw new ApiError(503, 'TOURNAMENTS_CLOSED', 'Scheduled tournaments are unavailable.');
     if (!await this.eligible(actor)) throw new ApiError(403, 'TOURNAMENT_INELIGIBLE', 'Tournaments require an eligible account.');
     if (!this.load(id)?.members.some(member => member.actor.id === actor.id) && !await newWorkAllowed(this.getEnv(), 'games')) {
-      throw new ApiError(503, 'NEW_GAMES_PAUSED', 'New games are paused at the monthly safety limit. Existing games will finish.');
+      throw new ApiError(503, 'NEW_GAMES_PAUSED', 'New games are paused. Existing games will finish.');
     }
     this.ensure();
     const event = this.ctx.storage.transactionSync(() => {
@@ -278,7 +278,7 @@ export class TournamentControl {
     }
     if (priorAdmissions !== event.admissionIds.length
       && !await reserveMonthlyWork(this.getEnv(), 'games', `tournament:${event.id}`, now, event.admissionIds.length)) {
-      this.cancel(this.load(id)!, 'New games are paused at the monthly safety limit.', now);
+      this.cancel(this.load(id)!, 'New games are paused. Existing games will finish.', now);
       return;
     }
     // SQLite needs a WHERE clause to parse INSERT ... SELECT ... ON CONFLICT.

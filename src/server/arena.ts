@@ -279,7 +279,7 @@ export class ArenaControl {
     if (!validActor) throw new ApiError(400, 'INVALID_ARENA_ACCOUNT', 'Use a valid player account.');
     const created = this.ensure();
     if (allowance.status === 'rejected') throw allowance.reason;
-    if (!allowance.value && !this.entry(id, actor.id)) throw new ApiError(503, 'NEW_GAMES_PAUSED', 'New games are paused at the monthly safety limit.');
+    if (!allowance.value && !this.entry(id, actor.id)) throw new ApiError(503, 'NEW_GAMES_PAUSED', 'New games are paused. Existing games will finish.');
     let changed = created, maintenance = created;
     try {
       this.ctx.storage.transactionSync(() => {
@@ -347,7 +347,7 @@ export class ArenaControl {
     if (!await competitiveSessionEligible(actor, env)) {
       throw new ApiError(403, 'ARENA_INELIGIBLE', 'Arenas require an eligible account.');
     }
-    if (!await newWorkAllowed(env, 'games')) throw new ApiError(503, 'NEW_GAMES_PAUSED', 'New games are paused at the monthly safety limit.');
+    if (!await newWorkAllowed(env, 'games')) throw new ApiError(503, 'NEW_GAMES_PAUSED', 'New games are paused. Existing games will finish.');
     this.ctx.storage.transactionSync(() => {
       if (this.bridge.closing(actor.id)) throw new ApiError(409, 'ACCOUNT_CLOSING', 'Account closure is pending. Try again shortly.');
       const now = Date.now();
@@ -529,7 +529,7 @@ export class ArenaControl {
     const env = this.getEnv();
     const limits = arenaLimits(env);
     if (!await reserveMonthlyWork(env, 'games', `arena:${intent.game_id}`, now)) {
-      this.cancelUncreated(intent, 'New games are paused at the monthly safety limit.', now); return;
+      this.cancelUncreated(intent, 'New games are paused. Existing games will finish.', now); return;
     }
     const admitted = await env.DB.prepare(`INSERT INTO tournament_game_admissions(game_id,tournament_id,created_at)
       SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM game_admission_counts WHERE kind='tournament'

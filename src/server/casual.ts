@@ -72,7 +72,7 @@ export class CasualControl {
         if (found) return { ok: true, snapshot: found, created: false };
         throw new ApiError(410, 'GAME_ARCHIVED', 'Open this game from your completed history.');
       }
-      if (!existing && !admitted && !await newWorkAllowed(env, 'games')) throw new ApiError(409, 'SEAT_UNAVAILABLE', 'New games are paused at the monthly safety limit.');
+      if (!existing && !admitted && !await newWorkAllowed(env, 'games')) throw new ApiError(409, 'SEAT_UNAVAILABLE', 'New games are paused. Existing games will finish.');
       if (!existing && !admitted && input.ai && !aiEnabled(env)) throw new ApiError(503, 'AI_UNAVAILABLE', 'Computer practice is unavailable. Try a casual invitation.');
       this.ctx.storage.transactionSync(() => {
         if (this.bridge.closing(actor.id)) throw new ApiError(409, 'ACCOUNT_CLOSING', 'Account closure is pending. Try again shortly.');
