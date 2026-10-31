@@ -1,21 +1,18 @@
 import type { Actor, GameResult, Pool } from '../shared/protocol';
 import type { ArenaMe, ArenaStatus, ArenaSummary } from '../shared/arenas';
 import type { TournamentCadence } from '../shared/tournaments';
-import { acquireTournamentAccount, acquireTournamentSeat, revalidateActor, competitiveAccountEligibility, competitiveSessionEligible } from './auth';
+import { acquireTournamentAccount, competitiveSessionEligible } from './auth';
 import { ARENA_POLICY, arenaLimits } from './arena-policy';
 import { ArenaProjection } from './arena-projection';
 import { newWorkAllowed, reserveMonthlyWork } from './budget';
 import { isolatedGameBudget } from './capacity-policy';
 import type { Env } from './env';
+import { assertNotClosing, gamePhase, NEW_GAMES_PAUSED, requireSession, seatPair, type EventBridge } from './events';
+import { CADENCE_POOL, CADENCES, GAME_WINDOW_MS, MINUTE, occurrences } from './schedule';
 import { ApiError } from './security';
 
-const MINUTE = 60_000;
-const DAY = 86_400_000;
-const SERIES = [
-  { cadence: 'hourly', pool: 'blitz', pairingMs: 60 * MINUTE },
-  { cadence: 'daily', pool: 'rapid', pairingMs: 120 * MINUTE },
-  { cadence: 'weekly', pool: 'rapid', pairingMs: 120 * MINUTE },
-] as const;
+/** Pairing stays open this long after the start. */
+const PAIRING_MS: Record<TournamentCadence, number> = { hourly: 60 * MINUTE, daily: 120 * MINUTE, weekly: 120 * MINUTE };
 
 type Event = {
   id: string; cadence: TournamentCadence; pool: Pool; starts_at: number; closes_at: number;
@@ -43,24 +40,9 @@ export interface ArenaReservation {
   whiteId: string; blackId: string; status: Intent['status'];
 }
 
-export interface ArenaBridge {
-  closing(userId: string): boolean;
-  busy(userId: string, eventId: string): boolean;
-  reserve(userId: string, eventId: string, pool: Pool): void;
-  releaseMember(userId: string, eventId: string): void;
-  rating(pool: Pool, userId: string): number;
+interface ArenaBridge extends EventBridge {
   /** Conservative count of non-arena Competition reservations and games. */
   otherGames(): number;
-  settle(result: GameResult): Promise<{ accepted: boolean; pending: boolean }>;
-}
-
-function occurrences(cadence: TournamentCadence, now: number): [number, number] {
-  if (cadence === 'hourly') { const start = Math.floor(now / (60 * MINUTE)) * 60 * MINUTE; return [start, start + 60 * MINUTE]; }
-  const date = new Date(now);
-  let start = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), cadence === 'daily' ? 18 : 16);
-  if (cadence === 'weekly') start -= date.getUTCDay() * DAY;
-  const interval = cadence === 'daily' ? DAY : 7 * DAY;
-  return start > now ? [start - interval, start] : [start, start + interval];
 }
 
 async function bounded<T>(rows: T[], concurrency: number, work: (row: T) => Promise<void>): Promise<void> {
@@ -186,13 +168,12 @@ export class ArenaControl {
     let created = false;
     const fixedStarts = isolatedGameBudget(this.getEnv())?.arenaStarts;
     this.ctx.storage.transactionSync(() => {
-      for (const series of SERIES) for (const startsAt of fixedStarts
-        ? [fixedStarts[series.cadence]] : occurrences(series.cadence, now)) {
-        if (startsAt + series.pairingMs <= now) continue;
-        const id = `arena-${series.cadence}-${startsAt}`;
+      for (const cadence of CADENCES) for (const startsAt of fixedStarts ? [fixedStarts[cadence]] : occurrences(cadence, now)) {
+        if (startsAt + PAIRING_MS[cadence] <= now) continue;
+        const id = `arena-${cadence}-${startsAt}`;
         if (this.event(id)) continue;
         this.ctx.storage.sql.exec(`INSERT INTO arena_events(id,cadence,pool,starts_at,closes_at,status,next_at)
-          VALUES(?,?,?,?,?,'scheduled',?)`, id, series.cadence, series.pool, startsAt, startsAt + series.pairingMs, Math.max(now, startsAt));
+          VALUES(?,?,?,?,?,'scheduled',?)`, id, cadence, CADENCE_POOL[cadence], startsAt, startsAt + PAIRING_MS[cadence], Math.max(now, startsAt));
         created = true;
       }
     });
@@ -200,7 +181,7 @@ export class ArenaControl {
   }
 
   async getMe(actor: Actor, id: string): Promise<ArenaMe | null> {
-    if (!await revalidateActor(actor, this.getEnv())) throw new ApiError(401, 'SIGN_IN_REQUIRED', 'Sign in again.');
+    await requireSession(actor, this.getEnv());
     return this.me(actor, id);
   }
 
@@ -208,15 +189,16 @@ export class ArenaControl {
     const event = this.event(id);
     if (!event || (event.finished_at !== null && event.finished_at < Date.now() - ARENA_POLICY.historyMs)) return null;
     const entry = this.entry(id, actor.id);
+    const gameStatus = entry?.game_id ? this.intent(entry.game_id)?.status : undefined;
     return { id, format: 'arena-v1', serverNow: Date.now(), status: event.status,
       registered: Boolean(entry && entry.state !== 'withdrawn'), state: entry?.state === 'claiming' ? 'reserving' : entry?.state ?? null,
-      gameId: entry?.game_id && this.intent(entry.game_id)?.status !== 'allocating' && this.intent(entry.game_id)?.status !== 'creating' ? entry.game_id : null,
+      gameId: entry?.game_id && gameStatus !== 'allocating' && gameStatus !== 'creating' ? entry.game_id : null,
       points: (entry?.points_half ?? 0) / 2, games: entry?.games ?? 0, queuedAt: entry?.queued_at ?? null, reason: entry?.reason ?? null };
   }
 
   /** No Game lookup or mutation, including while allocating or releasing. */
   async reservation(actor: Actor, id: string): Promise<ArenaReservation | null> {
-    if (!await revalidateActor(actor, this.getEnv())) throw new ApiError(401, 'SIGN_IN_REQUIRED', 'Sign in again.');
+    await requireSession(actor, this.getEnv());
     const entry = this.entry(id, actor.id);
     const intent = entry?.game_id ? this.intent(entry.game_id) : null;
     if (!intent) return null;
@@ -279,11 +261,11 @@ export class ArenaControl {
     if (!validActor) throw new ApiError(400, 'INVALID_ARENA_ACCOUNT', 'Use a valid player account.');
     const created = this.ensure();
     if (allowance.status === 'rejected') throw allowance.reason;
-    if (!allowance.value && !this.entry(id, actor.id)) throw new ApiError(503, 'NEW_GAMES_PAUSED', 'New games are paused. Existing games will finish.');
+    if (!allowance.value && !this.entry(id, actor.id)) throw new ApiError(503, 'NEW_GAMES_PAUSED', NEW_GAMES_PAUSED);
     let changed = created, maintenance = created;
     try {
       this.ctx.storage.transactionSync(() => {
-        if (this.bridge.closing(actor.id)) throw new ApiError(409, 'ACCOUNT_CLOSING', 'Account closure is pending. Try again shortly.');
+        assertNotClosing(this.bridge, actor.id);
         const now = Date.now();
         if (!Number.isFinite(actor.sessionExpiresAt) || actor.sessionExpiresAt <= now) {
           throw new ApiError(403, 'ARENA_INELIGIBLE', 'Arenas require an eligible account.');
@@ -325,7 +307,7 @@ export class ArenaControl {
   }
 
   async withdraw(actor: Actor, id: string): Promise<ArenaMe> {
-    if (!await revalidateActor(actor, this.getEnv())) throw new ApiError(401, 'SIGN_IN_REQUIRED', 'Sign in again.');
+    await requireSession(actor, this.getEnv());
     this.ctx.storage.transactionSync(() => {
       const event = this.event(id);
       if (!event) throw new ApiError(404, 'ARENA_NOT_FOUND', 'This arena was not found.');
@@ -347,9 +329,9 @@ export class ArenaControl {
     if (!await competitiveSessionEligible(actor, env)) {
       throw new ApiError(403, 'ARENA_INELIGIBLE', 'Arenas require an eligible account.');
     }
-    if (!await newWorkAllowed(env, 'games')) throw new ApiError(503, 'NEW_GAMES_PAUSED', 'New games are paused. Existing games will finish.');
+    if (!await newWorkAllowed(env, 'games')) throw new ApiError(503, 'NEW_GAMES_PAUSED', NEW_GAMES_PAUSED);
     this.ctx.storage.transactionSync(() => {
-      if (this.bridge.closing(actor.id)) throw new ApiError(409, 'ACCOUNT_CLOSING', 'Account closure is pending. Try again shortly.');
+      assertNotClosing(this.bridge, actor.id);
       const now = Date.now();
       const event = this.open(id, now);
       const entry = this.entry(id, actor.id);
@@ -369,7 +351,7 @@ export class ArenaControl {
   }
 
   async pause(actor: Actor, id: string): Promise<ArenaMe> {
-    if (!await revalidateActor(actor, this.getEnv())) throw new ApiError(401, 'SIGN_IN_REQUIRED', 'Sign in again.');
+    await requireSession(actor, this.getEnv());
     this.ctx.storage.transactionSync(() => {
       if (!this.event(id)) throw new ApiError(404, 'ARENA_NOT_FOUND', 'This arena was not found.');
       const entry = this.entry(id, actor.id);
@@ -512,7 +494,7 @@ export class ArenaControl {
       const gameId = crypto.randomUUID();
       sql.exec(`INSERT INTO arena_intents(game_id,event_id,reservation_id,white_id,black_id,white_actor,black_actor,status,created_at,deadline_at,next_at)
         VALUES(?,?,?,?,?,?,?,'allocating',?,?,?)`, gameId, id, crypto.randomUUID(), white.user_id, black.user_id,
-      white.actor, black.actor, now, now + (event.pool === 'blitz' ? 18 : 40) * MINUTE, now);
+      white.actor, black.actor, now, now + GAME_WINDOW_MS[event.pool], now);
       for (const [entry, delta, other] of [[white, 1, black.user_id], [black, -1, white.user_id]] as const) {
         sql.exec(`UPDATE arena_entries SET state='playing',game_id=?,queued_at=NULL,next_at=NULL,color_balance=color_balance+?,last_opponent=?,reason=NULL
           WHERE event_id=? AND user_id=? AND state='queued'`, gameId, delta, other, id, entry.user_id);
@@ -529,7 +511,7 @@ export class ArenaControl {
     const env = this.getEnv();
     const limits = arenaLimits(env);
     if (!await reserveMonthlyWork(env, 'games', `arena:${intent.game_id}`, now)) {
-      this.cancelUncreated(intent, 'New games are paused. Existing games will finish.', now); return;
+      this.cancelUncreated(intent, NEW_GAMES_PAUSED, now); return;
     }
     const admitted = await env.DB.prepare(`INSERT INTO tournament_game_admissions(game_id,tournament_id,created_at)
       SELECT ?,?,? WHERE EXISTS(SELECT 1 FROM game_admission_counts WHERE kind='tournament'
@@ -571,14 +553,8 @@ export class ArenaControl {
       if (!actual) {
         const white = JSON.parse(intent.white_actor) as Actor;
         const black = JSON.parse(intent.black_actor) as Actor;
-        const whiteEligible = (await competitiveAccountEligibility(env, white.id)).eligible;
-        const blackEligible = (await competitiveAccountEligibility(env, black.id)).eligible;
-        if (whiteEligible && blackEligible) {
-          if (!await acquireTournamentSeat(env, white.id, intent.game_id, event.id)
-            || !await acquireTournamentSeat(env, black.id, intent.game_id, event.id)) throw new Error('arena_seat_pending');
-        }
+        await seatPair(env, event.id, intent.game_id, white.id, black.id);
         if (!this.claimStart(Date.now())) throw new Error('game_start_rate');
-        // Game rechecks eligibility and chronological deadlines independently.
         await game.init({ id: intent.game_id, format: event.pool, rated: false, white, black, reservationId: intent.reservation_id,
           tournament: { id: event.id, format: 'arena-v1', round: 1, deadlineAt: intent.deadline_at } });
         actual = await game.status();
@@ -591,8 +567,7 @@ export class ArenaControl {
       this.ctx.storage.transactionSync(() => {
         const current = this.intent(intent.game_id);
         if (!current || ['finished', 'cancelled'].includes(current.status)) return;
-        const status = actual?.status === 'pending-adjudication' || actual?.status === 'finished' ? 'settling' : actual ? 'live' : 'creating';
-        this.ctx.storage.sql.exec('UPDATE arena_intents SET status=?,next_at=?,attempts=0,reason=NULL WHERE game_id=?', status,
+        this.ctx.storage.sql.exec('UPDATE arena_intents SET status=?,next_at=?,attempts=0,reason=NULL WHERE game_id=?', gamePhase(actual?.status),
           Math.min(now + 30_000, intent.deadline_at > now ? intent.deadline_at : now + 1_000), intent.game_id);
       });
     } catch {
@@ -709,6 +684,53 @@ export class ArenaControl {
       projectionBuilds: this.ctx.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM arena_projection_builds').one().count };
   }
 
+  private async advanceEntries(now: number): Promise<void> {
+    const work = this.ctx.storage.sql.exec<Entry>(`SELECT e.* FROM arena_entries e JOIN arena_events v ON v.id=e.event_id
+      WHERE (e.state IN ('claiming','releasing') AND e.next_at<=?) OR
+        (e.state='queued' AND (v.status NOT IN ('scheduled','running') OR v.closes_at<=? OR ?=0))
+      ORDER BY COALESCE(e.next_at,0),e.event_id,e.user_id LIMIT ?`, now, now, Number(this.enabled()), ARENA_POLICY.workBatch).toArray();
+    await bounded(work, ARENA_POLICY.externalConcurrency, async entry => {
+      try {
+        if (entry.state === 'claiming') await this.claim(entry, now);
+        else {
+          if (entry.state === 'queued') this.releaseEntry(entry, 'paused', 'Arena pairing has closed.', now);
+          await this.release(this.entry(entry.event_id, entry.user_id)!, now);
+        }
+      } catch { this.ctx.storage.sql.exec('UPDATE arena_entries SET next_at=? WHERE event_id=? AND user_id=?', now + 1_000, entry.event_id, entry.user_id); }
+    });
+  }
+
+  private async pairQueued(now: number): Promise<void> {
+    // Retained-entry byte accounting is needed only when a queued player is due.
+    const queued = this.enabled() && this.ctx.storage.sql.exec("SELECT 1 FROM arena_entries WHERE state='queued' AND next_at<=? LIMIT 1", now).toArray().length > 0;
+    let room = queued ? await this.storageRoom() : 0;
+    if (room <= 0) return;
+    const last = this.ctx.storage.sql.exec<{ value: string }>("SELECT value FROM arena_meta WHERE key='pair-cursor'").toArray()[0]?.value ?? '';
+    const events = this.ctx.storage.sql.exec<{ id: string }>(`SELECT id FROM arena_events WHERE status='running'
+      ORDER BY CASE WHEN id>? THEN 0 ELSE 1 END,id LIMIT ?`, last, ARENA_POLICY.workBatch).toArray();
+    let paired = 0;
+    for (let pass = 0; pass < ARENA_POLICY.pairBatch && room > 0 && paired < ARENA_POLICY.pairBatch; pass++) {
+      const before = paired;
+      for (const event of events) {
+        this.ctx.storage.sql.exec("INSERT INTO arena_meta(key,value) VALUES('pair-cursor',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", event.id);
+        if (this.pair(event.id, Date.now())) { paired++; room--; }
+        if (!room || paired >= ARENA_POLICY.pairBatch) break;
+      }
+      // No awaited work can add a queued player during this loop. Retry
+      // deferred anchors on the next maintenance alarm.
+      if (paired === before) break;
+    }
+  }
+
+  private async advanceIntents(now: number): Promise<void> {
+    const creating = this.ctx.storage.sql.exec<Intent>(`SELECT * FROM arena_intents WHERE status IN ('allocating','creating')
+      AND next_at<=? ORDER BY next_at,game_id LIMIT ?`, now, ARENA_POLICY.initBatch).toArray();
+    await bounded(creating, ARENA_POLICY.externalConcurrency, intent => this.reconcile(intent, now));
+    const recovering = this.ctx.storage.sql.exec<Intent>(`SELECT * FROM arena_intents WHERE status IN ('live','settling')
+      AND next_at<=? ORDER BY next_at,game_id LIMIT ?`, now, ARENA_POLICY.workBatch).toArray();
+    await bounded(recovering, ARENA_POLICY.externalConcurrency, intent => this.reconcile(intent, now));
+  }
+
   async maintenance(): Promise<void> {
     if (this.working) return;
     if (!this.enabled() && !this.ctx.storage.sql.exec('SELECT 1 FROM arena_events LIMIT 1').toArray().length
@@ -719,46 +741,10 @@ export class ArenaControl {
       await this.refreshLegacyGames();
       this.ensure(now);
       this.ctx.storage.transactionSync(() => this.lifecycle(now));
-      const entryWork = this.ctx.storage.sql.exec<Entry>(`SELECT e.* FROM arena_entries e JOIN arena_events v ON v.id=e.event_id
-        WHERE (e.state IN ('claiming','releasing') AND e.next_at<=?) OR
-          (e.state='queued' AND (v.status NOT IN ('scheduled','running') OR v.closes_at<=? OR ?=0))
-        ORDER BY COALESCE(e.next_at,0),e.event_id,e.user_id LIMIT ?`, now, now, Number(this.enabled()), ARENA_POLICY.workBatch).toArray();
-      await bounded(entryWork, ARENA_POLICY.externalConcurrency, async entry => {
-        try {
-          if (entry.state === 'claiming') await this.claim(entry, now);
-          else {
-            if (entry.state === 'queued') this.releaseEntry(entry, 'paused', 'Arena pairing has closed.', now);
-            await this.release(this.entry(entry.event_id, entry.user_id)!, now);
-          }
-        } catch { this.ctx.storage.sql.exec('UPDATE arena_entries SET next_at=? WHERE event_id=? AND user_id=?', now + 1_000, entry.event_id, entry.user_id); }
-      });
-      // Retained-entry byte accounting is needed only when a queued player is due.
-      const queued = this.enabled() && this.ctx.storage.sql.exec("SELECT 1 FROM arena_entries WHERE state='queued' AND next_at<=? LIMIT 1", now).toArray().length > 0;
-      let room = queued ? await this.storageRoom() : 0;
-      if (room > 0) {
-        const last = this.ctx.storage.sql.exec<{ value: string }>("SELECT value FROM arena_meta WHERE key='pair-cursor'").toArray()[0]?.value ?? '';
-        const events = this.ctx.storage.sql.exec<{ id: string }>(`SELECT id FROM arena_events WHERE status='running'
-          ORDER BY CASE WHEN id>? THEN 0 ELSE 1 END,id LIMIT ?`, last, ARENA_POLICY.workBatch).toArray();
-        let paired = 0;
-        for (let pass = 0; pass < ARENA_POLICY.pairBatch && room > 0 && paired < ARENA_POLICY.pairBatch; pass++) {
-          const before = paired;
-          for (const event of events) {
-            this.ctx.storage.sql.exec("INSERT INTO arena_meta(key,value) VALUES('pair-cursor',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", event.id);
-            if (this.pair(event.id, Date.now())) { paired++; room--; }
-            if (!room || paired >= ARENA_POLICY.pairBatch) break;
-          }
-          // No awaited work can add a queued player during this loop. Retry
-          // deferred anchors on the next maintenance alarm.
-          if (paired === before) break;
-        }
-      }
+      await this.advanceEntries(now);
+      await this.pairQueued(now);
       await this.ctx.storage.sync();
-      const creating = this.ctx.storage.sql.exec<Intent>(`SELECT * FROM arena_intents WHERE status IN ('allocating','creating')
-        AND next_at<=? ORDER BY next_at,game_id LIMIT ?`, now, ARENA_POLICY.initBatch).toArray();
-      await bounded(creating, ARENA_POLICY.externalConcurrency, intent => this.reconcile(intent, now));
-      const recovering = this.ctx.storage.sql.exec<Intent>(`SELECT * FROM arena_intents WHERE status IN ('live','settling')
-        AND next_at<=? ORDER BY next_at,game_id LIMIT ?`, now, ARENA_POLICY.workBatch).toArray();
-      await bounded(recovering, ARENA_POLICY.externalConcurrency, intent => this.reconcile(intent, now));
+      await this.advanceIntents(now);
       this.ctx.storage.transactionSync(() => this.lifecycle(now));
       await this.projection.advance(now);
       this.projection.cleanup();

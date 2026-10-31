@@ -2,12 +2,13 @@ import { env } from 'cloudflare:workers';
 import { createExecutionContext, runInDurableObject, waitOnExecutionContext } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import handler from '../src/server/index';
-import { currentActor } from '../src/server/auth';
+import { acquireSeatGuard, currentActor } from '../src/server/auth';
 import { STOCKFISH_BUILD } from '../src/shared/engine';
 import { GAME_HOT_RETENTION_MS } from '../src/server/game';
 import { retireGamePayloads } from '../src/server/maintenance';
 import type { Env } from '../src/server/env';
 import type { Actor, GameSnapshot, InitGame } from '../src/shared/protocol';
+import { player } from './authority-helpers';
 
 const origin = 'http://localhost:8787';
 let originalCompetitionEnv: Env | undefined;
@@ -272,5 +273,21 @@ describe('bounded game admission', () => {
     const canceled = await fetch(request('/api/queue/cancel', cookie, {}), bindings);
     expect(canceled.status).toBe(200);
     expect(await canceled.json()).toEqual({ status: 'idle' });
+  });
+
+  it('reuses retired casual payload capacity while retaining a separate permanent game ID ceiling', async () => {
+    const actor = await player();
+    const counts = await env.DB.prepare(`SELECT COUNT(*) AS total,SUM(CASE WHEN storage_state='retained' THEN 1 ELSE 0 END) AS retained
+      FROM casual_game_admissions`).first<{ total: number; retained: number | null }>();
+    const limited = { ...env, CASUAL_GAME_LIMIT: String((counts?.retained ?? 0) + 1), CASUAL_GAME_ID_LIMIT: String((counts?.total ?? 0) + 2) };
+    const first = crypto.randomUUID();
+    const second = crypto.randomUUID();
+    expect(await acquireSeatGuard(limited, actor, first)).toBe(true);
+    expect(await acquireSeatGuard(limited, actor, second)).toBe(false);
+    await env.DB.prepare("UPDATE casual_game_admissions SET storage_state='archived',archived_at=? WHERE game_id=?").bind(Date.now(), first).run();
+    expect(await acquireSeatGuard(limited, actor, second)).toBe(true);
+    await env.DB.prepare("UPDATE casual_game_admissions SET storage_state='archived',archived_at=? WHERE game_id=?").bind(Date.now(), second).run();
+    expect(await acquireSeatGuard(limited, actor, crypto.randomUUID())).toBe(false);
+    expect(await acquireSeatGuard({ ...limited, CASUAL_GAME_ID_LIMIT: '-1' }, actor, crypto.randomUUID())).toBe(false);
   });
 });

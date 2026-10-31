@@ -1,8 +1,9 @@
 import type { Env } from './env';
+import { HISTORY_MS, REGISTRATION_MS } from './schedule';
 
 export const ARENA_POLICY = {
-  version: 'arena-v1', registrationMs: 15 * 60_000,
-  historyMs: 7 * 86_400_000, candidateWindow: 64, pairBatch: 8, initBatch: 8,
+  version: 'arena-v1', registrationMs: REGISTRATION_MS,
+  historyMs: HISTORY_MS, candidateWindow: 64, pairBatch: 8, initBatch: 8,
   externalConcurrency: 4, workBatch: 32, pageRows: 32, pageBytes: 32 * 1024,
   snapshotIntervalMs: 10_000, startRate: 32, registrationRate: 50, registrationBurst: 100,
   registrationAuthConcurrency: 16, registrationConcurrency: 256,

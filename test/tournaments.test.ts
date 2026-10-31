@@ -164,6 +164,33 @@ describe('scheduled tournament authority', () => {
     for (const actor of actors.slice(2)) expect(await competition.queueStatus(actor)).toEqual({ status: 'idle' });
   });
 
+  it('keeps the cancellation reason when releasing a finished event must be retried', async () => {
+    const { startsAt, clock } = startClock();
+    const competition = await authority();
+    const { id, actors } = await enter(competition, 3, startsAt);
+    await env.DB.prepare("UPDATE account SET password=NULL WHERE userId=? AND providerId='credential'").bind(actors[0].id).run();
+    await runInDurableObject(competition, instance => {
+      const internal = instance as unknown as { env: Env };
+      const original = internal.env.DB;
+      let fail = true;
+      internal.env = { ...internal.env, DB: new Proxy(original, { get(target, property) {
+        if (property !== 'prepare') { const value = Reflect.get(target, property); return typeof value === 'function' ? value.bind(target) : value; }
+        return (sql: string) => {
+          if (!fail || !sql.includes('DELETE FROM tournament_account_locks WHERE tournament_id=?')) return original.prepare(sql);
+          fail = false;
+          throw new Error('Simulated D1 failure while releasing the event');
+        };
+      } }) };
+    });
+    clock.mockReturnValue(startsAt);
+    await competition.maintenance();
+    expect((await event(competition, id)).status).toBe('cancelled');
+    clock.mockReturnValue(startsAt + 31_000);
+    await competition.maintenance();
+    expect(await env.DB.prepare('SELECT COUNT(*) FROM tournament_account_locks WHERE tournament_id=?').bind(id).first('COUNT(*)')).toBe(0);
+    expect((await event(competition, id)).reason).toBe('Fewer than three eligible available players remained at the start.');
+  });
+
   it('recovers an account claim committed before a crash without treating its own reservation as busy', async () => {
     const { startsAt, clock } = startClock();
     let competition = await authority();
@@ -490,20 +517,4 @@ describe('scheduled tournament authority', () => {
     expect(await env.DB.prepare('SELECT COUNT(*) FROM tournament_game_admissions WHERE tournament_id=?').bind(id).first('COUNT(*)')).toBe(3);
     expect(await env.DB.prepare('SELECT COUNT(*) FROM tournament_account_locks WHERE tournament_id=?').bind(id).first('COUNT(*)')).toBe(3);
   });
-});
-
-it('reuses retired casual payload capacity while retaining a separate permanent game ID ceiling', async () => {
-  const actor = await player();
-  const counts = await env.DB.prepare(`SELECT COUNT(*) AS total,SUM(CASE WHEN storage_state='retained' THEN 1 ELSE 0 END) AS retained
-    FROM casual_game_admissions`).first<{ total: number; retained: number | null }>();
-  const limited = { ...env, CASUAL_GAME_LIMIT: String((counts?.retained ?? 0) + 1), CASUAL_GAME_ID_LIMIT: String((counts?.total ?? 0) + 2) };
-  const first = crypto.randomUUID();
-  const second = crypto.randomUUID();
-  expect(await acquireSeatGuard(limited, actor, first)).toBe(true);
-  expect(await acquireSeatGuard(limited, actor, second)).toBe(false);
-  await env.DB.prepare("UPDATE casual_game_admissions SET storage_state='archived',archived_at=? WHERE game_id=?").bind(Date.now(), first).run();
-  expect(await acquireSeatGuard(limited, actor, second)).toBe(true);
-  await env.DB.prepare("UPDATE casual_game_admissions SET storage_state='archived',archived_at=? WHERE game_id=?").bind(Date.now(), second).run();
-  expect(await acquireSeatGuard(limited, actor, crypto.randomUUID())).toBe(false);
-  expect(await acquireSeatGuard({ ...limited, CASUAL_GAME_ID_LIMIT: '-1' }, actor, crypto.randomUUID())).toBe(false);
 });

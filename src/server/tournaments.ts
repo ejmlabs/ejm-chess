@@ -1,24 +1,22 @@
 import { pair as roundRobin } from '@echecs/round-robin';
 import { Tournament, type Game as TournamentGame, type TournamentData } from '@echecs/tournament';
-import { acquireTournamentAccount, acquireTournamentSeat, revalidateActor, competitiveAccountEligibility } from './auth';
+import { acquireTournamentAccount, competitiveSessionEligible } from './auth';
 import { ApiError } from './security';
 import { newWorkAllowed, reserveMonthlyWork } from './budget';
 import type { Env } from './env';
+import { assertNotClosing, NEW_GAMES_PAUSED, requireSession, seatPair, type EventBridge } from './events';
+import { CADENCE_POOL, CADENCES, GAME_WINDOW_MS, HISTORY_MS, MINUTE, occurrences, REGISTRATION_MS } from './schedule';
 import type { Actor, GameResult, Pool } from '../shared/protocol';
 import type { TournamentCadence, TournamentList, TournamentPlayerStatus, TournamentView } from '../shared/tournaments';
 
-const MINUTE = 60_000;
-const DAY = 86_400_000;
 export const TOURNAMENT_LIMITS = {
-  minPlayers: 3, maxPlayers: 4, registrationMinutes: 15, historyDays: 7, rounds: 3, intermissionMs: MINUTE, startGraceMs: 5 * MINUTE,
+  minPlayers: 3, maxPlayers: 4, rounds: 3, intermissionMs: MINUTE, startGraceMs: 5 * MINUTE,
 } as const;
-const SERIES: readonly { cadence: TournamentCadence; pool: Pool; roundMs: number }[] = [
-  { cadence: 'hourly', pool: 'blitz', roundMs: 18 * MINUTE },
-  { cadence: 'daily', pool: 'rapid', roundMs: 40 * MINUTE },
-  { cadence: 'weekly', pool: 'rapid', roundMs: 40 * MINUTE },
-];
+const RECOVERY_RETRY_MS = 30_000;
+const registrationOpensAt = (startsAt: number) => startsAt - REGISTRATION_MS;
+const over = (event: Pick<Event, 'status'>) => event.status === 'finished' || event.status === 'cancelled';
 
-interface Member { actor: Actor; joinedAt: number; status: TournamentPlayerStatus; lock: 'pending' | 'held' | 'released' }
+interface Member { actor: Actor; status: TournamentPlayerStatus }
 interface Pairing {
   id: string; reservationId: string; round: number; deadlineAt: number; whiteId: string; blackId: string;
   status: 'creating' | 'ready' | 'active' | 'pending-adjudication' | 'finished';
@@ -33,27 +31,10 @@ interface Event {
   admissionIds: string[];
   firstRoundAt: number | null;
 }
-interface Bridge {
-  closing(userId: string): boolean;
-  busy(userId: string, tournamentId: string): boolean;
-  reserve(userId: string, tournamentId: string, pool: Pool): void;
-  releaseMember(userId: string, tournamentId: string): void;
+interface Bridge extends EventBridge {
   release(tournamentId: string): void;
-  rating(pool: Pool, userId: string): number;
-  settle(result: GameResult): Promise<{ accepted: boolean; pending: boolean }>;
-  canReserve?(games: number): boolean;
-  start?(): boolean;
-}
-
-/** Fixed UTC cadences use platform dates; delayed maintenance never enumerates missed periods. */
-function occurrences(cadence: TournamentCadence, now: number): [number, number] {
-  if (cadence === 'hourly') { const start = Math.floor(now / (60 * MINUTE)) * 60 * MINUTE; return [start, start + 60 * MINUTE]; }
-  const date = new Date(now);
-  let start = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), cadence === 'daily' ? 18 : 16);
-  if (cadence === 'weekly') start -= date.getUTCDay() * DAY;
-  const interval = cadence === 'daily' ? DAY : 7 * DAY;
-  if (start > now) return [start - interval, start];
-  return [start, start + interval];
+  canReserve(games: number): boolean;
+  start(): boolean;
 }
 
 export class TournamentControl {
@@ -83,12 +64,13 @@ export class TournamentControl {
   }
   private ensure(now = Date.now()): void {
     if (!this.enabled()) return;
-    for (const series of SERIES) {
-      for (const startsAt of occurrences(series.cadence, now)) {
+    for (const cadence of CADENCES) {
+      const pool = CADENCE_POOL[cadence];
+      for (const startsAt of occurrences(cadence, now)) {
         if (startsAt < now - TOURNAMENT_LIMITS.startGraceMs) continue;
-        const id = `${series.cadence}-${startsAt}`;
+        const id = `${cadence}-${startsAt}`;
         if (this.load(id)) continue;
-        this.save({ ...series, id, startsAt, status: 'scheduled', reason: null, round: 0, roundDeadlineAt: null,
+        this.save({ cadence, pool, roundMs: GAME_WINDOW_MS[pool], id, startsAt, status: 'scheduled', reason: null, round: 0, roundDeadlineAt: null,
           nextRoundAt: null, finishedAt: null, nextAt: startsAt, members: [], games: [], engine: null, admissionIds: [], firstRoundAt: null });
       }
     }
@@ -101,8 +83,8 @@ export class TournamentControl {
       name: names.get(row.player) ?? 'Player', rank: row.rank, points: row.score })).sort((a, b) => b.points - a.points || a.id.localeCompare(b.id)) : [];
     return {
       id: event.id, cadence: event.cadence, pool: event.pool, startsAt: event.startsAt,
-      registrationOpensAt: event.startsAt - TOURNAMENT_LIMITS.registrationMinutes * MINUTE,
-      status: event.status === 'scheduled' && now >= event.startsAt - TOURNAMENT_LIMITS.registrationMinutes * MINUTE && now < event.startsAt ? 'registering' : event.status,
+      registrationOpensAt: registrationOpensAt(event.startsAt),
+      status: event.status === 'scheduled' && now >= registrationOpensAt(event.startsAt) && now < event.startsAt ? 'registering' : event.status,
       reason: event.reason, rated: false, round: event.round, rounds: TOURNAMENT_LIMITS.rounds,
       roundDeadlineAt: event.roundDeadlineAt, nextRoundAt: event.nextRoundAt, finishedAt: event.finishedAt,
       maxPlayers: TOURNAMENT_LIMITS.maxPlayers,
@@ -122,11 +104,11 @@ export class TournamentControl {
     const rows = this.ctx.storage.sql.exec<{ value: string }>(`SELECT value FROM tournaments
       WHERE status NOT IN ('finished','cancelled') ORDER BY starts_at,id LIMIT 9`).toArray();
     const recent = this.ctx.storage.sql.exec<{ value: string }>(`SELECT value FROM tournaments
-      WHERE status IN ('finished','cancelled') AND starts_at>=? ORDER BY starts_at DESC,id LIMIT 12`, now - TOURNAMENT_LIMITS.historyDays * DAY).toArray();
+      WHERE status IN ('finished','cancelled') AND starts_at>=? ORDER BY starts_at DESC,id LIMIT 12`, now - HISTORY_MS).toArray();
     const result = { enabled: this.enabled(), serverNow: now,
       events: [...rows, ...recent].map(row => this.view(JSON.parse(row.value) as Event, actor, now)),
       limits: { minPlayers: TOURNAMENT_LIMITS.minPlayers, maxPlayers: TOURNAMENT_LIMITS.maxPlayers,
-        registrationMinutes: TOURNAMENT_LIMITS.registrationMinutes } };
+        registrationMinutes: REGISTRATION_MS / MINUTE } };
     await this.ctx.storage.sync();
     return result;
   }
@@ -135,34 +117,30 @@ export class TournamentControl {
     this.ensure();
     const event = this.load(id);
     await this.ctx.storage.sync();
-    if (!event || (['finished', 'cancelled'].includes(event.status) && event.startsAt < Date.now() - TOURNAMENT_LIMITS.historyDays * DAY)) return null;
+    if (!event || (over(event) && event.startsAt < Date.now() - HISTORY_MS)) return null;
     return this.view(event, actor);
-  }
-
-  private async eligible(actor: Actor): Promise<boolean> {
-    return await revalidateActor(actor, this.getEnv()) && (await competitiveAccountEligibility(this.getEnv(), actor.id)).eligible;
   }
 
   async register(actor: Actor, id: string): Promise<TournamentView> {
     if (!this.enabled()) throw new ApiError(503, 'TOURNAMENTS_CLOSED', 'Scheduled tournaments are unavailable.');
-    if (!await this.eligible(actor)) throw new ApiError(403, 'TOURNAMENT_INELIGIBLE', 'Tournaments require an eligible account.');
+    if (!await competitiveSessionEligible(actor, this.getEnv())) throw new ApiError(403, 'TOURNAMENT_INELIGIBLE', 'Tournaments require an eligible account.');
     if (!this.load(id)?.members.some(member => member.actor.id === actor.id) && !await newWorkAllowed(this.getEnv(), 'games')) {
-      throw new ApiError(503, 'NEW_GAMES_PAUSED', 'New games are paused. Existing games will finish.');
+      throw new ApiError(503, 'NEW_GAMES_PAUSED', NEW_GAMES_PAUSED);
     }
     this.ensure();
     const event = this.ctx.storage.transactionSync(() => {
-      if (this.bridge.closing(actor.id)) throw new ApiError(409, 'ACCOUNT_CLOSING', 'Account closure is pending. Try again shortly.');
+      assertNotClosing(this.bridge, actor.id);
       const value = this.load(id);
       const now = Date.now();
       if (!value) throw new ApiError(404, 'TOURNAMENT_NOT_FOUND', 'This tournament was not found.');
-      if (value.status !== 'scheduled' || now >= value.startsAt || now < value.startsAt - TOURNAMENT_LIMITS.registrationMinutes * MINUTE) {
+      if (value.status !== 'scheduled' || now >= value.startsAt || now < registrationOpensAt(value.startsAt)) {
         throw new ApiError(409, 'REGISTRATION_CLOSED', 'Registration opens 15 minutes before the start and closes at the start.');
       }
       const existing = value.members.find(item => item.actor.id === actor.id);
       if (existing) existing.actor = actor;
       else {
         if (value.members.length >= TOURNAMENT_LIMITS.maxPlayers) throw new ApiError(409, 'TOURNAMENT_FULL', 'This tournament is full.');
-        value.members.push({ actor, joinedAt: now, status: 'registered', lock: 'pending' });
+        value.members.push({ actor, status: 'registered' });
       }
       this.save(value);
       return value;
@@ -172,7 +150,7 @@ export class TournamentControl {
   }
 
   async withdraw(actor: Actor, id: string): Promise<TournamentView> {
-    if (!await revalidateActor(actor, this.getEnv())) throw new ApiError(401, 'SIGN_IN_REQUIRED', 'Sign in again.');
+    await requireSession(actor, this.getEnv());
     const event = this.ctx.storage.transactionSync(() => {
       const value = this.load(id);
       if (!value) throw new ApiError(404, 'TOURNAMENT_NOT_FOUND', 'This tournament was not found.');
@@ -189,9 +167,8 @@ export class TournamentControl {
     await this.getEnv().DB.prepare('DELETE FROM tournament_account_locks WHERE tournament_id=?').bind(event.id).run();
     this.ctx.storage.transactionSync(() => {
       const current = this.load(event.id);
-      if (!current || !['finished', 'cancelled'].includes(current.status)) return;
+      if (!current || !over(current)) return;
       this.bridge.release(event.id);
-      current.members.forEach(item => { item.lock = 'released'; });
       current.nextAt = null;
       this.save(current);
     });
@@ -200,6 +177,46 @@ export class TournamentControl {
   private cancel(event: Event, reason: string, now: number): void {
     event.status = 'cancelled'; event.reason = reason; event.finishedAt = now; event.nextAt = now;
     this.save(event);
+  }
+
+  private async admitted(id: string): Promise<number> {
+    return await this.getEnv().DB.prepare('SELECT COUNT(*) AS count FROM tournament_game_admissions WHERE tournament_id=?').bind(id).first<number>('count') ?? 0;
+  }
+
+  private mark(id: string, memberId: string, status: Member['status']): void {
+    const event = this.load(id)!;
+    const member = event.members.find(item => item.actor.id === memberId)!;
+    member.status = status;
+    this.save(event);
+  }
+
+  /** Each step commits before the next external call, so a restart resumes from the stored status. */
+  private async admit(id: string, memberId: string): Promise<void> {
+    const env = this.getEnv();
+    const event = this.load(id)!;
+    const member = event.members.find(item => item.actor.id === memberId)!;
+    if (member.status !== 'registered') return;
+    const dropLock = () => env.DB.prepare('DELETE FROM tournament_account_locks WHERE user_id=? AND tournament_id=?').bind(memberId, id).run();
+    if (!await competitiveSessionEligible(member.actor, env)) {
+      await dropLock();
+      this.mark(id, memberId, 'skipped-ineligible');
+      this.bridge.releaseMember(memberId, id);
+      return;
+    }
+    const busy = this.ctx.storage.transactionSync(() => {
+      const taken = this.bridge.busy(memberId, id);
+      if (taken) this.mark(id, memberId, 'skipped-busy');
+      else this.bridge.reserve(memberId, id, event.pool);
+      return taken;
+    });
+    if (busy) return;
+    await this.ctx.storage.sync();
+    const acquired = await acquireTournamentAccount(env, member.actor, id);
+    this.mark(id, memberId, acquired ? 'admitted' : 'skipped-busy');
+    if (!acquired) {
+      await dropLock();
+      this.bridge.releaseMember(memberId, id);
+    }
   }
 
   private async start(id: string, now: number): Promise<void> {
@@ -213,48 +230,17 @@ export class TournamentControl {
     }
     event = this.load(id)!;
     if (now - event.startsAt > TOURNAMENT_LIMITS.startGraceMs) {
-      const count = event.admissionIds.length && event.engine && event.firstRoundAt !== null
-        ? await this.getEnv().DB.prepare('SELECT COUNT(*) FROM tournament_game_admissions WHERE tournament_id=?').bind(event.id).first<number>('COUNT(*)') : 0;
+      // A first round time is stored only with the planned IDs. If D1 accepted them before the interruption,
+      // drain the original cutoff rather than abandoning retained IDs.
+      const accepted = event.firstRoundAt !== null && await this.admitted(id) === event.admissionIds.length;
       event = this.load(id)!;
-      if (count && count === event.admissionIds.length) {
-        // D1 accepted the event before the interruption. Drain its original cutoff rather than abandoning retained IDs.
+      if (accepted) {
         this.ctx.storage.transactionSync(() => this.startRound(event, event.firstRoundAt!));
         await this.ctx.storage.sync();
       } else this.cancel(event, 'The start could not recover within five minutes.', now);
       return;
     }
-    for (const memberId of event.members.map(item => item.actor.id)) {
-      event = this.load(id)!;
-      const member = event.members.find(item => item.actor.id === memberId)!;
-      if (member.status !== 'registered') continue;
-      const eligible = await this.eligible(member.actor);
-      event = this.load(id)!;
-      const checked = event.members.find(item => item.actor.id === memberId)!;
-      if (!eligible) {
-        await this.getEnv().DB.prepare('DELETE FROM tournament_account_locks WHERE user_id=? AND tournament_id=?').bind(memberId, event.id).run();
-        event = this.load(id)!;
-        const skipped = event.members.find(item => item.actor.id === memberId)!;
-        skipped.status = 'skipped-ineligible'; skipped.lock = 'released';
-        this.bridge.releaseMember(memberId, event.id); this.save(event); continue;
-      }
-      this.ctx.storage.transactionSync(() => {
-        if (this.bridge.busy(memberId, event.id)) { checked.status = 'skipped-busy'; checked.lock = 'released'; }
-        else this.bridge.reserve(memberId, event.id, event.pool);
-        this.save(event);
-      });
-      if (checked.status !== 'registered') continue;
-      await this.ctx.storage.sync();
-      const acquired = await acquireTournamentAccount(this.getEnv(), checked.actor, event.id);
-      event = this.load(id)!;
-      const current = event.members.find(item => item.actor.id === memberId)!;
-      current.status = acquired ? 'admitted' : 'skipped-busy';
-      current.lock = acquired ? 'held' : 'released';
-      this.save(event);
-      if (!acquired) {
-        await this.getEnv().DB.prepare('DELETE FROM tournament_account_locks WHERE user_id=? AND tournament_id=?').bind(memberId, event.id).run();
-        this.bridge.releaseMember(memberId, event.id);
-      }
-    }
+    for (const member of event.members) await this.admit(id, member.actor.id);
     event = this.load(id)!;
     const players = event.members.filter(item => item.status === 'admitted').map(item => ({ id: item.actor.id, points: 0, rank: 0,
       rating: this.bridge.rating(event.pool, item.actor.id) })).sort((a, b) => b.rating - a.rating || a.id.localeCompare(b.id));
@@ -270,15 +256,13 @@ export class TournamentControl {
       await this.ctx.storage.sync();
     }
     // Admit the full fixed event atomically before creating its first game. Stable IDs survive retries.
-    const priorAdmissions = await this.getEnv().DB.prepare('SELECT COUNT(*) AS count FROM tournament_game_admissions WHERE tournament_id=?')
-      .bind(event.id).first<number>('count');
-    if (priorAdmissions !== event.admissionIds.length && this.bridge.canReserve && !this.bridge.canReserve(event.admissionIds.length)) {
+    const planned = await this.admitted(id) === event.admissionIds.length;
+    if (!planned && !this.bridge.canReserve(event.admissionIds.length)) {
       this.cancel(this.load(id)!, 'The shared game admission limit was reached.', now);
       return;
     }
-    if (priorAdmissions !== event.admissionIds.length
-      && !await reserveMonthlyWork(this.getEnv(), 'games', `tournament:${event.id}`, now, event.admissionIds.length)) {
-      this.cancel(this.load(id)!, 'New games are paused. Existing games will finish.', now);
+    if (!planned && !await reserveMonthlyWork(this.getEnv(), 'games', `tournament:${event.id}`, now, event.admissionIds.length)) {
+      this.cancel(this.load(id)!, NEW_GAMES_PAUSED, now);
       return;
     }
     // SQLite needs a WHERE clause to parse INSERT ... SELECT ... ON CONFLICT.
@@ -315,17 +299,8 @@ export class TournamentControl {
       if (!admitted) throw new Error('tournament_admission_missing');
       const white = event.members.find(item => item.actor.id === pairing.whiteId)!.actor;
       const black = event.members.find(item => item.actor.id === pairing.blackId)!.actor;
-      const checks = await Promise.all([competitiveAccountEligibility(env, white.id), competitiveAccountEligibility(env, black.id)]);
-      if (checks.every(check => check.eligible)) {
-        const whiteSeat = await acquireTournamentSeat(env, white.id, pairing.id, event.id);
-        const blackSeat = await acquireTournamentSeat(env, black.id, pairing.id, event.id);
-        if (!whiteSeat || !blackSeat) {
-          const current = await Promise.all([competitiveAccountEligibility(env, white.id), competitiveAccountEligibility(env, black.id)]);
-          if (current.every(check => check.eligible)) throw new Error('tournament_seat_unavailable');
-        }
-      }
-      if (this.bridge.start && !this.bridge.start()) throw new Error('game_start_rate');
-      // Game independently rechecks eligibility and writes an immediate zero-score terminal record if revoked.
+      await seatPair(env, event.id, pairing.id, white.id, black.id);
+      if (!this.bridge.start()) throw new Error('game_start_rate');
       await game.init({ id: pairing.id, format: event.pool, rated: false, reservationId: pairing.reservationId,
         white, black, tournament: { id: event.id, round: pairing.round, deadlineAt: pairing.deadlineAt } });
       actual = await game.status();
@@ -385,6 +360,57 @@ export class TournamentControl {
     return this.ctx.storage.sql.exec<{ due: number | null }>('SELECT MIN(next_at) AS due FROM tournaments').one().due;
   }
 
+  /** One event's recovery steps. A failure only delays the next pass. */
+  private async advance(id: string, now: number): Promise<void> {
+    try {
+      let event = this.load(id)!;
+      if (event.status === 'scheduled' || event.status === 'starting') await this.start(id, now);
+      event = this.load(id)!;
+      if (event.status === 'intermission' && event.nextRoundAt! <= now) {
+        this.ctx.storage.transactionSync(() => this.startRound(event, now));
+        await this.ctx.storage.sync();
+      }
+      event = this.load(id)!;
+      if (event.status === 'running') await this.runRound(event, now);
+      event = this.load(id)!;
+      if (over(event)) await this.release(event);
+    } catch {
+      const event = this.load(id)!;
+      event.nextAt = now + RECOVERY_RETRY_MS;
+      // A finished or cancelled event keeps the reason players already see.
+      if (!over(event)) event.reason = 'Recovery is pending after a service interruption.';
+      this.save(event);
+    }
+  }
+
+  private async runRound(event: Event, now: number): Promise<void> {
+    for (const pairing of event.games.filter(item => item.round === event.round && item.status !== 'finished')) {
+      await this.initialize(event, pairing);
+      if (now >= event.roundDeadlineAt!) {
+        const game = this.getEnv().GAME.get(this.getEnv().GAME.idFromName(pairing.id));
+        await game.enforceTournamentDeadline(event.id, pairing.round);
+        const actual = await game.status();
+        if (actual?.result) await this.bridge.settle(actual.result);
+      }
+    }
+    const current = this.load(event.id)!;
+    if (current.status === 'running') { current.nextAt = now + RECOVERY_RETRY_MS; current.reason = null; this.save(current); }
+  }
+
+  /** Drop events past the history window once no retained Game payload refers to them. */
+  private async prune(now: number): Promise<void> {
+    const old = this.ctx.storage.sql.exec<{ id: string }>(`SELECT id FROM tournaments WHERE status IN ('finished','cancelled')
+      AND next_at IS NULL AND starts_at<? ORDER BY starts_at,id LIMIT 4`, now - HISTORY_MS).toArray();
+    for (const event of old) {
+      const retained = await this.getEnv().DB.prepare("SELECT 1 FROM tournament_game_admissions WHERE tournament_id=? AND storage_state='retained' LIMIT 1").bind(event.id).first();
+      if (retained) continue;
+      this.ctx.storage.transactionSync(() => {
+        this.ctx.storage.sql.exec('DELETE FROM tournament_games WHERE tournament_id=?', event.id);
+        this.ctx.storage.sql.exec('DELETE FROM tournaments WHERE id=?', event.id);
+      });
+    }
+  }
+
   async maintenance(): Promise<void> {
     if (this.working) return;
     this.working = true;
@@ -392,48 +418,8 @@ export class TournamentControl {
       const now = Date.now();
       this.ensure(now);
       const work = this.ctx.storage.sql.exec<{ id: string }>('SELECT id FROM tournaments WHERE next_at<=? ORDER BY next_at,id LIMIT 4', now).toArray();
-      for (const row of work) {
-        try {
-          let event = this.load(row.id)!;
-          if (event.status === 'scheduled' || event.status === 'starting') await this.start(event.id, now);
-          event = this.load(row.id)!;
-          if (event.status === 'intermission' && event.nextRoundAt! <= now) {
-            this.ctx.storage.transactionSync(() => this.startRound(event, now));
-            await this.ctx.storage.sync();
-          }
-          event = this.load(row.id)!;
-          if (event.status === 'running') {
-            for (const pairing of event.games.filter(item => item.round === event.round && item.status !== 'finished')) {
-              await this.initialize(event, pairing);
-              if (now >= event.roundDeadlineAt!) {
-                const game = this.getEnv().GAME.get(this.getEnv().GAME.idFromName(pairing.id));
-                await game.enforceTournamentDeadline(event.id, pairing.round);
-                const actual = await game.status();
-                if (actual?.result) await this.bridge.settle(actual.result);
-              }
-            }
-            event = this.load(row.id)!;
-            if (event.status === 'running') { event.nextAt = now + 30_000; event.reason = null; this.save(event); }
-          }
-          event = this.load(row.id)!;
-          if (event.status === 'finished' || event.status === 'cancelled') await this.release(event);
-        } catch {
-          const event = this.load(row.id)!;
-          event.nextAt = now + 30_000;
-          event.reason = 'Recovery is pending after a service interruption.';
-          this.save(event);
-        }
-      }
-      const old = this.ctx.storage.sql.exec<{ id: string }>(`SELECT id FROM tournaments WHERE status IN ('finished','cancelled')
-        AND next_at IS NULL AND starts_at<? ORDER BY starts_at,id LIMIT 4`, now - TOURNAMENT_LIMITS.historyDays * DAY).toArray();
-      for (const event of old) {
-        const retained = await this.getEnv().DB.prepare("SELECT 1 FROM tournament_game_admissions WHERE tournament_id=? AND storage_state='retained' LIMIT 1").bind(event.id).first();
-        if (retained) continue;
-        this.ctx.storage.transactionSync(() => {
-          this.ctx.storage.sql.exec('DELETE FROM tournament_games WHERE tournament_id=?', event.id);
-          this.ctx.storage.sql.exec('DELETE FROM tournaments WHERE id=?', event.id);
-        });
-      }
+      for (const row of work) await this.advance(row.id, now);
+      await this.prune(now);
       await this.ctx.storage.sync();
     } finally { this.working = false; }
   }

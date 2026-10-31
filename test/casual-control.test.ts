@@ -3,7 +3,7 @@ import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Competition } from '../src/server/competition';
 import type { Env } from '../src/server/env';
-import type { Game } from '../src/server/game';
+import { GAME_HOT_RETENTION_MS, type Game } from '../src/server/game';
 import type { Actor, InitGame } from '../src/shared/protocol';
 import { STOCKFISH_BUILD } from '../src/shared/engine';
 import { admitGameFixture, player } from './authority-helpers';
@@ -69,6 +69,24 @@ describe('Competition-owned casual admission', () => {
     const status = await competition.health();
     expect(status.casuals.unfinished).toBe(0);
     expect(await competition.createCasualGame(other, { id: crypto.randomUUID(), format: 'rapid' })).toMatchObject({ ok: true });
+  });
+
+  it('refuses to reopen a finished game whose payload was archived before D1 recorded the tombstone', async () => {
+    const competition = env.COMPETITION.get(env.COMPETITION.idFromName('global'));
+    const actor = await player();
+    const id = crypto.randomUUID();
+    const created = await competition.createCasualGame(actor, { id, format: 'blitz' });
+    expect(created).toMatchObject({ ok: true, created: true });
+    const game = env.GAME.get(env.GAME.idFromName(id));
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(created.ok ? created.snapshot.readinessDeadline! : 0);
+    const result = (await game.status())!.result!;
+    await game.flush();
+    await competition.flush();
+    clock.mockReturnValue(result.endedAt + GAME_HOT_RETENTION_MS);
+    await game.archive({ gameId: id, expectedVersion: result.version, terminalDigest: result.terminalDigest });
+    expect(await env.DB.prepare('SELECT storage_state FROM casual_game_admissions WHERE game_id=?').bind(id).first('storage_state')).toBe('retained');
+    expect(await competition.createCasualGame(actor, { id, format: 'blitz' }))
+      .toMatchObject({ ok: false, error: { status: 410, code: 'GAME_ARCHIVED' } });
   });
 
   it('recovers an accepted uninitialized game after restart and stops without changing its ID, reservation or deadline', async () => {

@@ -2,11 +2,13 @@ import type { Env } from './env';
 import { ADJUDICATION_WAIT_MS, GAME_HOT_RETENTION_MS } from './game';
 import { cleanupBudgetReceipts } from './budget';
 
-export const GAME_MAINTENANCE_BATCH = 4;
-export const GAME_MAINTENANCE_RETRY_MS = 300_000;
-export const GAME_RETIREMENT_SCALED_BATCH = 32;
-export const GAME_RETIREMENT_CONCURRENCY = 4;
-const RETIREMENT_TOKENS = 32_000;
+const GAME_MAINTENANCE_BATCH = 4;
+const GAME_MAINTENANCE_RETRY_MS = 300_000;
+const GAME_RETIREMENT_SCALED_BATCH = 32;
+const GAME_RETIREMENT_CONCURRENCY = 4;
+// The D1 bucket holds milli-tokens, so tokens per second is also milli-tokens per millisecond.
+const RETIREMENT_TOKENS_PER_SECOND = 32;
+const RETIREMENT_BURST_MILLI = 32_000;
 
 type Ledger = 'casual_game_admissions' | 'tournament_game_admissions';
 interface Candidate { ledger: Ledger; game_id: string; result_version: number; terminal_digest: string }
@@ -89,8 +91,8 @@ async function retirePreviewPayloads(env: Env, now: number): Promise<Maintenance
 
 async function takeScaledBudget(env: Env, now: number): Promise<boolean> {
   const row = await env.DB.prepare(`UPDATE game_retirement_budget
-    SET tokens_milli=MIN(32000,tokens_milli+MAX(0,?-refilled_at)*32)-1000,refilled_at=MAX(refilled_at,?)
-    WHERE id=1 AND MIN(32000,tokens_milli+MAX(0,?-refilled_at)*32)>=1000 RETURNING tokens_milli`)
+    SET tokens_milli=MIN(${RETIREMENT_BURST_MILLI},tokens_milli+MAX(0,?-refilled_at)*${RETIREMENT_TOKENS_PER_SECOND})-1000,refilled_at=MAX(refilled_at,?)
+    WHERE id=1 AND MIN(${RETIREMENT_BURST_MILLI},tokens_milli+MAX(0,?-refilled_at)*${RETIREMENT_TOKENS_PER_SECOND})>=1000 RETURNING tokens_milli`)
     .bind(now, now, now).first();
   return row !== null;
 }
@@ -135,14 +137,15 @@ export async function nextRetirementAt(env: Env, now = Date.now()): Promise<numb
   if (row.ready_at > now) return row.ready_at;
   const budget = await env.DB.prepare('SELECT tokens_milli,refilled_at FROM game_retirement_budget WHERE id=1').first<{ tokens_milli: number; refilled_at: number }>();
   if (!budget) throw new Error('retirement_budget_missing');
-  const tokens = Math.min(RETIREMENT_TOKENS, budget.tokens_milli + Math.max(0, now - budget.refilled_at) * 32);
-  return tokens >= 1_000 ? now + 1 : Math.max(now, budget.refilled_at) + Math.ceil((1_000 - tokens) / 32);
+  const tokens = Math.min(RETIREMENT_BURST_MILLI, budget.tokens_milli + Math.max(0, now - budget.refilled_at) * RETIREMENT_TOKENS_PER_SECOND);
+  return tokens >= 1_000 ? now + 1 : Math.max(now, budget.refilled_at) + Math.ceil((1_000 - tokens) / RETIREMENT_TOKENS_PER_SECOND);
 }
 
 export async function retirementStatus(env: Env) {
   const work = await env.DB.prepare('SELECT COUNT(*) AS pending,MIN(ready_at) AS oldestDue FROM game_retirement_work').first<{ pending: number; oldestDue: number | null }>();
   return { mode: retirementMode(env), ...work, batch: GAME_RETIREMENT_SCALED_BATCH,
-    concurrency: GAME_RETIREMENT_CONCURRENCY, tokensPerSecond: 32, tokenBurst: 32, hotRetentionMs: GAME_HOT_RETENTION_MS };
+    concurrency: GAME_RETIREMENT_CONCURRENCY, tokensPerSecond: RETIREMENT_TOKENS_PER_SECOND,
+    tokenBurst: RETIREMENT_BURST_MILLI / 1_000, hotRetentionMs: GAME_HOT_RETENTION_MS };
 }
 
 /** All expanded callers share the same coordinator, token bucket and alarm. */
