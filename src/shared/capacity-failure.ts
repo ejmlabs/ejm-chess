@@ -40,6 +40,16 @@ const PRIVATE_FAILURE_CODES = new Set([
   'capacity_workflow_intent_conflict', 'capacity_workflow_metrics_uncertain', 'capacity_workflow_plan_invalid',
   'capacity_workflow_plan_missing', 'capacity_workflow_profile_conflict', 'capacity_workflow_profile_invalid',
   'capacity_workflow_ticket_invalid', 'capacity_workflow_unresolved',
+  // Controller, ledger, fault and budget guards reach the Worker through the same RPC.
+  'capacity_budget_binding_invalid', 'capacity_budget_resource_changed', 'capacity_calendar_binding_invalid',
+  'capacity_charge_invalid', 'capacity_completion_invalid', 'capacity_conflict_fault_unproved',
+  'capacity_controller_bootstrap_exceeded', 'capacity_controller_envelope_exceeded', 'capacity_controller_reentrant',
+  'capacity_controller_stop_tail_exceeded', 'capacity_controller_unqualified', 'capacity_diagnostic_game_denied',
+  'capacity_fault_invalid', 'capacity_fault_result_missing', 'capacity_fixture_batch_invalid', 'capacity_game_invalid',
+  'capacity_ingress_invalid', 'capacity_intent_account_invalid', 'capacity_intent_binding_conflict',
+  'capacity_intent_ledger_fenced', 'capacity_intent_ledger_invalid', 'capacity_intent_not_reserved',
+  'capacity_intent_observation_invalid', 'capacity_permit_corrupt', 'capacity_stop_invalid',
+  'capacity_ticket_secret_invalid', 'capacity_work_invalid',
 ]);
 export const capacityPrivateFailureCode = (value: unknown): string | null =>
   typeof value === 'string' && PRIVATE_FAILURE_CODES.has(value) ? value : null;
@@ -49,8 +59,9 @@ const USAGE_FIELDS = ['doRowsRead', 'doRowsWritten', 'doStorageBytes', 'd1RowsRe
 const WORK_FIELDS = ['workerRequests', 'nativeDoRequests', 'workerCpuMs', 'doRowsWritten', 'doRowsRead',
   'd1RowsWritten', 'd1RowsRead', 'doStorageBytes', 'd1StorageBytes'] as const;
 const ERROR_NAMES = new Set(['Error', 'TypeError', 'RangeError', 'SyntaxError', 'AbortError', 'TimeoutError']);
-const CAUSE_CODES = ['D1_ERROR', 'D1_EXEC_ERROR', 'D1_TYPE_ERROR', 'D1_COLUMN_NOTFOUND',
-  'SQLITE_BUSY', 'SQLITE_LOCKED', 'SQLITE_ERROR', 'SQLITE_CONSTRAINT', 'SQLITE_FULL', 'SQLITE_IOERR'] as const;
+// The generic D1 code is last, so a message naming both keeps the specific cause.
+const CAUSE_CODES = ['SQLITE_BUSY', 'SQLITE_LOCKED', 'SQLITE_ERROR', 'SQLITE_CONSTRAINT', 'SQLITE_FULL', 'SQLITE_IOERR',
+  'D1_EXEC_ERROR', 'D1_TYPE_ERROR', 'D1_COLUMN_NOTFOUND', 'D1_ERROR'] as const;
 const PREFIX = 'capacity-native-failure:';
 const MAX_AUDIT_BYTES = 3072;
 type Usage = Record<typeof USAGE_FIELDS[number], number> & { uncertain: boolean };
@@ -100,7 +111,8 @@ export function capacityFailureFromError(error: unknown): CapacityFailureAudit |
 export function capacityNativeFailure(error: unknown,
   values: Pick<CapacityFailureAudit, 'kind' | 'stage' | 'index' | 'readBound' | 'usage' | 'envelope'>): Error {
   const prior = capacityFailureFromError(error);
-  if (prior) return new Error(PREFIX + JSON.stringify(prior));
+  // A nested native receipt keeps its root cause. Only its missing step is this call's.
+  if (prior) return new Error(PREFIX + JSON.stringify({ ...prior, index: prior.index ?? values.index }));
   const original = error instanceof Error ? error : null;
   const cause = original?.cause instanceof Error ? original.cause : original;
   const code = capacityPrivateFailureCode(original?.message) ?? 'capacity_run_unresolved';

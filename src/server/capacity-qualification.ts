@@ -178,14 +178,19 @@ export default {
       failed = true;
       ingress?.stop();
       try {
-        const ticket = await control.recoverCompetitionWorkflow();
-        if (ticket) {
-          const reply = await callCapacityWorkflow<CapacityShutdownReceipt>(env.COMPETITION, ticket, 'Competition.finishQualification');
-          if (!reply.workflowActual || reply.drained.pendingNative || reply.drained.alarm || reply.drained.sockets
-            || !await control.complete(ticket, reply.workflowActual, reply.drained)
-            || !await control.confirmShutdown(ticket, reply.value)) throw new Error('capacity_shutdown_unconfirmed');
-        }
-      } finally { await control.stop(); }
+        try {
+          const ticket = await control.recoverCompetitionWorkflow();
+          if (ticket) {
+            const reply = await callCapacityWorkflow<CapacityShutdownReceipt>(env.COMPETITION, ticket, 'Competition.finishQualification');
+            if (!reply.workflowActual || reply.drained.pendingNative || reply.drained.alarm || reply.drained.sockets
+              || !await control.complete(ticket, reply.workflowActual, reply.drained)
+              || !await control.confirmShutdown(ticket, reply.value)) throw new Error('capacity_shutdown_unconfirmed');
+          }
+        } finally { await control.stop(); }
+      } catch (error) {
+        // A native finish that throws still returns its receipt. The stop stays a failure.
+        return capacityFailureResponse(error);
+      }
       return Response.json(await control.status(), { headers: { 'Cache-Control': 'no-store' } });
     }
     if (blockers.length) return Response.json({ ready: false, armed: false, blockers }, { status: 503, headers: { 'Cache-Control': 'no-store' } });

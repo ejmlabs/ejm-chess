@@ -226,6 +226,32 @@ as the cause. The driver rejects malformed, regressing or over-60-second spans.
 These headers contain no cookies, account IDs or SQL and do not appear on the
 player API.
 
+### Failure receipts
+
+A failed private reply names its cause only with a fixed code from one shared
+allowlist in `X-Capacity-Failure`. Any other error reports
+`capacity_run_unresolved`, so an unknown cause is never guessed. A native event
+that throws before it finishes throws one bounded receipt through the existing
+RPC, and its reservation stays held. The Worker returns that receipt in
+`X-Capacity-Audit` on the HTTP 503, including an owner stop whose native
+shutdown throws. A nested native failure keeps its root cause. The receipt holds
+the fixed code, stage, object kind, step index, error class, one fixed cause code,
+the read bound and the event's counters. It holds no exception text, cookies,
+account or Game IDs, SQL or request data. It adds no storage and no provider
+logging.
+
+The driver keeps a receipt in its `request-failure` trace row only when the
+status is 503, the code equals the failure header, the header is at most 3,072
+characters, every field passes the same checks, and its index is that request's
+own step. Controls such as stop have none. It keeps at most 32 per run and
+counts them in the final transport totals. A malformed, oversized, unknown or
+mismatched receipt is dropped, and the status and fixed code remain. A lost
+reply or timeout returns no receipt and leaves the cause unknown. A 503 stays a
+failure or uncertainty in every case.
+
+Implemented and locally tested only. No provider run has produced a receipt, and
+none of these checks qualifies capacity.
+
 ### Local auth-placement diagnostic, 2026-10-22 UTC
 
 The unchanged setup and first 60 seconds of registration completed locally

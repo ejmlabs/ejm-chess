@@ -27,6 +27,7 @@ export const CAPACITY_DRIVER_LIMITS = Object.freeze({
   clockDriftMs: 50, sampleIntervalMs: 1_000, maximumTraceBytes: 512 * 1024 ** 2,
   maximumEncodedTraceBytes: 2 * 1024 ** 3,
   maximumResponseBytes: 64 * 1024, maximumCredentialsBytes: 16 * 1024 ** 2, maximumSeedBytes: 4 * 1024,
+  maximumFailureReceipts: 32,
 });
 export const CAPACITY_REGIONS = Object.freeze(['us-west', 'us-east', 'europe', 'asia-pacific', 'australia', 'south-america']);
 /** Changing this requires the reviewed frozen candidate and focused local safety. */
@@ -61,7 +62,15 @@ function capacityFailureCode(error) {
   return ['AbortError', 'TimeoutError', 'TypeError', 'SyntaxError'].includes(error?.name) ? error.name : 'unknown-error';
 }
 
-// Match the private entry's fixed codes. Ignore unknown or decorated headers.
+/**
+ * A receipt is kept only as the answer to this exact failed HTTP 503: same fixed
+ * code as the failure header and same step index. Anything else leaves the cause unknown.
+ */
+function matchingFailureReceipt(response, privateCode, index) {
+  const receipt = response.status === 503 && privateCode !== null
+    ? readCapacityFailureAudit(response.headers.get('X-Capacity-Audit')) : null;
+  return receipt?.code === privateCode && receipt.index === index ? receipt : null;
+}
 
 /** Approved relative workload. A dated candidate, complete qualification and all server gates are separate. */
 export const CAPACITY_DRIVER_TIMING = Object.freeze({
@@ -567,6 +576,7 @@ async function limitedJson(response) {
 export class CapacityTransport {
   #sockets = new Set();
   #requests = 0;
+  #receipts = 0;
   #competitionTicket = null;
   constructor({ origin, credentials, bindings, earliestArmAt, issueCloseAt, hardCloseAt, profile, fetcher = fetch,
     WebSocketClass = WebSocket, now = Date.now, record = async () => {} }) {
@@ -618,9 +628,7 @@ export class CapacityTransport {
         ...(nativeTiming ? { nativeTiming } : {}) };
       if (!response.ok) {
         privateCode = capacityPrivateFailureCode(response.headers.get('X-Capacity-Failure'));
-        nativeFailure = readCapacityFailureAudit(response.headers.get('X-Capacity-Audit'));
-        if (nativeFailure && (nativeFailure.code !== privateCode
-          || (step && nativeFailure.index !== job.index))) nativeFailure = null;
+        nativeFailure = matchingFailureReceipt(response, privateCode, step ? job.index : null);
         if (step?.action === 'register' && response.status === 429) {
           const reply = validateStepReply(job.index, await limitedJson(response));
           if (reply.accepted || reply.code !== 'ARENA_RETRY') throw new Error('capacity_response_invalid');
@@ -719,9 +727,11 @@ export class CapacityTransport {
       } };
     } catch (error) {
       if (step) this.bindings.uncertain(step);
+      const receipt = nativeFailure && this.#receipts < CAPACITY_DRIVER_LIMITS.maximumFailureReceipts ? nativeFailure : null;
+      if (receipt) this.#receipts++;
       await this.record({ type: 'request-failure', kind: job.kind, index: job.index ?? null,
         at: this.now(), code: capacityFailureCode(error), httpStatus, privateCode,
-        ...(nativeFailure ? { nativeFailure } : {}) });
+        ...(receipt ? { nativeFailure: receipt } : {}) });
       const failure = new Error('capacity_request_uncertain');
       if (!diagnostic(this) && step?.action === 'register' && job.index < CAPACITY_CORPUS.registrationBurst
         && httpStatus === null && privateCode === null
@@ -761,7 +771,7 @@ export class CapacityTransport {
   }
 
   close() { for (const socket of this.#sockets) socket.close(1000, 'fixed run stop'); }
-  get counts() { return { requests: this.#requests, openSockets: this.#sockets.size }; }
+  get counts() { return { requests: this.#requests, openSockets: this.#sockets.size, failureReceipts: this.#receipts }; }
 }
 
 export function capacityResourceSample(previous = null) {

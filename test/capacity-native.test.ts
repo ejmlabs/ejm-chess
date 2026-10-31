@@ -1041,4 +1041,51 @@ describe('private native capacity adapter', () => {
       expect(state.storage.sql.exec('SELECT 1 FROM game_state').toArray()).toEqual([]);
     });
   });
+
+  it('returns a sanitized receipt for every failure before native finish and keeps a workflow reservation', async () => {
+    const secret = 'private-fixture-secret';
+    const game = env.GAME.get(env.GAME.idFromName(crypto.randomUUID()));
+    await runInDurableObject(game, async (_instance, state) => {
+      const manifest = capacityFixtureManifest(), control = fixtureControl(manifest);
+      const begin = vi.spyOn(control, 'begin'), complete = vi.spyOn(control, 'complete');
+      const receipt = async (work: Promise<unknown>) => {
+        const error = await work.then(() => null, caught => caught as Error);
+        expect(error?.message).not.toContain(secret);
+        return capacityFailureFromError(error);
+      };
+      const plain = new CapacityNativeHost<Game>(state, fixtureEnv(), 'Game', manifest, control, { 'Game.status': probeEnvelope() });
+      const issuer = fixtureControl(manifest);
+      const plainTicket = () => fixtureTicket(issuer, `game:${state.id.name}`, 'Game.status');
+      expect(await receipt(plain.invoke(await plainTicket(), 'captureRecoveryPoint')))
+        .toMatchObject({ stage: 'native-envelope', code: 'capacity_native_envelope_missing', index: null });
+      expect(await receipt(plain.invoke({ ...await plainTicket(), generation: 2 }, 'status')))
+        .toMatchObject({ stage: 'native-ticket', code: 'capacity_native_ticket_invalid' });
+      vi.spyOn(state.storage, 'getAlarm').mockRejectedValueOnce(new Error(`D1_ERROR: ${secret}`));
+      expect(await receipt(plain.invoke(await plainTicket(), 'status')))
+        .toMatchObject({ stage: 'native-follow-on', code: 'capacity_run_unresolved', causeCode: 'D1_ERROR', usage: { uncertain: true } });
+      vi.spyOn(Game.prototype, 'status').mockRejectedValueOnce(new Error(`SQLITE_BUSY: ${secret}`));
+      expect(await receipt(plain.invoke(await plainTicket(), 'status')))
+        .toMatchObject({ stage: 'native-method', code: 'capacity_run_unresolved', causeCode: 'SQLITE_BUSY' });
+
+      const envelope = { ...probeEnvelope(), doStorageBytes: 1024 ** 2, d1StorageBytes: 512 * 1024 ** 2 };
+      const workflow = { maximumEvents: 4, maximumEventWork: envelope,
+        envelope: { ...envelope, nativeDoRequests: 4, doRowsRead: 400_000, doRowsWritten: 40_000,
+          d1RowsRead: 40_000, d1RowsWritten: 40_000 } };
+      const ticket = await new CapacityTicketCodec(env.AUTH_SECRET).dispatch({ runId: manifest.runId,
+        manifestDigest: manifest.digest, id: crypto.randomUUID(), objectKey: `game:${state.id.name}`,
+        generation: 1, operation: 'Game.workflow', mode: 'workflow' });
+      const create = () => new CapacityNativeHost<Game>(state, fixtureEnv(), 'Game', manifest, control,
+        { 'Game.status': envelope }, { Game: workflow, Competition: workflow });
+      vi.spyOn(Game.prototype, 'status').mockRejectedValueOnce(new Error(`SQLITE_BUSY: ${secret}`));
+      expect(await receipt(create().invoke(ticket, 'status')))
+        .toMatchObject({ stage: 'native-method', code: 'capacity_run_unresolved', causeCode: 'SQLITE_BUSY' });
+      const held = state.storage.sql.exec('SELECT events,unresolved,reserved,observed FROM capacity_wrapper_workflow WHERE id=1').one();
+      expect(held).toMatchObject({ events: 1, unresolved: 1 });
+      expect(await receipt(create().invoke(ticket, 'status')))
+        .toMatchObject({ stage: 'workflow-claim', code: 'capacity_workflow_unresolved' });
+      expect(state.storage.sql.exec('SELECT events,unresolved,reserved,observed FROM capacity_wrapper_workflow WHERE id=1').one()).toEqual(held);
+      expect(begin).not.toHaveBeenCalled();
+      expect(complete).not.toHaveBeenCalled();
+    });
+  });
 });

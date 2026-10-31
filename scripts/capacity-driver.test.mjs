@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createServer } from 'node:http';
 import { Chess } from 'chess.js';
+import { capacityNativeFailure } from '../src/shared/capacity-failure.ts';
 import { ARENA_POLICY } from '../src/server/arena-policy.ts';
 import WebSocket, { WebSocketServer } from 'ws';
 import { CAPACITY_BINDING_HEADER, CAPACITY_COMPETITION_HEADER, CAPACITY_CORPUS, CAPACITY_STEP_COUNT, capacityAccountId, capacityCommand, capacityEventId,
@@ -607,6 +608,75 @@ test('denied and uncertain HTTP replies release unread bodies without retrying',
     assert.equal(cancelled, true);
     assert.equal(calls, 1);
   }
+});
+
+const failureUsage = { doRowsRead: 3, doRowsWritten: 1, doStorageBytes: 4096, d1RowsRead: 5, d1RowsWritten: 0,
+  d1StorageBytes: 8192, d1Statements: 2, d1Retries: 0, d1RetryReadSurcharge: 0, unresolvedD1: 0, uncertain: true };
+const failureReceipt = (index, stage = 'native-follow-on') => {
+  const { message } = capacityNativeFailure(new Error('capacity_native_follow_on_unresolved',
+    { cause: new Error('SQLITE_BUSY: private-fixture-secret') }),
+  { kind: 'Competition', stage, index, readBound: 128, usage: failureUsage, envelope: null });
+  return message.slice(message.indexOf('{'));
+};
+const failureTransport = (fetcher, records) => new CapacityTransport({ origin: 'https://chess-capacity-test.ejmlabs.com',
+  credentials: { token: 'private-token-fixture', manifestDigest: 'a'.repeat(64),
+    accounts: [{ cookie: 'fixture=session', expiresAt: 4_000 }] },
+  bindings: new CapacityBindings(), issueCloseAt: 2_000, hardCloseAt: 3_000, now: () => 1_000,
+  record: async value => { records.push(value); }, fetcher });
+const failureReply = (status, code, receipt) => async () => new Response(null, { status, headers: {
+  ...(code ? { 'X-Capacity-Failure': code } : {}), ...(receipt ? { 'X-Capacity-Audit': receipt } : {}) } });
+
+test('a failed 503 keeps only its own validated receipt, and every reply stays a failure', async () => {
+  const index = capacityIntentStepIndex(0, 0), code = 'capacity_native_follow_on_unresolved', good = failureReceipt(index);
+  const secret = 'private-fixture-secret';
+  const tampered = change => JSON.stringify({ ...JSON.parse(good), ...change });
+  const cases = [
+    ['matching receipt', 503, code, good, true],
+    ['status is not 503', 500, code, good, false],
+    ['code differs from the failure header', 503, 'capacity_native_method_missing', good, false],
+    ['another step', 503, code, failureReceipt(index + 1), false],
+    ['unknown stage', 503, code, tampered({ stage: secret }), false],
+    ['unknown code', 503, code, tampered({ code: 'capacity_private_fixture_secret' }), false],
+    ['unknown field', 503, code, tampered({ extra: secret }), false],
+    ['negative count', 503, code, tampered({ readBound: -1 }), false],
+    // Headers trim outer spaces. Inner padding keeps the receipt valid JSON but too large.
+    ['oversized', 503, code, good.replace('"version"', '"version"' + ' '.repeat(4_096)), false],
+    ['malformed', 503, code, good.slice(0, -1), false],
+    ['no failure header', 503, null, good, false],
+  ];
+  for (const [name, status, header, receipt, kept] of cases) {
+    const records = [], transport = failureTransport(failureReply(status, header, receipt), records);
+    await assert.rejects(transport.issue({ kind: 'step', index, at: 1_000 }), /capacity_request_uncertain/, name);
+    assert.deepEqual(records, [{ type: 'request-failure', kind: 'step', index, at: 1_000, code: 'capacity_provider_uncertain',
+      httpStatus: status, privateCode: header, ...(kept ? { nativeFailure: JSON.parse(good) } : {}) }], name);
+    assert.equal(transport.counts.failureReceipts, kept ? 1 : 0, name);
+    assert.equal(JSON.stringify(records).includes(secret), false, name);
+  }
+  const records = [], lost = failureTransport(async () => { throw new DOMException(secret, 'TimeoutError'); }, records);
+  await assert.rejects(lost.issue({ kind: 'step', index, at: 1_000 }), /capacity_request_uncertain/);
+  assert.deepEqual(records, [{ type: 'request-failure', kind: 'step', index, at: 1_000, code: 'TimeoutError',
+    httpStatus: null, privateCode: null }]);
+});
+
+test('a shutdown receipt has no step, and only the first bounded receipts are kept', async () => {
+  const code = 'capacity_native_follow_on_unresolved', records = [];
+  const stop = failureTransport(failureReply(503, code, failureReceipt(null)), records);
+  await assert.rejects(stop.issue({ kind: 'stop' }), /capacity_request_uncertain/);
+  assert.deepEqual(records[0].nativeFailure, JSON.parse(failureReceipt(null)));
+  records.length = 0;
+  const mismatched = failureTransport(failureReply(503, code, failureReceipt(7)), records);
+  await assert.rejects(mismatched.issue({ kind: 'stop' }), /capacity_request_uncertain/);
+  assert.equal('nativeFailure' in records[0], false);
+  records.length = 0;
+  const bounded = failureTransport(failureReply(503, code, failureReceipt(null)), records);
+  for (let attempt = 0; attempt <= CAPACITY_DRIVER_LIMITS.maximumFailureReceipts; attempt++) {
+    await assert.rejects(bounded.issue({ kind: 'status' }), /capacity_request_uncertain/);
+  }
+  assert.equal(records.filter(row => row.nativeFailure).length, CAPACITY_DRIVER_LIMITS.maximumFailureReceipts);
+  assert.equal(records.length, CAPACITY_DRIVER_LIMITS.maximumFailureReceipts + 1);
+  assert.equal(records.at(-1).privateCode, code);
+  assert.equal('nativeFailure' in records.at(-1), false);
+  assert.equal(bounded.counts.failureReceipts, CAPACITY_DRIVER_LIMITS.maximumFailureReceipts);
 });
 
 test('trace stalls and saturation fail without replaying or bunching missed traffic', async () => {
