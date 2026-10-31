@@ -55,6 +55,7 @@ export interface AiOpponent {
 
 export type AiFailure = 'AI_UNAVAILABLE' | 'AI_MODEL_UNAVAILABLE' | 'AI_QUOTA' | 'AI_INVALID_MOVE' | 'AI_PROVIDER_FAILED';
 
+/** `pending-adjudication` and `timeout-needs-review` only describe games saved before a flag was resolved at once. */
 export type GameStatus = 'waiting' | 'ready' | 'active' | 'finished' | 'pending-adjudication';
 export type ResultReason = 'checkmate' | 'stalemate' | 'threefold-repetition' | 'fifty-move-rule'
   | 'insufficient-material' | 'resignation' | 'draw-agreement' | 'readiness-expired'

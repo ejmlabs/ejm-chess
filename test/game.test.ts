@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Chess } from 'chess.js';
 import { parseReplay } from '../src/client/replay';
 import { positionOutcome, timeoutOutcome } from '../src/server/adjudication';
+import { ADJUDICATION_WAIT_MS } from '../src/server/game';
 import { activeGame, admitGameFixture, player } from './authority-helpers';
 import type { GameCommand, GameResult, InitGame, ServerMessage } from '../src/shared/protocol';
 
@@ -198,6 +199,70 @@ describe('durable game authority', () => {
     expect(reply.snapshot.moves).toHaveLength(0);
   });
 
+  it('adds the increment after each move and starts the opponent clock when the move is accepted', async () => {
+    const { game, white, black, snapshot } = await activeGame();
+    const start = snapshot.startedAt!;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(start + 10_000);
+    const first = await game.command(white, { type: 'move', id: crypto.randomUUID(), expectedVersion: snapshot.version, from: 'e2', to: 'e4' });
+    expect(first.snapshot.clocks).toEqual({ w: 293_000, b: 300_000, running: 'b', deadline: start + 310_000 });
+    clock.mockReturnValue(start + 25_000);
+    const second = await game.command(black, { type: 'move', id: crypto.randomUUID(), expectedVersion: first.snapshot.version, from: 'e7', to: 'e5' });
+    expect(second.snapshot.clocks).toEqual({ w: 293_000, b: 288_000, running: 'w', deadline: start + 25_000 + 293_000 });
+  });
+
+  it('keeps one draw offer, lets only the opponent answer it, and clears it on a decline or a move', async () => {
+    const { game, white, black, snapshot } = await activeGame();
+    const send = (actor: typeof white, type: 'offer-draw' | 'accept-draw' | 'decline-draw', expectedVersion: number) =>
+      game.command(actor, { type, id: crypto.randomUUID(), expectedVersion });
+    const offered = await send(white, 'offer-draw', snapshot.version);
+    expect(offered.snapshot.drawOfferedBy).toBe('w');
+    for (const [actor, type, code] of [[white, 'offer-draw', 'draw_offer_pending'], [black, 'offer-draw', 'draw_offer_pending'],
+      [white, 'accept-draw', 'no_opponent_draw_offer'], [white, 'decline-draw', 'no_opponent_draw_offer']] as const) {
+      expect(await send(actor, type, offered.snapshot.version)).toMatchObject({ ok: false, code, snapshot: { drawOfferedBy: 'w', status: 'active' } });
+    }
+    const declined = await send(black, 'decline-draw', offered.snapshot.version);
+    expect(declined).toMatchObject({ ok: true, snapshot: { drawOfferedBy: null, status: 'active' } });
+    const again = await send(black, 'offer-draw', declined.snapshot.version);
+    const moved = await game.command(white, { type: 'move', id: crypto.randomUUID(), expectedVersion: again.snapshot.version, from: 'e2', to: 'e4' });
+    expect(moved).toMatchObject({ ok: true, snapshot: { drawOfferedBy: null, status: 'active' } });
+  });
+
+  it('requires the promotion piece and keeps it when the position is rebuilt', async () => {
+    const { game, white, snapshot } = await activeGame();
+    await runInDurableObject(game, (_instance, state) => {
+      const stored = JSON.parse(state.storage.sql.exec<{ value: string }>('SELECT value FROM game_state').one().value);
+      stored.initialFen = '4k3/P7/8/8/8/8/8/4K3 w - - 0 1';
+      state.storage.sql.exec('UPDATE game_state SET value=?', JSON.stringify(stored));
+    });
+    await evictDurableObject(game);
+    const move = { type: 'move' as const, expectedVersion: snapshot.version, from: 'a7', to: 'a8' };
+    expect(await game.command(white, { ...move, id: crypto.randomUUID() })).toMatchObject({ ok: false, code: 'illegal_move' });
+    const promoted = await game.command(white, { ...move, id: crypto.randomUUID(), promotion: 'n' });
+    expect(promoted.snapshot.moves).toMatchObject([{ from: 'a7', to: 'a8', promotion: 'n', san: 'a8=N', by: 'w' }]);
+    await evictDurableObject(game);
+    expect((await game.snapshot(white)).fen).toBe(promoted.snapshot.fen);
+    expect(promoted.snapshot.fen.startsWith('N3k3/')).toBe(true);
+  });
+
+  it('ends a tournament game at its own flag when that comes before the round cutoff', async () => {
+    const [white, black] = await Promise.all([player(), player()]);
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
+    const id = crypto.randomUUID();
+    const game = env.GAME.get(env.GAME.idFromName(id));
+    await runInDurableObject(game, async (instance, state) => {
+      (instance as unknown as { schedule(): Promise<void> }).schedule = async () => {};
+      await state.storage.deleteAlarm();
+    });
+    const tournament = { id: 'hourly:blitz:flag-first', round: 1, deadlineAt: now + 900_000 };
+    const initial = await game.init({ id, white, black, rated: false, format: 'blitz', reservationId: `event:${id}`, tournament });
+    const first = await game.command(white, { type: 'ready', id: crypto.randomUUID(), expectedVersion: initial.version });
+    const active = await game.command(black, { type: 'ready', id: crypto.randomUUID(), expectedVersion: first.snapshot.version });
+    clock.mockReturnValue(active.snapshot.clocks.deadline!);
+    expect(await game.enforceTournamentDeadline(tournament.id, 1)).toMatchObject({ status: 'finished',
+      endedAt: active.snapshot.clocks.deadline, outcome: { winner: 'b', score: 0, reason: 'timeout-win' } });
+  });
+
   it('restores repetition history after eviction', async () => {
     const { game, white, black, snapshot } = await activeGame();
     let version = snapshot.version;
@@ -288,6 +353,67 @@ describe('durable game authority', () => {
     const closed = new Promise<number>(resolve => socket.addEventListener('close', event => resolve(event.code), { once: true }));
     await runInDurableObject(game, (instance, state) => instance.webSocketClose(state.getWebSockets()[0], 1006, 'x'.repeat(500)));
     expect(await closed).toBe(1000);
+  });
+});
+
+/** Rewrites an active game into the state a flag left before timeouts were resolved at the flag. */
+async function pendingAdjudicationGame() {
+  const setup = await activeGame();
+  const flaggedAt = setup.snapshot.clocks.deadline!;
+  await env.DB.batch([setup.white, setup.black].map(actor => env.DB.prepare('INSERT INTO active_game_seats(user_id,game_id,acquired_at) VALUES(?,?,?)')
+    .bind(actor.id, setup.snapshot.id, Date.now())));
+  await runInDurableObject(setup.game, (instance, state) => {
+    const stored = JSON.parse(state.storage.sql.exec<{ value: string }>('SELECT value FROM game_state').one().value);
+    Object.assign(stored, { status: 'pending-adjudication', version: stored.version + 1, deadline: null, endedAt: flaggedAt,
+      outcome: { winner: null, score: null, reason: 'timeout-needs-review' }, remaining: { ...stored.remaining, w: 0 } });
+    state.storage.sql.exec('UPDATE game_state SET value=?', JSON.stringify(stored));
+    const result = (instance as unknown as { result(saved: unknown): GameResult }).result(stored);
+    state.storage.sql.exec('INSERT INTO result_delivery(id,value) VALUES(1,?)', JSON.stringify({ result, attempts: 0, nextAttemptAt: flaggedAt }));
+  });
+  return { ...setup, flaggedAt };
+}
+
+const openSeats = (id: string) => env.DB.prepare('SELECT COUNT(*) AS count FROM active_game_seats WHERE game_id=? AND released_at IS NULL')
+  .bind(id).first('count');
+
+describe('games saved with a pending adjudication', () => {
+  it('rejects commands, holds the seats and settles once under the material rule when the wait ends', async () => {
+    const { game, black, snapshot, flaggedAt } = await pendingAdjudicationGame();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(flaggedAt + 1_000);
+    expect(await game.status()).toMatchObject({ status: 'pending-adjudication', version: snapshot.version + 1,
+      result: { status: 'pending-adjudication', outcome: { reason: 'timeout-needs-review' } } });
+    expect(await game.command(black, { type: 'resign', id: crypto.randomUUID(), expectedVersion: snapshot.version + 1 }))
+      .toMatchObject({ ok: false, code: 'game_over', snapshot: { status: 'pending-adjudication' } });
+    await game.flush();
+    expect(await openSeats(snapshot.id)).toBe(2);
+    expect(await runInDurableObject(game, (_instance, state) => state.storage.getAlarm())).toBe(flaggedAt + ADJUDICATION_WAIT_MS);
+    clock.mockReturnValue(flaggedAt + ADJUDICATION_WAIT_MS);
+    const final = await game.status();
+    expect(final).toMatchObject({ status: 'finished', version: snapshot.version + 2,
+      result: { endedAt: flaggedAt + ADJUDICATION_WAIT_MS, outcome: { winner: 'b', score: 0, reason: 'timeout-win', decisionId: expect.stringContaining(snapshot.id) } } });
+    await game.flush();
+    await env.COMPETITION.get(env.COMPETITION.idFromName('global')).flush();
+    expect(await openSeats(snapshot.id)).toBe(0);
+    expect(await env.DB.prepare('SELECT status,reason,score FROM games WHERE id=?').bind(snapshot.id).first())
+      .toEqual({ status: 'finished', reason: 'timeout-win', score: 0 });
+    expect((await game.status())!.result).toEqual(final!.result);
+  });
+
+  it('voids once by an owner decision and refuses a game that is not pending', async () => {
+    const { game, white, snapshot, flaggedAt } = await pendingAdjudicationGame();
+    vi.spyOn(Date, 'now').mockReturnValue(flaggedAt + 1_000);
+    const voided = await game.technicalVoid('owner-decision-1');
+    expect(voided).toMatchObject({ status: 'finished', version: snapshot.version + 2,
+      outcome: { winner: null, score: null, reason: 'technical-void', decisionId: 'owner-decision-1' } });
+    expect(await game.technicalVoid('owner-decision-1')).toMatchObject({ version: voided.version, outcome: voided.outcome });
+    const refused = (decisionId: string, stub = game) => runInDurableObject(stub, async instance => {
+      try { await instance.technicalVoid(decisionId); return null; } catch (error) { return (error as Error).message; }
+    });
+    expect(await refused('owner-decision-2')).toBe('not_pending_adjudication');
+    expect(await refused('bad id')).toBe('invalid_decision');
+    const active = await activeGame();
+    expect(await refused('owner-decision-1', active.game)).toBe('not_pending_adjudication');
+    expect((await game.snapshot(white)).outcome).toEqual(voided.outcome);
   });
 });
 
