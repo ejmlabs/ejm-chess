@@ -38,14 +38,31 @@ workspace/
   ejm-chess/
 ```
 
-The source is [ejmlabs/ejm-ui](https://github.com/ejmlabs/ejm-ui) at the full
-commit in [`.github/ui-source.json`](../.github/ui-source.json), as in ejm-cli
-and ejmlabs. A package version alone is not a source pin. Check out that commit
-beside this repository and install its lockfile before installing or checking
-chess (see [local setup](../README.md#local-setup)). Move the pin and the
-product lockfile in the same change, then run typecheck, tests and the build
-against the new revision. No shared implementation is vendored into this
+The shared source is the public `ejmlabs/ejm-ui` revision recorded in
+[`.github/ui-source.json`](../.github/ui-source.json), the pin file the other
+consumers use. It is `56301e39a8a78356851259fd50571f1551bc1cbf`, the ejm-ui
+`main` commit that merged [ejm-ui PR #59](https://github.com/ejmlabs/ejm-ui/pull/59)
+(the systemic kit), which includes the public `@ejm/ui/components/Chessboard`
+leaf and `useSearch` from `@ejm/ssg`. A pin selects
+source. It does not publish a package or prove compatibility; the install,
+typecheck and build below do. No shared implementation is vendored into this
 product.
+
+Check out the pinned revision beside this checkout, install its lockfile, then
+install chess:
+
+```sh
+git -C ../ejm-ui checkout <revision from .github/ui-source.json>
+npm --prefix ../ejm-ui ci --ignore-scripts
+npm ci --ignore-scripts
+```
+
+The linked packages resolve their own dependencies from the `ejm-ui` install, so
+the chess build fails until that install exists. `@ejm/ui` carries Tailwind, the
+React plugin and the single React copy through `ejmlabs()` in `vite.config.ts`,
+so this product lists none of `@tailwindcss/vite`, `@vitejs/plugin-react` or
+`tailwindcss`. Its `tsconfig.json` extends `@ejm/ui/tsconfig.json`. The lockfile
+keeps the registry versions and integrity fields of every remaining package.
 
 ## Configuration gap
 
@@ -71,8 +88,9 @@ deploy. The five specialty configs remain absent as private copies in this
 checkout. Non-secret templates live under [`config-examples/`](../config-examples/README.md);
 copy an example to the matching gitignored filename, then fill IDs from private
 records before capacity, proof-acceptance, proof-qualification, proof-service or
-recovery-drill commands. Keep discovery publication behind an approved public
-opening. See [live-ready prep](live-ready-prep.md).
+recovery-drill commands. Shared UI source is the pinned `ejm-ui` revision above;
+keep discovery publication behind an approved public opening. See
+[live-ready prep](live-ready-prep.md).
 
 Worker tests read `wrangler.jsonc` in the local environment. Recovery tests also
 read `wrangler.recovery-drill.jsonc`. Worker dry-run packaging and preview need

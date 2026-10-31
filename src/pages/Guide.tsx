@@ -239,9 +239,9 @@ const guides: Record<string, GuideContent> = server ? {
         A slot stays reserved through proof and rating settlement. Unknown, failed, exhausted or late proofs cannot extend the original 30-second deadline. Existing games keep their recorded rules.</p>
       <p>See the <a href="/qualification/timeout-proofs.json">technical qualification report</a> for source pins, native checks and measured limits.</p>
       <AppHeading as="h2">Local development</AppHeading>
-      <p>Use Node 24, install the sibling public ejm-ui packages, then install this product’s dependencies.
+      <p>Use Node 24. Check out the public ejm-ui revision pinned in <code>.github/ui-source.json</code> beside this repository and install it, then install this product’s dependencies.
         The repository README and operations guide give the local commands, bindings, migration steps, and launch gates.</p>
-      <AppPre><code>{'npm ci\nnpm run typecheck\nnpm test\nnpm run build\nnpm run worker:check'}</code></AppPre>
+      <AppPre><code>{'npm ci --ignore-scripts\nnpm run typecheck\nnpm test\nnpm run build\nnpm run worker:check'}</code></AppPre>
       <p>Run the type check, focused server tests, static build, and Worker dry run before review.
         The test command runs native workerd tests and then the Node load-driver tests. The driver tests use local fixtures and a loopback connection, without provider load.
         Tests must protect a real rule or failure risk.</p>

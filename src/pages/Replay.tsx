@@ -71,7 +71,7 @@ export default function Replay() {
         <GameReplay key={state.id} pgn={state.pgn} />
       </Suspense>}
     </AppFlow>
-    {'id' in state && <Button asChild variant="link"><a href={gamePath(state.id, 'pgn')} download>Download PGN</a></Button>}
+    {'id' in state && <div><Button asChild variant="link"><a href={gamePath(state.id, 'pgn')} download>Download PGN</a></Button></div>}
     <Text as="p" variant="muted">Replays are private to the players and make no changes to the game.</Text>
     <AppActions>
       <Button asChild variant="link"><Link href="/history/">Your games</Link></Button>

@@ -2,7 +2,9 @@
   "extends": "@ejm/ui/tsconfig.json",
   "compilerOptions": {
     "types": ["node", "vite/client"],
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true
   },
   "include": ["src", "vite.config.ts", "vitest.config.ts"],
   "exclude": ["src/server"]
