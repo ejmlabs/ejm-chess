@@ -5,7 +5,7 @@ import { isGameId } from '../shared/gamePath';
 import { acquireSeatGuard, getActorBySessionId, knownGame } from './auth';
 import { newWorkAllowed } from './budget';
 import { aiEnabled, type Env } from './env';
-import { assertNotClosing, gamePhase } from './events';
+import { assertNotClosing, gamePhase, nextReconcileAt } from './events';
 import { ApiError } from './security';
 
 export type CasualGameInput = Pick<InitGame, 'id' | 'format' | 'ai'>;
@@ -152,7 +152,7 @@ export class CasualControl {
       }
       if (actual?.result) await this.bridge.settle(actual.result);
       this.ctx.storage.sql.exec(`UPDATE casual_intents SET state=?,next_at=?,attempts=0,error=NULL
-        WHERE game_id=? AND state<>'finished'`, gamePhase(actual?.status ?? initialized?.status), Date.now() + 30_000, id);
+        WHERE game_id=? AND state<>'finished'`, gamePhase(actual?.status ?? initialized?.status), nextReconcileAt(Date.now(), actual?.dueAt), id);
       await this.ctx.storage.sync();
       if (actual) return game.lookup((JSON.parse(intent.payload) as InitGame).white);
       return initialized;

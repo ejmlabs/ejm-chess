@@ -17,7 +17,7 @@ import { captureNativePoint } from './recovery';
 import { LEADERBOARD_COLUMNS, LEADERBOARD_VALUES, leaderboardRow } from './leaderboard';
 import { initialRating, rateMatch } from './rating';
 import { RatingRepair, RECORD_ID, REPAIR_BATCH } from './rating-repair';
-import type { EventBridge } from './events';
+import { nextReconcileAt, type EventBridge } from './events';
 import type { Env } from './env';
 import {
   FORMATS, PRIOR_RULES_VERSIONS, RATING_VERSION, RULES_VERSION,
@@ -605,7 +605,7 @@ export class Competition extends DurableObject<Env> {
     }
     const state = actual.status === 'active' ? 'live' : 'reserved';
     this.ctx.storage.transactionSync(() => {
-      this.ctx.storage.sql.exec('UPDATE matches SET status=?,next_attempt_at=? WHERE id=?', state, Date.now() + RETRY_MS, gameId);
+      this.ctx.storage.sql.exec('UPDATE matches SET status=?,next_attempt_at=? WHERE id=?', state, nextReconcileAt(Date.now(), actual.dueAt), gameId);
       this.ctx.storage.sql.exec('UPDATE slots SET state=? WHERE game_id=?', state, gameId);
       if (state === 'live' && actual.startedAt !== null) this.recordStarted(match, actual.startedAt);
     });

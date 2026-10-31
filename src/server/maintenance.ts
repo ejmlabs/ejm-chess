@@ -165,13 +165,29 @@ export async function retireGamePayloads(env: Env, now = Date.now()): Promise<Ma
 }
 
 /**
+ * An admission whose Game holds no state after any game could have ended never started and never will.
+ * The permanent ID stays in its ledger as an archived row with no terminal version, which also stops
+ * every later creation, and the seats it held are freed.
+ */
+async function abandonAdmission(env: Env, ledger: Ledger, gameId: string, now: number): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE ${ledger} SET storage_state='archived',archived_at=?
+      WHERE game_id=? AND storage_state='retained' AND NOT EXISTS(SELECT 1 FROM games WHERE id=?)`).bind(now, gameId, gameId),
+    env.DB.prepare(`UPDATE active_game_seats SET released_at=? WHERE game_id=? AND released_at IS NULL
+      AND EXISTS(SELECT 1 FROM ${ledger} WHERE game_id=? AND storage_state='archived' AND archived_at=? AND terminal_version IS NULL)`)
+      .bind(now, gameId, gameId, now),
+  ]);
+}
+
+/**
  * Retry expired authority work even after a Durable Object alarm has exhausted retries.
  * D1 holds no Game deadlines, so a healthy game cannot be told from an overdue one. Competition already
- * reconciles each game it admitted every 30 seconds, so this fallback skips those until they are older than
+ * reads each game it admitted at least every five minutes, so this fallback skips those until they are older than
  * any game can be. A game Competition cannot see is polled from the end of the adjudication wait.
+ * Only an answered status call proves a Game absent. A failed call keeps the five-minute poll and never abandons.
  */
 async function recoverUnattendedGames(env: Env, now: number): Promise<MaintenanceResult> {
-  const select = ledgers.map(ledger => `SELECT '${ledger}' AS ledger,${ledger}.game_id,
+  const select = ledgers.map(ledger => `SELECT '${ledger}' AS ledger,${ledger}.game_id,${ledger}.created_at,
       COALESCE(g.ended_at,${ledger}.created_at) AS due_at
     FROM ${ledger} LEFT JOIN games g ON g.id=${ledger}.game_id
     WHERE ${ledger}.storage_state='retained' AND ${ledger}.archive_retry_at<=?
@@ -179,7 +195,7 @@ async function recoverUnattendedGames(env: Env, now: number): Promise<Maintenanc
         OR (g.id IS NULL AND ${ledger}.created_at<=CASE WHEN ${UNWATCHED[ledger]} THEN ? ELSE ? END))`).join(' UNION ALL ');
   const args = ledgers.flatMap(() => [now, now - ADJUDICATION_WAIT_MS, now - ADJUDICATION_WAIT_MS, now - GAME_MAX_AGE_MS]);
   const candidates = (await env.DB.prepare(`${select} ORDER BY due_at,game_id LIMIT ?`)
-    .bind(...args, GAME_MAINTENANCE_BATCH).all<Pick<Candidate, 'ledger' | 'game_id'>>()).results;
+    .bind(...args, GAME_MAINTENANCE_BATCH).all<Pick<Candidate, 'ledger' | 'game_id'> & { created_at: number }>()).results;
   const result = { attempted: 0, completed: 0, failed: 0 };
   for (const candidate of candidates) {
     if (!await takeBudget(env, 'game-recovery', now)) break;
@@ -190,8 +206,8 @@ async function recoverUnattendedGames(env: Env, now: number): Promise<Maintenanc
     result.attempted++;
     try {
       const game = env.GAME.get(env.GAME.idFromName(candidate.game_id));
-      await game.status();
-      await game.flush();
+      if (await game.status() === null && candidate.created_at <= now - GAME_MAX_AGE_MS) await abandonAdmission(env, candidate.ledger, candidate.game_id, now);
+      else await game.flush();
       result.completed++;
     } catch { result.failed++; }
   }

@@ -95,6 +95,19 @@ describe('ranked admission without a timeout proof', () => {
   });
 });
 
+describe('ranked game polling', () => {
+  it('reads a started game near its deadline instead of every 30 seconds', async () => {
+    const match = await pair();
+    const active = await start(match);
+    expect(await competition.queueStatus(match.white)).toMatchObject({ status: 'live', gameId: active.id });
+    const row = await runInDurableObject(competition, (_instance, state) =>
+      state.storage.sql.exec<{ next_attempt_at: number }>('SELECT next_attempt_at FROM matches WHERE id=?', active.id).one());
+    // A blitz clock gives five minutes, and the read is never later than the five-minute safety bound.
+    expect(row.next_attempt_at - Date.now()).toBeGreaterThan(60_000);
+    expect(row.next_attempt_at).toBeLessThanOrEqual(active.clocks.deadline!);
+  });
+});
+
 describe('ranked timeout at the flag', () => {
   it('awards the survivor with mating material a win at the flag and rates it once', async () => {
     const match = await pair();

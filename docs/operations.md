@@ -188,16 +188,42 @@ Game recovery checks at most four admitted IDs per UTC minute across repeated
 or concurrent calls. It retries overdue pending adjudication (games saved under
 earlier rules versions) and missing terminal projections through the
 authority's normal status/outbox path. D1 holds no Game deadlines, so it cannot
-tell a healthy game from an overdue one. Competition already reconciles every
-game it admitted through a durable intent (casual, round-robin and arena) at
-least every 30 seconds, so recovery skips those until the admission is a day
-old, longer than any clock allows. A casual game admitted before durable
-intents (no reservation) has no such owner and is polled once 30 seconds have
-passed. Polled records have a five-minute cooldown so the oldest four cannot
-starve the rest. Fifteen healthy admitted games cost 30 recovery polls in ten
-minutes before this change and none after (local run, not staged or released).
+tell a healthy game from an overdue one. Competition already reads every
+game it admitted through a durable intent (casual, round-robin, arena and
+ranked), so recovery skips those until the admission is a day old, longer than
+any clock allows. A casual game admitted before durable intents (no
+reservation) has no such owner and is polled once 30 seconds have passed.
+Polled records have a five-minute cooldown so the oldest four cannot starve the
+rest. Fifteen healthy admitted games cost 30 recovery polls in ten minutes
+before this change and none after (local run, not staged or released).
 A large outage backlog may delay this fallback; the stored outcome time
 still uses the original deadline. Durable Object alarms remain the first path.
+
+An admission a day old whose Game answers a status call with no state never
+started and never will. Recovery marks it abandoned: its ledger row becomes
+`archived` with no terminal version, which keeps the row and permanent ID,
+returns only the retained payload slot and stops every later creation. Its
+unreleased seats are released, and it is not polled again. A status call that
+fails never abandons a row; it keeps the five-minute poll. A Game holding any
+state, including a never-started terminal result, follows its normal result
+and retirement path. This fallback does not edit a Competition intent for the
+same ID.
+
+Competition reads each live game it admitted when that Game next has work, and
+never more than five minutes later. The Game reports this due time in its
+status reply: the clock deadline, the readiness wait, the tournament cutoff,
+the end of a legacy adjudication wait, or a result delivery retry. Every Game
+arms its own alarm for these and pushes its result at once, so a read follows
+a status change and recovers a lost alarm or push. A move can bring a deadline
+forward; the Game alarm covers it, and the five-minute bound covers a lost
+alarm. A late read delays delivery only, because a flag keeps its original
+deadline as its result time. A failed status call retries after one second, as
+before, and a reply without a due time falls back to the five-minute bound.
+A due time already passed is retried after one second, never in a tight loop.
+Ten live rapid games cost 190 Game status reads over the first ten minutes of
+play at the earlier fixed 30-second poll and 11 now (local mocked-clock run,
+not staged or released). A resignation, a draw or a flag still settles through
+the Game's own delivery, so it waits for no read.
 Competition serializes alarm updates and keeps an earlier pending deadline.
 A full maintenance pass can advance a deadline due when it began, while keeping
 alarms armed after its start. After dispatch, maintenance arms the next deadline.

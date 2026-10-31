@@ -291,13 +291,19 @@ export class Game extends DurableObject<Env> {
     }
   }
 
+  /** When this game's own authority next has work: a clock, a wait, a tournament cutoff or a result delivery retry. */
+  private authorityDue(state: State | null): number | null {
+    const due = [state?.deadline, state?.readinessDeadline, state && adjudicationDeadline(state), this.delivery()?.nextAttemptAt,
+      state && state.status !== 'finished' ? state.tournament?.deadlineAt : null,
+    ].filter((time): time is number => typeof time === 'number');
+    return due.length ? Math.min(...due) : null;
+  }
+
   private async schedule(): Promise<void> {
     const state = this.load();
     if (!state && this.archived()) { await this.ctx.storage.deleteAlarm(); return; }
-    const due = [state?.deadline, state?.readinessDeadline, state && adjudicationDeadline(state), this.delivery()?.nextAttemptAt,
-      state && state.status !== 'finished' ? state.tournament?.deadlineAt : null,
-      ...this.ctx.getWebSockets().map(socket => attachmentOf(socket)?.actor.sessionExpiresAt),
-    ].filter((time): time is number => typeof time === 'number');
+    const sessionExpiries = this.ctx.getWebSockets().map(socket => attachmentOf(socket)?.actor.sessionExpiresAt);
+    const due = [this.authorityDue(state), ...sessionExpiries].filter((time): time is number => typeof time === 'number');
     if (!due.length) { await this.ctx.storage.deleteAlarm(); return; }
     await this.ctx.storage.setAlarm(Math.max(Date.now() + 1, Math.min(...due)));
   }
@@ -430,12 +436,14 @@ export class Game extends DurableObject<Env> {
     });
   }
 
-  async status(): Promise<{ id: string; status: GameSnapshot['status']; version: number; startedAt: number | null; result: GameResult | null } | null> {
+  /** `dueAt` lets Competition sleep until this game next needs it. Null means nothing is pending. */
+  async status(): Promise<{ id: string; status: GameSnapshot['status']; version: number; startedAt: number | null; result: GameResult | null; dueAt: number | null } | null> {
     const now = Date.now();
     const state = this.loadCurrent(now);
     if (!state) return null;
     await this.committed();
-    return { id: state.id, status: state.status, version: state.version, startedAt: state.startedAt, result: state.outcome ? this.result(state) : null };
+    return { id: state.id, status: state.status, version: state.version, startedAt: state.startedAt,
+      result: state.outcome ? this.result(state) : null, dueAt: this.authorityDue(state) };
   }
 
   async command(actor: Actor, input: GameCommand): Promise<CommandReply> {

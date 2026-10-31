@@ -21,6 +21,21 @@ export function gamePhase(status: GameSnapshot['status'] | undefined): 'creating
   return status === 'pending-adjudication' || status === 'finished' ? 'settling' : status ? 'live' : 'creating';
 }
 
+/**
+ * A Game arms its own alarm for every deadline and pushes its result, so polling it is only a backstop.
+ * A poll follows the Game's reported due time, but never waits past this: if a Game alarm or a push
+ * was lost, or a move brought a deadline forward, the game is still read again within five minutes.
+ * A flag keeps its original deadline as the result time, so a late read delays delivery only.
+ */
+const RECONCILE_SAFETY_MS = 300_000;
+/** A due time already passed leaves work only the Game's own retry owns, so it is not polled in a tight loop. */
+const RECONCILE_RETRY_MS = 1_000;
+
+export function nextReconcileAt(now: number, dueAt: number | null | undefined): number {
+  const due = dueAt === null || dueAt === undefined ? Number.POSITIVE_INFINITY : dueAt > now ? dueAt : now + RECONCILE_RETRY_MS;
+  return Math.min(now + RECONCILE_SAFETY_MS, due);
+}
+
 export function assertNotClosing(bridge: Pick<EventBridge, 'closing'>, userId: string): void {
   if (bridge.closing(userId)) throw new ApiError(409, 'ACCOUNT_CLOSING', 'Account closure is pending. Try again shortly.');
 }

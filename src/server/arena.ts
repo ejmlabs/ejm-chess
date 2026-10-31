@@ -6,7 +6,7 @@ import { ARENA_POLICY, arenaLimits } from './arena-policy';
 import { ArenaProjection } from './arena-projection';
 import { newWorkAllowed, reserveMonthlyWork } from './budget';
 import type { Env } from './env';
-import { assertNotClosing, gamePhase, NEW_GAMES_PAUSED, requireSession, seatPair, type EventBridge } from './events';
+import { assertNotClosing, gamePhase, NEW_GAMES_PAUSED, nextReconcileAt, requireSession, seatPair, type EventBridge } from './events';
 import { CADENCE_POOL, CADENCES, GAME_WINDOW_MS, MINUTE, occurrences } from './schedule';
 import { ApiError } from './security';
 
@@ -574,7 +574,7 @@ export class ArenaControl {
         const current = this.intent(intent.game_id);
         if (!current || ['finished', 'cancelled'].includes(current.status)) return;
         this.ctx.storage.sql.exec('UPDATE arena_intents SET status=?,next_at=?,attempts=0,reason=NULL WHERE game_id=?', gamePhase(actual?.status),
-          Math.min(now + 30_000, intent.deadline_at > now ? intent.deadline_at : now + ARENA_POLICY.retryMs), intent.game_id);
+          Math.min(nextReconcileAt(now, actual?.dueAt), intent.deadline_at > now ? intent.deadline_at : now + ARENA_POLICY.retryMs), intent.game_id);
       });
     } catch {
       this.ctx.storage.sql.exec(`UPDATE arena_intents SET attempts=MIN(attempts+1,1000000),next_at=?,reason='Recovery is pending.'

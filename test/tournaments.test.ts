@@ -228,6 +228,19 @@ describe('scheduled tournament authority', () => {
     expect(await env.DB.prepare('SELECT COUNT(*) FROM tournament_game_admissions WHERE tournament_id=?').bind(id).first('COUNT(*)')).toBe(3);
   });
 
+  it('reads a running round when its games next need it, not every 30 seconds', async () => {
+    const { startsAt, clock } = startClock();
+    const competition = await authority();
+    const { id } = await enter(competition, 3, startsAt);
+    clock.mockReturnValue(startsAt);
+    await competition.maintenance();
+    expect((await event(competition, id)).status).toBe('running');
+    const due = await runInDurableObject(competition, (_instance, state) =>
+      state.storage.sql.exec<{ next_at: number }>('SELECT next_at FROM tournaments WHERE id=?', id).one().next_at);
+    // The game waits two minutes for both players to be ready, and nothing else is pending.
+    expect(due).toBe(startsAt + 120_000);
+  });
+
   it('resumes the same persisted game after an uncertain init and never resets its wall deadline', async () => {
     const { startsAt, clock } = startClock();
     let competition = await authority();

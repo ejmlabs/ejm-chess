@@ -85,8 +85,9 @@ describe('arena alarm schedule', () => {
   it('wakes only for game polls, not pairing, once every queued player has a game', async () => {
     const { competition, clock, startsAt } = await running({ players: 4, queued: 4 });
     await wakeups(competition, clock, startsAt + 1_000);
-    // Each live game is reconciled every 30 seconds.
-    expect(await wakeups(competition, clock, startsAt + 120_000)).toBe(3);
+    // Each Game reports its own next due time, here the end of its two-minute readiness wait, so nothing wakes before it.
+    expect(await wakeups(competition, clock, startsAt + 119_000)).toBe(0);
+    expect(await wakeups(competition, clock, startsAt + 121_000)).toBeGreaterThanOrEqual(1);
   });
 
   it('drains a running arena at the next pass after entry is switched off, and releases every queued player', async () => {

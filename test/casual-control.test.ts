@@ -7,7 +7,7 @@ import { GAME_HOT_RETENTION_MS, type Game } from '../src/server/game';
 import { maintainUnattendedGames } from '../src/server/maintenance';
 import type { Actor, InitGame } from '../src/shared/protocol';
 import { STOCKFISH_BUILD } from '../src/shared/engine';
-import { admitGameFixture, player } from './authority-helpers';
+import { activeGame, admitGameFixture, player } from './authority-helpers';
 
 type Authority = DurableObjectStub<Competition>;
 afterEach(() => vi.restoreAllMocks());
@@ -278,6 +278,71 @@ describe('Competition-owned casual admission', () => {
     clock.mockReturnValue(admitted! + 25 * 60 * 60_000);
     expect((await maintainUnattendedGames(env)).recovery).toEqual({ attempted: 1, completed: 1, failed: 0 });
     expect(await game.status()).toMatchObject({ status: 'finished', result: { outcome: { reason: 'readiness-expired' } } });
+  });
+
+  it('abandons an admission whose Game never existed once it is older than any game, freeing its seats and keeping its ID', async () => {
+    const now = Date.now();
+    const [creator, opponent] = await Promise.all([player(), player()]);
+    const rows = { casual: crypto.randomUUID(), event: crypto.randomUUID(), young: crypto.randomUUID() };
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO casual_game_admissions(game_id,creator_id,created_at) VALUES(?,?,?)').bind(rows.casual, creator.id, now - 25 * 3_600_000),
+      env.DB.prepare('INSERT INTO casual_game_admissions(game_id,creator_id,created_at) VALUES(?,?,?)').bind(rows.young, creator.id, now - 2 * 3_600_000),
+      env.DB.prepare('INSERT INTO tournament_game_admissions(game_id,tournament_id,created_at) VALUES(?,?,?)').bind(rows.event, 'abandon-fixture', now - 25 * 3_600_000),
+      ...[[creator, rows.casual], [creator, rows.young], [creator, rows.event], [opponent, rows.event]].map(([actor, id]) =>
+        env.DB.prepare('INSERT INTO active_game_seats(user_id,game_id,acquired_at) VALUES(?,?,?)').bind((actor as typeof creator).id, id, now - 25 * 3_600_000)),
+    ]);
+    await parkOtherAdmissions(Object.values(rows));
+    const counts = () => env.DB.prepare("SELECT permanent_ids,retained_payloads FROM game_admission_counts WHERE kind='casual'").first<{ permanent_ids: number; retained_payloads: number }>();
+    const before = await counts();
+    expect((await maintainUnattendedGames(env, now)).recovery).toEqual({ attempted: 3, completed: 3, failed: 0 });
+    const state = (ledger: string, id: string) => env.DB.prepare(`SELECT storage_state,archived_at,terminal_version FROM ${ledger} WHERE game_id=?`).bind(id).first();
+    expect(await state('casual_game_admissions', rows.casual)).toEqual({ storage_state: 'archived', archived_at: now, terminal_version: null });
+    expect(await state('tournament_game_admissions', rows.event)).toEqual({ storage_state: 'archived', archived_at: now, terminal_version: null });
+    // A game that could still be young is only polled, never abandoned.
+    expect(await state('casual_game_admissions', rows.young)).toEqual({ storage_state: 'retained', archived_at: null, terminal_version: null });
+    const open = async (id: string) => await env.DB.prepare('SELECT COUNT(*) FROM active_game_seats WHERE game_id=? AND released_at IS NULL').bind(id).first('COUNT(*)');
+    expect([await open(rows.casual), await open(rows.event), await open(rows.young)]).toEqual([0, 0, 1]);
+    // Each permanent ID stays counted. Only the retained payload slots return.
+    expect(await counts()).toEqual({ permanent_ids: before!.permanent_ids, retained_payloads: before!.retained_payloads - 1 });
+    // The ID can never start a game, and only the still-young row is polled again.
+    await runInDurableObject(env.GAME.get(env.GAME.idFromName(rows.casual)), async instance => {
+      await expect((instance as Game).init({ id: rows.casual, format: 'blitz', rated: false, white: creator })).rejects.toThrow('casual_admission_required');
+    });
+    await env.DB.prepare('DELETE FROM maintenance_budgets').run();
+    expect((await maintainUnattendedGames(env, now + 3_600_000)).recovery).toEqual({ attempted: 1, completed: 1, failed: 0 });
+    expect(await state('casual_game_admissions', rows.casual)).toMatchObject({ archived_at: now });
+  });
+
+  it('keeps polling a Game that cannot be reached and abandons it only after an answered status call', async () => {
+    const now = Date.now();
+    const creator = await player();
+    const id = crypto.randomUUID();
+    await env.DB.prepare('INSERT INTO casual_game_admissions(game_id,creator_id,created_at,reservation_id) VALUES(?,?,?,?)').bind(id, creator.id, now - 25 * 3_600_000, 'reservation').run();
+    await env.DB.prepare('INSERT INTO active_game_seats(user_id,game_id,acquired_at) VALUES(?,?,?)').bind(creator.id, id, now - 25 * 3_600_000).run();
+    await parkOtherAdmissions([id]);
+    const unreachable = { ...env, GAME: { idFromName: (name: string) => env.GAME.idFromName(name),
+      get: () => ({ status: async () => { throw new Error('unavailable'); } }) } } as unknown as Env;
+    const held = async () => env.DB.prepare(`SELECT a.storage_state,s.released_at FROM casual_game_admissions a JOIN active_game_seats s ON s.game_id=a.game_id WHERE a.game_id=?`).bind(id).first();
+    expect((await maintainUnattendedGames(unreachable, now)).recovery).toEqual({ attempted: 1, completed: 0, failed: 1 });
+    expect(await held()).toEqual({ storage_state: 'retained', released_at: null });
+    // The existing five-minute cooldown still applies, and no failure ever ends the row.
+    expect((await maintainUnattendedGames(unreachable, now + 299_000)).recovery.attempted).toBe(0);
+    expect((await maintainUnattendedGames(unreachable, now + 300_000)).recovery).toEqual({ attempted: 1, completed: 0, failed: 1 });
+    expect(await held()).toEqual({ storage_state: 'retained', released_at: null });
+    expect((await maintainUnattendedGames(env, now + 600_000)).recovery).toEqual({ attempted: 1, completed: 1, failed: 0 });
+    expect(await held()).toEqual({ storage_state: 'archived', released_at: now + 600_000 });
+  });
+
+  it('leaves an old admission alone while its Game holds a started game', async () => {
+    const { game, snapshot } = await activeGame();
+    await env.DB.prepare('UPDATE casual_game_admissions SET created_at=? WHERE game_id=?').bind(Date.now() - 25 * 3_600_000, snapshot.id).run();
+    await parkOtherAdmissions([snapshot.id]);
+    const deadline = snapshot.clocks.deadline!;
+    vi.spyOn(Date, 'now').mockReturnValue(deadline);
+    expect((await maintainUnattendedGames(env, deadline)).recovery).toEqual({ attempted: 1, completed: 1, failed: 0 });
+    expect(await env.DB.prepare('SELECT storage_state,terminal_version FROM casual_game_admissions WHERE game_id=?').bind(snapshot.id).first())
+      .toEqual({ storage_state: 'retained', terminal_version: null });
+    expect(await game.status()).toMatchObject({ status: 'finished', startedAt: snapshot.startedAt, result: { outcome: { reason: 'timeout-win' } } });
   });
 
   it('reads the legacy casual count for a new admission only, not when resuming a saved request', async () => {

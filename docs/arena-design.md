@@ -175,8 +175,9 @@ games drain. No cap limits open events.
 The Competition alarm is armed for the next real due time only. A running
 event nobody waits in sleeps until its close. While a player is queued, pairing
 retries once a second, so pairing latency is unchanged. A draining event waits
-for its last settlement. Live games are reconciled every 30 seconds or at their
-cutoff, and publication, cleanup and release batches arm their own due times.
+for its last settlement. A live game is read when its Game next reports work
+(its readiness end, clock deadline or cutoff) and never more than five minutes
+later, and publication, cleanup and release batches arm their own due times.
 The minute trigger still runs a full pass, so switching `ARENAS_ENABLED` off
 drains running events at the next pass.
 
@@ -184,7 +185,9 @@ Implemented and tested locally with a mocked clock, not staged or released.
 An idle running hourly arena woke 3,665 times from start through close before
 this change and 7 times after. In the first two minutes after a start, an arena
 with one player left waiting woke 123 times before and after, and an arena
-whose queued players all had games woke 7 times, down from 123.
+whose queued players all had games woke 7 times, down from 123, and 4 times
+after Games reported their own due times, which moved their reads from every 30
+seconds to the end of the two-minute readiness wait.
 
 ## Points and opponents
 

@@ -4,7 +4,7 @@ import { acquireTournamentAccount, competitiveSessionEligible } from './auth';
 import { ApiError } from './security';
 import { newWorkAllowed, reserveMonthlyWork } from './budget';
 import type { Env } from './env';
-import { assertNotClosing, NEW_GAMES_PAUSED, requireSession, seatPair, type EventBridge } from './events';
+import { assertNotClosing, NEW_GAMES_PAUSED, nextReconcileAt, requireSession, seatPair, type EventBridge } from './events';
 import { CADENCE_POOL, CADENCES, GAME_WINDOW_MS, HISTORY_MS, MINUTE, occurrences, REGISTRATION_MS } from './schedule';
 import type { Actor, GameResult, Pool } from '../shared/protocol';
 import type { TournamentCadence, TournamentList, TournamentPlayerStatus, TournamentView } from '../shared/tournaments';
@@ -290,7 +290,8 @@ export class TournamentControl {
     this.save(event);
   }
 
-  private async initialize(event: Event, pairing: Pairing): Promise<void> {
+  /** Returns when the Game next needs a read, or null once it has nothing pending. */
+  private async initialize(event: Event, pairing: Pairing): Promise<number | null> {
     const env = this.getEnv();
     const game = env.GAME.get(env.GAME.idFromName(pairing.id));
     let actual = await game.status();
@@ -312,6 +313,8 @@ export class TournamentControl {
       if (pair.status !== 'finished') pair.status = actual.status === 'active' ? 'active' : actual.status === 'pending-adjudication' ? 'pending-adjudication' : 'ready';
       this.save(current);
     }
+    // A finished game was settled above and is not read again.
+    return actual && actual.status !== 'finished' ? actual.dueAt : null;
   }
 
   /** Called in the same authoritative transaction as accepted game settlement. */
@@ -384,8 +387,10 @@ export class TournamentControl {
   }
 
   private async runRound(event: Event, now: number): Promise<void> {
+    let dueAt: number | null = null;
     for (const pairing of event.games.filter(item => item.round === event.round && item.status !== 'finished')) {
-      await this.initialize(event, pairing);
+      const gameDue = await this.initialize(event, pairing);
+      if (gameDue !== null) dueAt = Math.min(dueAt ?? gameDue, gameDue);
       if (now >= event.roundDeadlineAt!) {
         const game = this.getEnv().GAME.get(this.getEnv().GAME.idFromName(pairing.id));
         await game.enforceTournamentDeadline(event.id, pairing.round);
@@ -394,7 +399,7 @@ export class TournamentControl {
       }
     }
     const current = this.load(event.id)!;
-    if (current.status === 'running') { current.nextAt = now + RECOVERY_RETRY_MS; current.reason = null; this.save(current); }
+    if (current.status === 'running') { current.nextAt = nextReconcileAt(now, dueAt); current.reason = null; this.save(current); }
   }
 
   /** Drop events past the history window once no retained Game payload refers to them. */
