@@ -35,18 +35,18 @@ export default function Profile() {
       <Text as="p">Public ratings count settled ranked games. Casual and AI games add no rating credit.</Text>
     </SectionHead>
     <AppFlow aria-live="polite" aria-busy={state.status === 'loading'}>
-      {state.status === 'loading' && <StateBlock kind="loading" message="Loading this player." density="compact" />}
+      {state.status === 'loading' && <StateBlock kind="loading" message="Loading this player." />}
       {state.status === 'missing' && <>
-        <StateBlock kind="empty" message="This player profile is unavailable." density="compact" />
+        <StateBlock kind="empty" message="This player profile is unavailable." />
         <Text as="p">Choose a player from the <Link href="/leaderboard/">leaderboard</Link>.</Text>
       </>}
-      {state.status === 'error' && <StateBlock kind="error" message="This profile could not be loaded." action={{ label: 'Retry' }} onAction={() => setAttempt(value => value + 1)} density="compact" />}
+      {state.status === 'error' && <StateBlock kind="error" message="This profile could not be loaded." action={{ label: 'Retry' }} onAction={() => setAttempt(value => value + 1)} />}
       {state.status === 'ready' && <>
         {!state.profile.rankedOpen && <Status status="info" label="New ranked play is closed while the launch checks remain." />}
         <Table label="Player ratings" caption="Settled ratings by time control"
           columns={[{ key: 'format', label: 'Format' }, { key: 'rating', label: 'Rating', align: 'right' }, { key: 'games', label: 'Games', align: 'right' }, { key: 'status', label: 'Status' }]}
           rows={state.profile.pools.map(pool => ({ id: pool.pool, format: `${pool.pool === 'blitz' ? 'Blitz' : 'Rapid'} ${FORMATS[pool.pool].label}`, rating: pool.rating ?? 'Not rated', games: pool.games, status: labels[pool.status] }))}
-          rowHeader="format" rowKey="id" truncate={false} density="compact" />
+          rowHeader="format" rowKey="id" truncate={false} />
         {state.profile.pools.some(pool => pool.pending) && <Status status="pending" label="A result is awaiting settlement. The displayed rating keeps its last settled value." />}
         {state.profile.pools.some(pool => pool.updatedAt !== null) && <AppGroup as="ul">{state.profile.pools.filter(pool => pool.updatedAt !== null).map(pool => <li key={pool.pool}><Text variant="muted">
           {pool.pool === 'blitz' ? 'Blitz' : 'Rapid'} updated{' '}

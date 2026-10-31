@@ -8,13 +8,13 @@ shared ejm-ui design, including account, replay and private review workflows.
 > `https://chess.ejmlabs.com` behind Cloudflare Access. Worker version 12
 > (`a9038ccc-3f74-4ea2-9661-4555779b32d7`) was deployed from `main` at
 > `996acf4`. Public play, ranked, tournaments, arenas and server analysis
-> remain closed. A clean checkout still needs the matching shared UI source and
+> remain closed. A clean checkout still needs the pinned shared UI source and
 > reviewed private configuration:
 >
-> - The matching shared UI source, checked out as `../ejm-ui` (`@ejm/*` packages
->   are `file:` dependencies). It must provide `@ejm/ui/components/Chessboard` and
->   a `useSearch` export from `@ejm/ssg`; without them typecheck reports two
->   errors (`src/client/Board.tsx`, `src/pages/Play.tsx`) and the build fails.
+> - The shared UI source, checked out as `../ejm-ui` at the revision in
+>   `.github/ui-source.json` (`@ejm/*` packages are `file:` dependencies). That
+>   revision provides `@ejm/ui/components/Chessboard` and a `useSearch` export
+>   from `@ejm/ssg`; an older checkout fails typecheck and the build.
 > - The six private Worker configurations (`wrangler.jsonc`,
 >   `wrangler.capacity.jsonc`, `wrangler.proof-acceptance.jsonc`,
 >   `wrangler.proof-qualification.jsonc`, `wrangler.proof-service.jsonc`,
@@ -79,9 +79,10 @@ Known limits:
 
 Use Node 24. The repository declares public `@ejm/*` packages through portable
 sibling `file:../ejm-ui/packages/<package>` dependencies in the manifest and
-lockfile. Use the matching retained shared source described in the
+lockfile. The shared source is the public `ejmlabs/ejm-ui` revision pinned in
+[`.github/ui-source.json`](.github/ui-source.json); see the
 [source handoff](docs/source-handoff.md#shared-ui-dependency). A package version
-alone does not identify the unpublished owner changes this source consumed:
+alone does not identify the source this product consumes:
 
 ```text
 workspace/
@@ -89,17 +90,17 @@ workspace/
   ejm-chess/
 ```
 
-Install the sibling workspace with its lockfile, then this product:
+Check out the pinned `ejm-ui` revision, install its lockfile, then this product.
+Keep dependency lifecycle scripts off:
 
 ```sh
 cd ../ejm-ui
-npm ci
+npm ci --ignore-scripts
 cd ../ejm-chess
-npm ci
+npm ci --ignore-scripts
 ```
 
-If the shared token outputs are absent, run the token build in `ejm-ui` before
-building the product. Do not import private sibling source or copy shared components.
+Do not import private sibling source or copy shared components.
 
 The private Wrangler configurations are excluded from this source handoff.
 Restore reviewed local bindings as described in the

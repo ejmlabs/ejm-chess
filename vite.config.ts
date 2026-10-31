@@ -1,11 +1,8 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite';
-import { ejmSite } from '@ejm/site/vite';
-import { ejmSsg } from '@ejm/ssg/vite';
+import { ejmlabs } from '@ejm/site/vite';
 import { chessHeaders } from './src/policy.ts';
 
-export default defineConfig({
-  plugins: [react(), tailwindcss(), ejmSite({ project: 'chess', headers: chessHeaders }), ejmSsg({ site: 'src/site.tsx' })],
-  resolve: { dedupe: ['react', 'react-dom'] },
-});
+// The preset carries Tailwind, React, one React, the design guard, prerendering and the build options.
+// `headers` is chess only (src/policy.ts): no analytics, plus the Turnstile, game WebSocket and Stockfish WebAssembly
+// additions to the shared policy.
+export default defineConfig({ plugins: [ejmlabs({ project: 'chess', headers: chessHeaders })] });

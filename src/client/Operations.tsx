@@ -63,7 +63,7 @@ export default function Operations() {
   }
   return <Disclosure summary="Operations and rating journal export"><AppFlow>
     <Text as="p">Usage and stops, unsettled work, projection lag, and repair status. These counters do not establish measured capacity.</Text>
-    {error && <StateBlock kind="error" message={error} density="compact" />}{message && <div role="status"><Status status="info" label={message} /></div>}
+    {error && <StateBlock kind="error" message={error} />}{message && <div role="status"><Status status="info" label={message} /></div>}
     <AppActions><Button variant="secondary" disabled={busy} onClick={() => void run(loadStatus)}>Refresh status</Button>
       <Button variant="ghost" disabled={busy} onClick={() => void run(async () => {
         const result = await api<{ authority: { errors: string[] }; analysis: string }>('/api/admin/operations/maintenance', {});
@@ -77,7 +77,7 @@ export default function Operations() {
         <Text as="p" variant="muted">Feature switches and stops apply separately. Active games, accepted results, replay, and recovery continue when admission stops. These counters do not cap the Cloudflare invoice.</Text>
       </AppGroup>
       {status.budget.stoppedByEnv && <Status status="info" label="The deployment-wide stop is active. These controls cannot override it." />}
-      <Table label="Monthly usage" caption={`Monthly usage for ${status.budget.month}`} density="compact" truncate={false}
+      <Table label="Monthly usage" caption={`Monthly usage for ${status.budget.month}`} truncate={false}
         columns={[{ key: 'kind', label: 'Work' }, { key: 'used', label: 'Used', align: 'right' },
         { key: 'denied', label: 'Denied', align: 'right' }, { key: 'state', label: 'State' }]}
         rows={[{ id: 'signup', kind: 'Signup attempts', used: status.budget.signup.used, denied: 0,
