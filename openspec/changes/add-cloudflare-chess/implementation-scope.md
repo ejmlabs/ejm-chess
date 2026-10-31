@@ -2,6 +2,8 @@
 
 The owner requested implementation on 2026-10-20. The planning home remains this change. Follow `openspec-apply-change` here. Product and UI work use their existing owner workflows; neither isolated owner has an OpenSpec root, and none is initialized.
 
+This file is dated evidence. The 2026-10-31 launch policy in [proposal.md](proposal.md) supersedes its timeout-proof, first-tier run and product-cap gates: no arbitrary caps, no first-tier gate, ranked uses the material timeout rule only. Read earlier boundaries as history.
+
 | Owner | Isolated checkout | Scope |
 | --- | --- | --- |
 | `ejm-chess` | `/private/tmp/ejm-chess-2yz1VsKp/ejm-chess` | New standalone product repository on `codex/chess-foundation`: Cloudflare runtime, account integration, game and competition state, board, product guides, and meaningful tests. |

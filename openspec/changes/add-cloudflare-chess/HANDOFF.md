@@ -2,7 +2,10 @@
 
 Source placement updated on 2026-10-26. Task counts move; the current
 [task file](tasks.md) is authoritative. This handoff preserves source and
-execution facts; it changes no launch scope, limits or approval.
+execution facts. Updated on 2026-10-31 for the owner's launch policy (see
+[proposal](proposal.md)): no arbitrary product caps, no first-tier load-test
+gate, and ranked uses the material timeout rule only. Sections that predate it
+are dated history.
 
 ## Read before resuming
 
@@ -50,6 +53,8 @@ while preparing this handoff, so they are last-known state.
 | Capacity full22 | Failed at final registration confirmations with five HTTP 503 responses. It recorded 10,829 acknowledged registration replies, 1,225 distinct confirmed accounts, zero charged Game IDs and zero native Game objects. | No passing full workload, first-tier capacity or large-event release claim. |
 | Capacity cleanup | Saved owner stop was confirmed, temporary test exception was removed and the local driver exited. Resources and traces were retained. | Native shutdown was not confirmed. Do not claim full native retirement. |
 
+The proof rows above are history: the timeout-proof path was retired on
+2026-10-31, and the capacity rows are follow-up evidence, not launch gates.
 The earlier release evidence map was written before these final outcomes.
 Use the stopped-run summaries when continuing. Root acceptance of a packet,
 source sealing, local readiness and a buffered trace header are not passing
@@ -90,23 +95,23 @@ These labels are unchanged from [tasks.md](tasks.md):
 | Labels | Remaining contract |
 | --- | --- |
 | 3.6 | Complete required two-browser board interaction and accessibility coverage. The completed friend flow above is partial evidence. |
-| 3.8 | Qualify the timeout-proof contract, ordinary flags, failures, finite attempts, recovery and stops. |
+| 3.9 | Retire the timeout-proof path: ranked uses the material rule at the flag; remove proof admission, slots and code. Task 3.8 is superseded and its text is history. |
 | 4.5 | Finish policy guidance and verify game, history and leaderboard flows together. |
 | 6.2 | Complete provider, mail and deployed cost evidence. Reuse verified delivery and reset evidence while those contracts remain unchanged. |
 | 6.3 | Finish spending, storage, recovery, privacy and accepted-work controls and their readback. |
-| 6.4 | Complete the required measurements. Broader regional work remains unfinished beyond the initial opening gate. |
-| 7.1 | Finish critical-path protected-host player and integration checks against recorded deployed source. |
-| 7.2 | Open public ranked and first-tier arenas only after their approved critical-path gates pass; verify live limits and guides. |
+| 6.4 | Follow-up evidence, not a gate. Complete the measurements; broader regional work stays unfinished. |
+| 7.1 | Finish protected-host player and integration checks, now including ranked and arena play, against recorded deployed source. |
+| 7.2 | Open ranked play and arenas after 3.9, the 3.6 and 7.1 player checks and the live 6.2 and 6.3 mail, alert, cron and stop readbacks. Then remove Access and verify the public host and guides. |
 | 7.3 | Publish verified shared discovery and Studio adoption after product and guide destinations pass. |
-| 10.4 | Finish and qualify the large-event design, standings, recovery and published limits. |
-| 18.3 | Resolve registration diagnostics while retaining prior failures and accounting. No passing registration-only diagnostic is recorded. |
-| 18.4 | Run the full approved native workload against a freshly reviewed repaired candidate. |
-| 18.5 | Reconcile all retained failures, usage, receipts, stops and documented measured limits. |
+| 10.4 | Follow-up evidence, not a gate. Finish and qualify the large-event design, standings, recovery and published limits. |
+| 18.3 | Follow-up evidence, not a gate. Resolve registration diagnostics while retaining prior failures and accounting. No passing registration-only diagnostic is recorded. |
+| 18.4 | Follow-up evidence, not a gate. Run the full approved native workload against a freshly reviewed repaired candidate. |
+| 18.5 | Follow-up evidence, not a gate. Reconcile all retained failures, usage, receipts, stops and documented measured limits. |
 
-The critical-path capacity target remains three 2,000-entry events, a combined
+Follow-up evidence since 2026-10-31, not a launch gate or cap: the capacity target is three 2,000-entry events, a combined
 1,000 unfinished-game cap, 19,000 required and 20,000 maximum native admissions,
 the full 900-second stream and the approved ten-second recovery lead. These are
-test requirements, not supported capacity. The shorter run does not complete
+measurement targets, not supported capacity. The shorter run does not complete
 the longer calendar, full-hour endurance, regional or later-tier qualification.
 
 The current plan retains the single $100 monthly target and existing spending
@@ -156,15 +161,15 @@ closed to the public:
   Archived `reconcile-chess-planning-baseline` (no delta specs).
 - Owner accepted and merged the material timeout rule (PR #3). Doc and UI gaps
   for the old automatic void were closed; `AGENTS.md` matches the rule. The
-  private proof-acceptance re-run against the new expectations remains
-  unexecuted and still gates ranked proof enablement.
+  private proof-acceptance re-run is no longer needed: the proof path was
+  retired on 2026-10-31 (task 3.9).
 - Protected canary player checklist steps 1–7 plus the explicit Join retest are
   done. **Steps 8+ are paused** by owner request; they are not abandoned.
 - Ranked-inclusive source/docs prep checked in tasks: **3.8**, **4.5**, **6.2**,
   **6.3**, **7.3a**. Specialty Wrangler examples, timeout-proof status JSON,
   color-balance guidance, and provisioning checklist are in tree. Still open:
-  paused **3.6**/**7.1**, provider **3.9**, ranked open **7.2**, discovery
-  publish **7.3**, follow-ups **6.4**/**10.4**/**18.x**.
+  **3.9** retire the proof path, paused **3.6**/**7.1**, ranked open **7.2**,
+  discovery publish **7.3**, follow-up evidence **6.4**/**10.4**/**18.3 to 18.5**.
 
 ### Configuration and shared UI notes
 
@@ -177,30 +182,29 @@ closed to the public:
   (`wrangler.capacity.jsonc`, `wrangler.proof-acceptance.jsonc`,
   `wrangler.proof-qualification.jsonc`, `wrangler.proof-service.jsonc`,
   `wrangler.recovery-drill.jsonc`) are still absent from this checkout and must
-  be rebuilt from private records before proof, capacity or recovery drills.
+  be rebuilt from private records before capacity or recovery drills. The proof
+  configs are retired with task 3.9 and need no rebuild.
   Do not commit secrets or provider IDs.
 
 ## Resume in this order
 
-1. When unpausing the canary checklist, finish protected-host player checks from
-   step 8 onward and record results in `docs/verification.md`.
-2. Refresh OpenSpec apply status for `add-cloudflare-chess`. Review the partial
-   capacity patch and finish only the affected failure, native and driver checks
-   plus typecheck. Retain old results as historical evidence.
-3. Diagnose the retained proof and registration failures. Reconcile prior work
-   and current provider state before preparing any fresh execution packet.
-   Preserve all held uncertainty and stop receipts. Re-run private
-   proof-acceptance only after specialty Wrangler configs are reconstructed.
-4. Prepare a new feasible schedule and immutable candidate within the existing
-   approved scope. Follow the review and finite-work requirements in the plan.
-   Never resume an expired packet or infer success from readiness.
-5. Finish ranked proof and recovery, then the full capacity workload and its
-   accounting and stop readback. Derive enabled limits from actual results.
-6. Update product guides with measured limits and unrun checks. Build and deploy
-   accepted source, verify canonical public access, then publish discovery in
-   `ejm-ui` and Studio through their owner processes.
-7. Update task checkboxes only from verified results. Sync and archive completed
-   scope after required checks pass; retain longer follow-up work explicitly.
+1. Retire the timeout-proof path (task 3.9): ranked uses the material rule at
+   the flag, with no proof admission, slots or code. Keep the material-rule
+   fixtures and update guides and tests.
+2. Finish the protected-host player checks from step 8 onward (3.6, 7.1), now
+   including ranked and arena play, and record results in
+   `docs/verification.md`.
+3. Read back live mail, budget alerts, cron and the stop webhook (6.2, 6.3).
+4. Remove Access, verify the public host and guides (7.2), then publish
+   discovery in `ejm-ui` and Studio through their owner processes (7.3). Measure
+   real demand after opening.
+5. Follow-up evidence, not gates: the partial capacity diagnostic patch, the
+   retained registration failures and the full capacity workload (18.3 to 18.5),
+   regional measurements (6.4) and the large-event qualification (10.4). Retain
+   old results as historical evidence; never resume an expired packet or infer
+   success from readiness.
+6. Update task checkboxes only from verified results. Sync and archive completed
+   scope after required checks pass; retain follow-up work explicitly.
 
 No public launch, provider mutation beyond the approved protected canary, or
 live discovery publication was performed while updating this handoff.

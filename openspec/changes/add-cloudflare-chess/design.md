@@ -1,5 +1,34 @@
 # Design
 
+## Launch policy, 2026-10-31
+
+The owner rejected arbitrary caps ("we just need a billing ceiling in
+cloudflare. we don't want to over optimize here"). These decisions are
+authoritative and supersede conflicting text below. Earlier text stays as dated
+history and is marked superseded where it conflicts.
+
+- **Economic limit.** Cloudflare budget alerts and the existing $85 stop webhook
+  are the limit. They are not a hard invoice cap; alerts can lag. The product has
+  no arbitrary admission or retention caps. Kept: security and abuse limits,
+  protocol and input bounds, bounded per-request and per-alarm work, fair-play
+  rules (including the ranked pair limit), platform-safety bounds that prevent a
+  hard platform failure, ID non-recycling and the explicit stops. Plan counts
+  such as live games, entrants or retained records are measurement targets, not
+  caps, unless they are one of the kept bounds.
+- **No first-tier load-test gate.** The 2,000-player first-tier provider run no
+  longer gates ranked play or arenas. It is follow-up evidence (tasks 6.4, 10.4,
+  18.3 to 18.5). Measure real demand after opening.
+- **Material timeout rule only.** Ranked resolves a flag like casual: a loss for
+  the player who ran out when the opponent has mating material, otherwise a draw.
+  The private CHA-Solver timeout-proof path is retired: no proof Container, proof
+  qualification, proof-slot concurrency cap or proof admission budget (task 3.9).
+  The owner accepts the rule's stated limit, that a fully blocked position with
+  no reachable mate scores as a loss for the player who ran out.
+- **Opening gates.** Task 3.9, the protected-host player checks (3.6, 7.1) now
+  including ranked and arena play, and the live mail, alert, cron and stop
+  readbacks (6.2, 6.3). Then Access removal and public verification. Discovery
+  (7.3) follows. See "Critical-path public release".
+
 ## Current spending decision, 2026-10-22
 
 The owner directs one $100 monthly chess spending target, existing
@@ -10,7 +39,8 @@ Those dated calculations are historical estimates, not launch requirements.
 The 2026-10-30 demand policy removes monthly application caps. Use Cloudflare
 budget alerts and the stop webhook. Preserve abuse rate limits, authentication
 and accepted-work recovery. Keep optional server analysis disabled.
-Ranked correctness and tournament qualification still apply. Public Access is
+Ranked correctness still applies; since 2026-10-31 tournament and first-tier
+workload qualification is follow-up evidence. Public Access is
 removed only through the existing launch sequence. The $100 target is not a
 hard provider invoice cap: alerts can lag and accepted work continues.
 Owner authorization covers this configuration and financial-policy change;
@@ -21,7 +51,7 @@ The product owns these controls and docs; no shared UI API changes are needed.
 
 ## Context
 
-See `proposal.md` for the purpose and scope. At the initial proposal, no chess resources, application, account flow, or public hostname had been provisioned or verified. Dated 2026-10-21 UTC product evidence now records a protected canonical-host canary, account/security-mail acceptance for one approved recipient, and saved budget alerts with a tested stop webhook. Public new work remains stopped, and complete recovery, proof, capacity, regional, and launch gates remain open. This PR publishes planning and recorded status only. See `implementation-scope.md` for the owner boundaries and evidence limits.
+See `proposal.md` for the purpose and scope. At the initial proposal, no chess resources, application, account flow, or public hostname had been provisioned or verified. Dated 2026-10-21 UTC product evidence now records a protected canonical-host canary, account/security-mail acceptance for one approved recipient, and saved budget alerts with a tested stop webhook. Public new work remains stopped, and complete recovery, capacity and regional follow-up, and launch checks remain open (the proof path was retired on 2026-10-31). This PR publishes planning and recorded status only. See `implementation-scope.md` for the owner boundaries and evidence limits.
 
 The local studio UI-migration checkout consumes public `@ejm/*` packages through declared local dependencies. The shared project registry covers four existing identities. Public header/build hooks already support additive CSP sources; chess must verify its policy through those hooks before adding an API. The new `ejm-chess` checkout and upstream `ejm-ui` checkout are outside this change's write scope. This planning home grants no authority to edit either one.
 
@@ -337,13 +367,21 @@ Alternative: best-effort background writes or reversing historic point changes. 
 
 Use `chess.js` for the behavior it supplies, and make the online rule policy explicit: move acceptance, checkmate, stalemate, repetition, move-count draws, resignation, agreed draws, flags, aborts, and service failure. Distinguish claim-based draws from automatic draws and record the terminal rule version.
 
-`chess.js` cannot fully establish every dead position or whether only the non-flagging side can mate through any legal continuation. A general draw predicate is not a side-specific timeout decision. Do not claim exact FIDE compliance, infer mating possibility from engine scores, or silently handroll a full rules engine. Before release, document and test a concrete online adjudication policy, assess maintained adjudication dependencies if needed, and obtain owner acceptance of any stated limit. This unresolved accuracy requirement blocks public play, especially ranked outcomes.
+`chess.js` cannot fully establish every dead position or whether only the non-flagging side can mate through any legal continuation. A general draw predicate is not a side-specific timeout decision. Do not claim exact FIDE compliance, infer mating possibility from engine scores, or silently handroll a full rules engine. Before release, document and test a concrete online adjudication policy, assess maintained adjudication dependencies if needed, and obtain owner acceptance of any stated limit. Superseded on 2026-10-31: the owner accepted the material timeout rule and its stated limit for ranked as for casual play, so this requirement no longer blocks opening ranked play.
+
+#### Timeout rule for every game, 2026-10-31
+
+At the flag, in casual, ranked, tournament and arena games alike, the player who ran out loses when the opponent has mating material (more than a bare king and not a chess.js insufficient-material position); otherwise the game is a draw. The server decides once at the original deadline, with no proof service, waiting period or analysis call, and normal durable settlement releases reservations. A fully blocked position with no reachable mate is not detected and scores as a loss for the player who ran out; guides state this limit. Tournament and arena round cutoffs keep their published technical-void policy. Games saved under an earlier rules version keep their recorded result. Task 3.9 removes the proof code and its admission, slot and budget state. Regression fixtures keep the material rule honest: bare king, minor-piece and blocked cases, checkmate precedence and duplicate or late flags.
+
+#### Retired timeout-proof design (superseded on 2026-10-31)
+
+The paragraphs below, through the "Retired: qualification before enabling the profile" subsection, record the earlier CHA-Solver plan as dated history. They are not requirements. The proof path is retired: no private Container, no proof slots or attempt credits, no proof admission budget, no proof qualification gate. Where they say ranked admission, release or the profile depends on them, that no longer applies.
 
 Adopt the MIT-licensed maintained Rust [CHA-Solver](https://github.com/miguel-ambrona/chasolver) 3.0.0 at commit `3484c7e65247003fac8705a9290dc2b5d0978b94` for a narrow private native Container timeout-proof path. Keep the package and its `analyzer` example unchanged, with a thin product adapter and existing hash-pinned python-chess for independent witness validation. Do not fork a solver, use engine scores as proof, or put full search inside a Game move/clock transaction. No shared UI or harness contracts change. Review the private image's package notices and source obligations before distribution.
 
 Task 3.4 remains completed feasibility. Its 16 native queries and numeric-only WASM fixture ABI establish neither arbitrary-position bounds nor a production FEN/witness contract. The upstream public full-search API has no caller resource budget and can return unknown. The following task 3.8 is a distinct adoption and qualification gate. Use the [FIDE Online Chess Regulations](https://handbook.fide.com/chapter/OnlineChessRegulations), including automatic online draws, when documenting policy differences; this path does not prove complete dead-position detection during live play or full FIDE compliance.
 
-#### Reserve timeout-proof capacity before ranked admission
+#### Retired: reserve timeout-proof capacity before ranked admission
 
 Use saved rules version `online-2026-10-v3-proof` and profile `cha-native-3484c7e6-v1` only for newly admitted eligible ranked games after all existing ranked gates and task 3.8 pass. Historical games retain their saved policy. The profile defaults off. Missing, invalid or unavailable proof configuration closes new ranked admission rather than selecting an unqualified fallback.
 
@@ -351,7 +389,7 @@ Start with one private sleeping Container instance and one active proof job. Com
 
 Reuse the account-reservation and idempotent budget-receipt flow. Competition commits account/proof-slot ownership and the creation intent together; initialization waits until the matching monthly proof receipt also exists. This is a recoverable sequence across authorities, not a claimed D1/DO transaction. A lost reply reconciles the same intent, game and receipt. Known admission denial releases unused slots; uncertain state remains reserved until reconciliation proves release safe. No game starts without both capacity and spend authority. Stops close new reservations while previously reserved proof, terminal delivery and recovery work drain. Sleeping slots do not keep a Container awake.
 
-#### Private executable proof contract
+#### Retired: private executable proof contract
 
 The product-owned pool is reachable only through a Worker binding. Expose no public or client-supplied arbitrary-FEN endpoint. Accept one strict JSON request, at most 128 KiB of UTF-8, with exactly these fields:
 
@@ -376,7 +414,7 @@ Invoke only the unchanged pinned native example with stdin `<FEN> <white|black>\
 
 Return at most 16 KiB of JSON with exactly `v`, `rulesVersion`, `profileVersion`, `gameId`, `reservationId`, `pendingVersion`, `requestId`, `survivor`, `historyDigest`, `positionDigest`, `expiresAt`, `attempt`, `solverCommit`, `validatorVersion`, `verdict`, `witness`, and `reason`. Echo the checked request identity, fix `solverCommit` to the full pinned commit, and use validator version `python-chess-1.11.2-online-v1`. `verdict` is `winnable`, `unwinnable` or `unknown`; `witness` is the validated UCI array only for `winnable`, otherwise `[]`. `reason` is `null` for supported proofs, otherwise one of `solver-undetermined`, `resource-limit`, `invalid-input`, `invalid-output`, `invalid-witness`, `unsupported-policy`, `expired`, `transient-start`, or `interrupted`. Transport failure has no proof body. An invalid envelope is a private protocol failure, not an outcome.
 
-#### Bound execution, delivery and arbitration
+#### Retired: bound execution, delivery and arbitration
 
 Use the existing maintained Container lifecycle and subprocess facilities. A job helper that validates input/history and output/witness has a one-CPU-second limit; its native solver child has a separate one-CPU-second limit. Both have 128 MiB address-space ceilings, and an external watchdog kills their whole process group after one shared two-second wall deadline or the earlier remaining request deadline. These are per-process address-space and helper-CPU ceilings, not a claim that the whole Container uses 128 MiB or one CPU-second. Limit native stdout to 16 KiB and stderr to 4 KiB while reading; exceeding either limit kills the group and returns unknown. The hosting Container tier must enforce and measure its own total memory/CPU bound and use ten-second idle sleep. No child survives a cancelled request, process crash or pool restart. These values are safety ceilings to qualify, not measured universal completion guarantees; do not silently raise them to make fixtures pass.
 
@@ -384,7 +422,7 @@ Persist an attempt receipt keyed by `(requestId,attempt)` before execution, and 
 
 Game retains the pending request identity and original expiry. A private result may finalize that exact still-pending version once only after every version, side, reservation and digest agrees and its deadline remains open. `winnable` awards the survivor a timeout win; supported `unwinnable` records a timeout draw. Stale, mismatched, duplicate, late, expired or failed work cannot overwrite a terminal result or change ratings. Unknown freezes play and settlement, then the existing alarm applies the material timeout rule at the original 30-second deadline unless a supported proof already won arbitration: a rated loss for the flagged player when the survivor has mating material, otherwise a draw. Retries and restarts never extend it. Tournament cutoffs retain their earlier published deadline and existing unrated policy.
 
-#### Qualification before enabling the profile
+#### Retired: qualification before enabling the profile
 
 Use a licensed or authorized difficult corpus with full histories and both surviving sides. Cover ordinary starting/middlegame/endgame flags; bare king, two knights, bishop versus knight, asymmetric and blocked walls; castling, en passant, promotions; repeated positions, 50-move boundaries and checkmate precedence. Include invalid, wrong-side and overlong witnesses, real native-process unknowns, killed children, memory/output limits, failed startup, restart, lost replies, duplicates, stale results, timeout/fallback races and exhausted admission budgets. Preserve expected supported answers; ordinary flagging fixtures must resolve correctly within the stated limits rather than all falling through to the material timeout rule.
 
@@ -428,6 +466,8 @@ report without rewriting the frozen manifest. Cost adoption permits no extra
 image, native allocation, job, attempt, admission, experiment or lifetime and
 passes no real proof/Game/Competition, restore, capacity or player-flow check.
 
+
+The retired proof design ends above. The remaining paragraphs of this section still apply.
 
 Preserve fixtures for practical edge cases: underpromotion, en passant, castling rights after reconstruction, repetition, move-count boundaries, mate on a deadline, bare king and minor-piece flag cases, and blocked dead positions. Protect product adjudication contracts rather than reimplementing the dependency's own test suite.
 
@@ -479,7 +519,7 @@ Alternative: a single match-accuracy cutoff or browser monitoring presented as p
 | Product layout/assets | At most 20 KB gzip CSS on play, 14 KB on guides, 70 KB fonts, and 30 KB HTML per route; report board/piece asset costs. Existing studio budgets remain in force. |
 | Move validation | p95 server CPU at most 10 ms on representative positions and histories. |
 | Durable move commit | p95 service time at most 50 ms, excluding WAN; separately report end-to-end latency by tested region. |
-| Admission envelope | Exercise 1,000 live games and 20 settlements/second, including reconnect bursts and both formats; record measured limits for later optional ceilings. Under the 2026-10-30 demand policy these are follow-up evidence, not required application caps. |
+| Admission envelope | Exercise 1,000 live games and 20 settlements/second, including reconnect bursts and both formats; record measured limits for later optional ceilings. Under the 2026-10-30 demand policy and the 2026-10-31 launch policy these are follow-up evidence, not application caps or launch gates. |
 | Analysis | Benchmark locally and estimate cost before provisioning; under an owner-approved canary spending ceiling, measure deployed cold start, memory, nodes/second, queue delay, and cost per 1,000 games before wider use. |
 
 All figures above are proposed and unmeasured. No worldwide performance or concurrent-player guarantee follows from them. Record hardware/provider context, workload, samples, and failure rates with results. A budget miss requires a measured change or an explicit accepted trade-off, not a silent target increase.
@@ -491,8 +531,10 @@ Use Cloudflare's maintained Worker/DO test tools and focused browser tests. Cove
 On 2026-10-20 the owner authorized $100 per month for chess and requested stops
 and alerts. This replaces the earlier missing spending ceiling. The budget
 covers chess's Workers subscription and usage; existing resources for other
-products remain outside chess's authority. It does not authorize raising
-unmeasured admission limits, public ranked launch, or unrelated account changes.
+products remain outside chess's authority. It does not authorize public ranked
+launch or unrelated account changes. Superseded on 2026-10-31: there are no
+product admission limits to raise; budget alerts and the $85 stop webhook are
+the limit.
 The owner confirmed `chess@ejmlabs.com` as the sender and supplied the private
 delivery-test and alert destination. Sender onboarding and delivered messages
 were initial verification gates. Dated canary evidence records onboarding and
@@ -500,9 +542,11 @@ delivery to that one recipient; complete task 6.2 remains open.
 
 Use monthly usage counters and idempotent operation receipts for visibility.
 Under the 2026-10-30 demand policy they do not enforce monthly application
-admission caps. Cloudflare budget alerts and the stop webhook are the economic
-control. Explicit private versioned stops remain available. Abuse rate limits,
-authentication and platform-safety bounds remain. Retries cannot double-charge
+admission caps. Cloudflare budget alerts and the stop webhook (the existing $85
+stop) are the economic control, confirmed by the 2026-10-31 launch policy.
+Explicit private versioned stops remain available. Abuse rate limits,
+authentication, protocol and input bounds, bounded per-request and per-alarm
+work and platform-safety bounds remain. Retries cannot double-charge
 a game ID or bypass its admission receipt. Active games, terminal delivery,
 replay, and necessary recovery continue. Optional product retention ceilings
 may be set later from measured costs; they default off. Disable server analysis
@@ -513,6 +557,8 @@ first and reserve headroom for accepted work and service recovery.
 The following dated calculations are retained as evidence. They do not impose
 current per-service allocations, reserves or repeated approval requirements.
 The current single target, alerts and stop at the start of this design control.
+The timeout-proof allocations, slots and credits below are also retired by the
+2026-10-31 launch policy: the proof path no longer exists.
 
 The prior owner-approved proof allocation was $20 of the same $100 envelope
 on 2026-10-21 UTC, replacing the proposed $10 share. The owner-approved
@@ -567,7 +613,8 @@ These are internal allocations to qualify, not measured invoice amounts or
 provider-enforced dollar caps. Optional analysis must not consume recovery
 headroom. The unchanged alerts and stops retain their existing limits.
 
-Use one instance, four reserved ranked slots, at most 1,000 monthly game
+Retired on 2026-10-31 with the proof path (no proof instance, slots, monthly
+reservations or attempt credits remain): use one instance, four reserved ranked slots, at most 1,000 monthly game
 reservations and two attempt credits per reservation, with ten-second idle
 sleep. Enable the profile only after the pinned provider tier passes the required
 proof, settlement and recovery checks within current runtime and spending
@@ -729,8 +776,39 @@ Eligibility reads must not perform broad maintenance writes.
 
 #### Critical-path public release
 
-The owner approved these release gates on 2026-10-21. Ranked play and large
-arenas remain in the initial release. Before opening public access:
+Rewritten on 2026-10-31 by the launch policy. Ranked play and arenas open
+together. Before opening public access:
+
+1. Retire the timeout-proof path (task 3.9). Ranked resolves a flag by the
+   material rule, with no proof slot, attempt credit, Container or admission
+   budget.
+2. Complete the protected-host player checks (tasks 3.6 and 7.1) for accounts,
+   friend games, ranked games, arena entry/queue/results, rating/history,
+   replay, browser Stockfish and tournament entry. Check affected board
+   controls, reconnects, privacy and canonical security. Reuse the verified
+   email/reset evidence unless its implementation changes.
+3. Read back the live mail, budget-alert, cron and stop-webhook state (tasks 6.2
+   and 6.3). Preserve private administration and keep optional server analysis
+   disabled.
+4. Remove Cloudflare Access, then verify public access and guides on the
+   canonical host. Shared discovery (task 7.3) follows.
+
+The first-tier provider run does not gate opening. Measure real demand after
+opening. The first-tier run, nine-day real-calendar observation, full-hour
+72,000-hot-payload endurance and 25-per-second retirement run, six-region
+external WAN benchmarks and later 10,000-entry/5,000-live tier remain
+unfinished follow-up evidence. They do not block this release or become passed
+checks. Keep their requirements and report unrun measurements. Public limits
+are the kept safety bounds; no product admission ceiling is fitted to
+evidence. Do not promise sustained monthly throughput or worldwide latency from
+a short single-egress run. No chess rule, retention age or retained workload
+corpus changes through this release sequencing decision.
+
+##### Earlier release gates, superseded on 2026-10-31
+
+The owner approved these gates on 2026-10-21 as the earlier plan. Gate 1
+required the timeout-proof path and gate 2 the full first-tier provider run;
+neither gates opening now.
 
 1. Qualify real Game, timeout-proof and Competition settlement/recovery within
    four concurrent ranked games, 1,000 monthly proof admissions, two attempts
@@ -750,19 +828,17 @@ arenas remain in the initial release. Before opening public access:
    recovery. Preserve private administration and disable optional server
    analysis. Verify public access and guides after opening the canonical host.
 
-The nine-day real-calendar observation, full-hour 72,000-hot-payload endurance
-and 25-per-second retirement run, six-region external WAN benchmarks and later
-10,000-entry/5,000-live tier remain unfinished follow-up qualification. They do
-not block this initial release or become passed checks. Keep their requirements
-and report unrun measurements. The initial public ceilings must fit passing
-first-tier evidence, existing production safety limits and monthly headroom.
-Do not promise sustained monthly throughput or worldwide latency from a short
-single-egress run. No chess rule, retention age, workload corpus or budget
-ceiling changes through this release sequencing decision.
+The earlier plan kept the nine-day calendar observation, full-hour endurance
+run, six-region benchmarks and later tier as follow-up and required initial
+public ceilings to fit passing first-tier evidence. Only the follow-up part
+stands; there are no product ceilings to fit.
 
 #### Qualification and retention
 
-| Workload | First-tier acceptance target |
+Follow-up evidence since 2026-10-31. The table holds measurement targets for
+the first-tier run. They are not product caps and not launch gates.
+
+| Workload | First-tier measurement target |
 | --- | --- |
 | Entries | 2,000 per event, three simultaneous events |
 | Live games | 1,000 combined creating/reserved/active/settling games across modes; 2,000 participant sockets |
@@ -775,23 +851,27 @@ ceiling changes through this release sequencing decision.
 | Initial-run egress | Record actual available real client egress and latency; no unsupported worldwide latency claim |
 | Follow-up regions | Separate US West/East, Europe, Asia-Pacific, Australia, and South America benchmarks |
 
-Retain the proposed 10,000-entry/5,000-live tier as later qualification. Neither
+Retain the proposed 10,000-entry/5,000-live tier as later measurement. Neither
 configuration nor local tests establish deployed, regional, email, or account
-creation capacity. Choose enabled admission ceilings from actual passing cost
-and recovery evidence within the owner's $100/month chess budget.
+creation capacity. Superseded on 2026-10-31: do not choose product admission
+ceilings from these runs. The budget alerts and stop webhook are the economic
+limit; publish measured capacity only as a measurement.
 
 At 20 finishes/second, the one-hour hold requires at least 72,000 completed hot
 payloads plus live games and evidence holds. Four retirements/minute and 10,000
-permanent IDs cannot sustain it. Large-tier qualification therefore requires
+permanent IDs cannot sustain it. Large-tier measurement therefore needs
 at least 25 successful retirements/second after warmup with bounded concurrency,
 retry cursors, and nonblocking holds. Preserve permanent IDs, terminal receipts,
 private replay, and immutable results. Archive final standings before removing
-temporary event rows; history expiry uses `finishedAt`. Enforce separate record
-and byte ceilings with headroom for accepted work. Report cost per 1,000 games
+temporary event rows; history expiry uses `finishedAt`. Platform storage limits
+stay safety bounds that close new admission honestly before a hard platform
+failure; no other record or byte ceiling is a product cap. Report cost per 1,000 games
 and 10,000 spectator-hours, including auth, projection, storage, retries, and
-active-object duration. Retain initial preview limits until the approved
-first-tier release gates pass; sustained retention/endurance claims require
-the separate full-hour qualification.
+active-object duration. Retirement stays at the bounded preview rate (a
+per-alarm work bound) unless the exact `scaled` mode is selected from measured
+throughput after opening; this is no longer a first-tier release gate.
+Sustained retention/endurance claims require the separate full-hour
+qualification.
 
 Product owns arena runtime/DTOs and UI composition through existing public kit
 exports, migrations, tournament guides, and capacity evidence. The security
@@ -799,6 +879,10 @@ owner integrates HTTP/deadline/farming hooks. The operations owner supplies
 budget/retention controls. No harness or new shared visual contract is needed.
 
 #### Approved isolated native capacity run
+
+Follow-up evidence since 2026-10-31. This run and its once-only policy no longer
+gate opening ranked play or arenas; the history and finite bounds below stay
+as the record of the private harness.
 
 The owner approved the bounded plan on 2026-10-21 and directed completion and
 public launch again on 2026-10-22. Retain all six failed attempts unchanged.
@@ -1023,6 +1107,7 @@ storage. Refresh rates, taxes, plan, prior usage and attribution before live
 approval. Different cycles or quantities require a rebuilt ledger. Missing or
 delayed metrics or insufficient headroom stops new work.
 Private ingress and finite work units do not create a hard provider invoice cap.
+The proof share in this ledger is retired (2026-10-31); rebuild the ledger without it before any follow-up run.
 
 Seal exact source, config, fixture corpus and driver before live approval.
 After a run, reconcile physical/native usage, billing units, unique IDs and
@@ -1033,13 +1118,13 @@ retirement after the full one-hour hold, mixed holds, real hourly/daily/weekly
 calendar, ranked cost, long-term growth or later 10,000-entry/5,000-live tier.
 Plan those separately without removing the existing acceptance requirements.
 
-The owner requires hundreds and thousands of entrants in one automatic event. The existing three/four-player round-robin implementation is a local preview and does not satisfy this requirement. The selected arena design above resolves the format; implementation and capacity qualification remain incomplete. Do not raise a cap and claim scale.
+The owner requires hundreds and thousands of entrants in one automatic event. The existing three/four-player round-robin implementation is a local preview and does not satisfy this requirement. The selected arena design above resolves the format; implementation and capacity measurement remain incomplete follow-up evidence. Do not claim scale beyond what is measured; since 2026-10-31 there is no product cap to raise.
 
-Qualification candidates are 10,000 entrants, 5,000 concurrent games, registration bursts, simultaneous completions/reconnects, and cached spectator standings. These are proposed test targets, not supported capacity. Evaluate partitioned entrant/pairing state, per-game authorities, shared account reservations across modes, idempotent score receipts, paged standings, retirement throughput, D1 auth load, regional behavior, and cost. Select admission limits from evidence. Party mode remains conversation only until its design and implementation scope are confirmed.
+Qualification candidates are 10,000 entrants, 5,000 concurrent games, registration bursts, simultaneous completions/reconnects, and cached spectator standings. These are proposed test targets, not supported capacity. Evaluate partitioned entrant/pairing state, per-game authorities, shared account reservations across modes, idempotent score receipts, paged standings, retirement throughput, D1 auth load, regional behavior, and cost. Publish measured capacity as measurement; do not derive product admission limits from it (2026-10-31). Party mode remains conversation only until its design and implementation scope are confirmed.
 
 - [One global Competition object can bottleneck or delay matching/ratings] -> Keep it off the move path, bound admission and queues, measure the stated envelope, and plan a split only with preserved global invariants.
 - [A game object has one physical region] -> Prefer nearby players, widen searches transparently, test distant pairs, and publish server-arrival semantics. [Location hints are best effort](https://developers.cloudflare.com/durable-objects/reference/data-location/), not a worldwide latency guarantee.
-- [Adjudication package limits can cause incorrect results] -> Block public release until the documented policy, dependencies, difficult positions, and owner acceptance meet the accuracy contract.
+- [Adjudication limits can cause incorrect results] -> Superseded on 2026-10-31: the owner accepted the material timeout rule and its limit (a fully blocked position scores as a loss for the player who ran out). Publish the limit, keep regression fixtures, and claim no full FIDE adjudication.
 - [Engine signals cause false positives or weak screening] -> Keep optional sanctions human reviewed, disable case-based actions when unattended, publish detection limits, and verify objective abuse controls before competitive launch.
 - [Analysis/mail are paid or quota constrained] -> Verify Email beta access/domain delivery and measure capped Containers under a spending ceiling before enabling the dependent feature.
 - [D1 projections or storage lag/grow] -> Version writes, use primary auth reads and session bookmarks where needed, alert on lag/capacity, and retain retryable authority outside projections.
@@ -1053,7 +1138,7 @@ Qualification candidates are 10,000 entrants, 5,000 concurrent games, registrati
 3. Implement and test active-game recovery, auth, atomic competition/outboxes, projections, corrections, private review, and the resolved adjudication policy. Run bundle, service, load, accessibility, and failure checks.
 4. Before resource creation, obtain the deployment/spending scope, verify Workers Paid and Email beta eligibility, onboard the sender domain, and measure/approve the analysis budget. Prepare scoped secrets, additive D1 migrations, DO migrations, backups, retention and recovery runbooks. Do not place credentials in artifacts.
 5. After separately authorized deployment, test the protected preview and exact public host/routes: two distinct browsers, username/password signup with and without recovery email, account invitations, legacy guest reconnect, credential-backed ranked eligibility, promotion, clocks, reconnect, terminal settlement, leaderboard update, replay, automatic tournament rounds, report receipts, and unattended recovery. Exercise owner review, appeal decisions, and rating repair only when explicit reviewed operation is enabled. Verify access denial, headers, aliases, delivery, quotas, regional latency, and deployed revision. A dry run or configured setting does not establish these results.
-6. Open public ranked and first-tier arena admission only after the critical-path public release gates above pass. Keep longer calendar/endurance/regional and later-tier qualification unfinished and publish their limits. Enable shared chess discoverability and add studio discovery only after product and guide publication are verified. On failure, close new admission, preserve/drain active games and outboxes, and roll back compatible code through the normal release process. Do not restore an old database over accepted game/rating events; use journal replay and versioned projections. Sync specs and archive only verified completed scope.
+6. Open public ranked and arena admission only after the critical-path public release gates above (rewritten 2026-10-31) pass. Keep the first-tier run, longer calendar/endurance/regional and later-tier measurements unfinished follow-up evidence and publish their limits. Enable shared chess discoverability and add studio discovery only after product and guide publication are verified. On failure, close new admission, preserve/drain active games and outboxes, and roll back compatible code through the normal release process. Do not restore an old database over accepted game/rating events; use journal replay and versioned projections. Sync specs and archive only verified completed scope.
 
 ### 13. Private match replays
 
@@ -1077,11 +1162,11 @@ Games are unrated, with separate event standings. Normal wins/draws/losses score
 
 Routine play, event scheduling, retry, expiry, quota handling, and maintenance must proceed without an operator. Engine reports and statistical screening stay informational. Report receipts disclose review availability. Existing private review tools may remain optional, but unattended mode disables new case-based sanctions and appeal decisions. Temporary restrictions expire automatically; no account is convicted from accuracy, IP, focus, or report count. In unattended mode, close an open report as expired-unreviewed after seven days only when it has no human decision, unresolved appeal, or future evidence hold. Use an indexed oldest-first age query and at most 500 closures per existing maintenance pass. Record automatic outcome/time and increment the case version once, preserving private receipt identity, the 1,000-open-case cap, normal 90-day evidence retention, permanent audit metadata and all rating history. Duplicate submissions return the same receipt and closure without extending evidence expiry. Late optional analysis cannot reopen or add evidence to an expired case; pending analysis does not extend the review window. Closure is not clearance, conviction or a fabricated human review.
 
-For new games on the qualified proof profile, unknown timeout adjudication first uses the capacity and finite attempts reserved at ranked admission. Accept a supported validated proof once under section 9. Any remaining unknown falls back at the original 30-second deadline to the material timeout rule (a loss for the player who ran out when the other side has mating material, otherwise a draw), using the durable result outbox to release seats. The fallback is rated and scores a fully blocked position as a loss; competitive launch stays gated until ordinary-flag proof coverage, exhaustion behavior and all other launch gates are accepted and verified. A private tournament deadline RPC may technical-void a game at its published round cutoff without claiming a winner.
+Every timeout, including ranked, is decided at the flag by the material timeout rule (a loss for the player who ran out when the other side has mating material, otherwise a draw), using the durable result outbox to release seats. The result is rated in ranked games and scores a fully blocked position as a loss, the limit the owner accepted on 2026-10-31. Superseded on 2026-10-31: the earlier qualified proof profile, its reserved capacity and attempts, and its wait up to the original 30-second deadline are retired. A private tournament deadline RPC may technical-void a game at its published round cutoff without claiming a winner.
 
-Retire proved finished unrated Game payloads after at least one hour. Missing or exact `GAME_RETIREMENT_MODE=preview` preserves at most four attempts per minute. Exact `scaled` selects indexed durable work with at most 32 candidates per pass, four archive calls in flight, and one persisted global allowance of 32 attempts per second shared by alarm, cron, and manual entry points through Competition. Invalid mode values close retirement. Held and failed rows receive bounded retry times so they cannot block later due work. Qualification must measure at least 25 successful retirements per second after warmup before increased admission ceilings are selected.
+Retire proved finished unrated Game payloads after at least one hour. Missing or exact `GAME_RETIREMENT_MODE=preview` preserves at most four attempts per minute. Exact `scaled` selects indexed durable work with at most 32 candidates per pass, four archive calls in flight, and one persisted global allowance of 32 attempts per second shared by alarm, cron, and manual entry points through Competition. Invalid mode values close retirement. Held and failed rows receive bounded retry times so they cannot block later due work. Measure at least 25 successful retirements per second after warmup as follow-up evidence before choosing `scaled` for the large tier; no admission ceiling is selected from it (2026-10-31).
 
-Both modes require a matching D1 terminal version, rules version, and digest, no active seat, delivery or AI work, and no evidence or appeal hold. Keep a durable minimal Game tombstone and permanent D1 ID ledger; never deleteAll or recycle IDs. Retry retirement after partial failure. History/replay remains in D1. Count retained payloads separately from archived tombstones. Never reset or delete accepted rating events, correction checkpoints, or immutable result history. Permanent records still grow; a separate storage ceiling closes new admission honestly. Do not claim unlimited or operator-free production readiness before retention, failure, and capacity checks pass.
+Both modes require a matching D1 terminal version, rules version, and digest, no active seat, delivery or AI work, and no evidence or appeal hold. Keep a durable minimal Game tombstone and permanent D1 ID ledger; never deleteAll or recycle IDs. Retry retirement after partial failure. History/replay remains in D1. Count retained payloads separately from archived tombstones. Never reset or delete accepted rating events, correction checkpoints, or immutable result history. Permanent records still grow; the platform storage limit is a safety bound that closes new admission honestly, and no other storage ceiling is a product cap. Do not claim unlimited or operator-free production readiness before retention, failure, and capacity measurements support it.
 
 ### 17. Compact application spacing
 

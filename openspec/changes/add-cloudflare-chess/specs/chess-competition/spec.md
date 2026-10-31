@@ -8,19 +8,18 @@ Provide accountable ranked matchmaking and worldwide chess leaderboards whose ra
 
 ### Requirement: Simplified operating budget
 
-The service SHALL use the owner's 2026-10-22 decision: one $100 monthly
-spending target, existing usage alerts and emergency stop.
-This requirement supersedes earlier mandatory per-service allocations and
-repeated financial-review gates in this change. Dated cost calculations are
-historical estimates. Runtime bounds, source integrity, ranked correctness
-and tournament qualification SHALL remain required. Billing alerts SHALL NOT
-be described as a guaranteed invoice cap.
+The service SHALL use the owner's one $100 monthly spending target (2026-10-22). Under the 2026-10-31 launch policy, Cloudflare budget alerts and the existing $85 stop webhook SHALL be the economic limit, with no arbitrary product admission or retention caps. Security and abuse limits, protocol and input bounds, bounded per-request and per-alarm work, platform-safety bounds and ranked correctness SHALL remain. Alerts and the stop SHALL NOT be described as a guaranteed invoice cap.
 
-#### Scenario: Practical quotas replace stopped preview settings
+#### Scenario: Earlier allocations are history
+
+- **WHEN** a dated per-service allocation, reserve, cost calculation or repeated financial-review gate is read
+- **THEN** it is a historical estimate and imposes no current requirement
+
+#### Scenario: Application caps are off
 
 - **WHEN** the owner enables protected-host use
-- **THEN** monthly signup, game and email caps SHALL be 10,000, 10,000 and 5,000, with a 100,000 lifetime signup cap
-- **AND** account/game and email stops SHALL be cleared while abuse controls, authentication and accepted-work recovery remain enforced
+- **THEN** monthly and lifetime signup, game and email application caps SHALL be off
+- **AND** account/game and email stops SHALL be cleared while abuse controls, authentication, protocol and input bounds, platform-safety bounds and accepted-work recovery remain enforced
 - **AND** optional server analysis SHALL remain disabled and public Access removal SHALL follow the launch sequence
 
 
@@ -280,42 +279,39 @@ The service SHALL create opt-in bounded round-robin events at published UTC cade
 
 ### Requirement: Large-entry automatic events
 
-The release design SHALL support hundreds and thousands of entrants with an
-admission limit selected from measured qualification. The four-player preview
-SHALL NOT satisfy this claim. Registration, pairing, cross-mode reservations,
-scores, public reads and recovery SHALL remain bounded. The first tier SHALL
-target 2,000 entrants, 1,000 live games and 20 results/second within storage and
-the $100 monthly budget; the later 10,000-entry/5,000-live tier SHALL need separate
-qualification.
+The release design SHALL support hundreds and thousands of entrants without an arbitrary product entrant or concurrent-game cap. The four-player preview SHALL NOT satisfy this. Registration, pairing, cross-mode reservations, scores, public reads and recovery SHALL stay bounded per request and per alarm. The first tier (2,000 entrants, 1,000 live games, 20 results/second) and the later 10,000-entry/5,000-live tier SHALL be follow-up measurement targets, not caps or launch gates.
 
-#### Scenario: Capacity tier is selected
+#### Scenario: Capacity is published
 
-- **WHEN** operators select a public admission ceiling
-- **THEN** it stays within measured signup, concurrency, settlement, retention, recovery, region and cost evidence, and a smaller tier never proves the later tier
+- **WHEN** operators publish a capacity figure
+- **THEN** it states the measured signup, concurrency, settlement, retention, recovery, region and cost evidence, a smaller tier never proves the later tier, and the lack of a measurement does not by itself close admission
 
 ### Requirement: Initial ranked and large-arena release qualification
 
-Public opening SHALL require real ranked proof/settlement/recovery qualification,
-the complete approved first-tier provider workload, protected-host player flows,
-and verified privacy, spending, signup and accepted-work controls. Optional
-server analysis SHALL stay disabled.
+Public opening of ranked play and arenas SHALL require retirement of the
+timeout-proof path so ranked uses the material timeout rule, protected-host
+player checks that include ranked and arena play, and live readbacks of mail
+delivery, budget alerts, cron and the stop webhook. Access removal and public
+verification SHALL follow. The first-tier provider workload SHALL NOT gate
+opening and SHALL remain follow-up evidence. Optional server analysis SHALL stay
+disabled.
 
 #### Scenario: Financial adoption precedes release evidence
 
 - **WHEN** the owner adopts the reviewed financial policy
 - **THEN** it SHALL use the simplified operating budget with one $100 target
-- **AND** source integrity and provider-resource evidence SHALL remain required
+- **AND** source integrity SHALL remain required
 - **AND** financial adoption SHALL pass no workload or release check
 
 #### Scenario: Initial public release is selected
 
-- **WHEN** the initial ranked and large-arena release gates pass
-- **THEN** public access may open with ceilings no higher than passing first-tier evidence, existing production guards and monthly headroom
-- **AND** the nine-day calendar observation, full-hour retention/endurance and 25-per-second retirement run, six-region external WAN benchmarks and later tier remain explicit unfinished follow-up qualification without blocking that release or being reported as passed
+- **WHEN** the protected-host player checks and the live mail, alert, cron and stop readbacks pass
+- **THEN** Access may be removed and public ranked play and arenas open with no product admission caps, and public verification follows
+- **AND** the first-tier provider run, nine-day calendar observation, full-hour retention/endurance and 25-per-second retirement run, six-region external WAN benchmarks and later tier remain explicit unfinished follow-up evidence without blocking that release or being reported as passed
 
-#### Scenario: The first-tier run has one real client egress
+#### Scenario: A first-tier run has one real client egress
 
-- **WHEN** the frozen approved run uses one named real client egress
+- **WHEN** a follow-up first-tier run uses one named real client egress
 - **THEN** its measurements identify that egress and all unrun regions, and make no worldwide latency or sustained monthly throughput claim
 
 ### Requirement: Timed arena lifecycle
@@ -378,15 +374,11 @@ and no-store responses.
 #### Scenario: Public capacity is announced
 
 - **WHEN** an event's supported entrant or concurrent-game capacity is published
-- **THEN** the claim identifies the measured admission envelope and recovery/cost limits rather than treating a configured maximum or local test as production evidence
+- **THEN** the claim identifies the measured envelope and recovery/cost limits rather than treating a configured maximum or local test as production evidence
 
 ### Requirement: Once-only isolated native capacity qualification
 
-The private harness SHALL preserve failed run evidence and permit only the
-confirmed fixture repair after exact candidate review. All attempts SHALL share
-a $25 ceiling and at most 20,000 permanently charged Game IDs. Normal atomic
-receipts and native Game/Competition authority SHALL apply. Production SHALL
-reject the private budget exception and retain its ceilings.
+This requirement is follow-up evidence since 2026-10-31 and gates no launch. The private harness SHALL preserve failed run evidence and permit only the confirmed fixture repair after exact candidate review. All attempts SHALL share a $25 ceiling and at most 20,000 permanently charged Game IDs, with normal atomic receipts and native authority. Production SHALL reject the private budget exception. Its references to proof routes are historical.
 
 #### Scenario: A run is retried or restarted
 
@@ -434,4 +426,4 @@ reject the private budget exception and retain its ceilings.
 
 - **WHEN** expiry, a finite work ceiling, uncertain control state, missing metrics or complete-cost headroom blocks further work
 - **THEN** new synthetic admission stops permanently, accepted receipts reconcile only under their original IDs, unresolved work remains charged, and the failed or unrun target remains visible
-- **AND** this run does not complete the separate full retention, calendar, regional, ranked or later-tier measurements; initial public opening still requires its own ranked and operational release gates
+- **AND** this run does not complete the separate full retention, calendar, regional, ranked or later-tier measurements; initial public opening depends on its own launch gates, not on this run
