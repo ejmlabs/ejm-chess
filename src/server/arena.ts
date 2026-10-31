@@ -2,11 +2,12 @@ import type { Actor, GameResult, Pool } from '../shared/protocol';
 import type { ArenaMe, ArenaStatus, ArenaSummary } from '../shared/arenas';
 import type { TournamentCadence } from '../shared/tournaments';
 import { acquireTournamentAccount, competitiveSessionEligible } from './auth';
-import { ARENA_POLICY, arenaLimits, retryDelayMs } from './arena-policy';
+import { ARENA_POLICY, arenaLimits } from './arena-policy';
 import { ArenaProjection } from './arena-projection';
 import { newWorkAllowed, reserveMonthlyWork } from './budget';
 import type { Env } from './env';
 import { assertNotClosing, gamePhase, NEW_GAMES_PAUSED, nextReconcileAt, requireSession, seatPair, type EventBridge } from './events';
+import { retryDelayMs } from './retry';
 import { CADENCE_POOL, CADENCES, GAME_WINDOW_MS, MINUTE, occurrences } from './schedule';
 import { ApiError } from './security';
 
@@ -693,23 +694,19 @@ export class ArenaControl {
     const now = Date.now();
     const sql = this.ctx.storage.sql;
     const due = (query: string) => sql.exec<{ due: number | null }>(query).one().due;
+    const publicCleanup = sql.exec<{ value: string }>("SELECT value FROM arena_meta WHERE key='public-cleanup-at'").toArray()[0];
     const times = [
       due('SELECT MIN(next_at) AS due FROM arena_events'),
       due("SELECT MIN(next_at) AS due FROM arena_entries WHERE state IN ('claiming','releasing') AND next_at IS NOT NULL"),
       due('SELECT MIN(next_at) AS due FROM arena_intents WHERE next_at IS NOT NULL'),
+      due('SELECT MIN(cleanup_after) AS due FROM arena_events WHERE cleanup_after IS NOT NULL'),
+      due('SELECT MIN(project_after) AS due FROM arena_events WHERE revision>projected_revision'),
+      sql.exec('SELECT 1 FROM arena_projection_builds LIMIT 1').toArray().length ? now + 1 : null,
+      publicCleanup ? Number(publicCleanup.value) : null,
+      // A release batch is bounded, so the rest of a closed event's queue is due at once.
+      sql.exec(`SELECT 1 FROM arena_entries e JOIN arena_events v ON v.id=e.event_id WHERE ${STALE_QUEUED} LIMIT 1`,
+        now, Number(this.enabled())).toArray().length ? now : null,
     ].filter((value): value is number => value !== null);
-    const publishing = [due('SELECT MIN(project_after) AS due FROM arena_events WHERE revision>projected_revision'),
-      sql.exec('SELECT 1 FROM arena_projection_builds LIMIT 1').toArray().length ? now + 1 : null].filter((value): value is number => value !== null);
-    // Publication work waits out a failure instead of retrying on every millisecond.
-    if (publishing.length) times.push(Math.max(Math.min(...publishing), this.projection.retryAt));
-    const publicCleanup = sql.exec<{ value: string }>("SELECT value FROM arena_meta WHERE key='public-cleanup-at'").toArray()[0];
-    // Cleanup follows publication in every pass, so a failing publication skips it. It waits out the same backoff.
-    const cleanups = [due('SELECT MIN(cleanup_after) AS due FROM arena_events WHERE cleanup_after IS NOT NULL'),
-      publicCleanup ? Number(publicCleanup.value) : null].filter((value): value is number => value !== null);
-    if (cleanups.length) times.push(Math.max(Math.min(...cleanups), this.projection.retryAt));
-    // A release batch is bounded, so the rest of a closed event's queue is due at once.
-    if (sql.exec(`SELECT 1 FROM arena_entries e JOIN arena_events v ON v.id=e.event_id WHERE ${STALE_QUEUED} LIMIT 1`,
-      now, Number(this.enabled())).toArray().length) times.push(now);
     return times.length ? Math.min(...times) : null;
   }
 

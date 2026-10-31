@@ -2,11 +2,11 @@ import type { Actor, GameResult, GameSnapshot, InitGame } from '../shared/protoc
 import { FORMATS } from '../shared/protocol';
 import { getEngineLevel, STOCKFISH_BUILD } from '../shared/engine';
 import { isGameId } from '../shared/gamePath';
-import { retryDelayMs } from './arena-policy';
 import { acquireSeatGuard, getActorBySessionId, knownGame } from './auth';
 import { newWorkAllowed } from './budget';
 import { aiEnabled, type Env } from './env';
 import { assertNotClosing, gamePhase, nextReconcileAt } from './events';
+import { retryDelayMs } from './retry';
 import { ApiError } from './security';
 
 export type CasualGameInput = Pick<InitGame, 'id' | 'format' | 'ai'>;

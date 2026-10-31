@@ -6,6 +6,7 @@ import { aiEnabled, type Env } from './env';
 import { consumeGameProtocol, countProtocolEvent, gameProtocolStatus, initializeProtocolLimits } from './abuse';
 import { getEngineLevel, STOCKFISH_BUILD } from '../shared/engine';
 import { captureNativePoint } from './recovery';
+import { retryDelayMs } from './retry';
 import { ApiError } from './security';
 import {
   FORMATS, PRIOR_RULES_VERSIONS, RULES_VERSION, RATING_VERSION,
@@ -766,7 +767,8 @@ export class Game extends DurableObject<Env> {
         const current = this.delivery();
         if (current?.result.eventId !== delivery.result.eventId) return;
         current.attempts++;
-        current.nextAttemptAt = now + 1_000 * 2 ** Math.min(current.attempts, 8);
+        // Counts this failure too, so the first retry waits two seconds.
+        current.nextAttemptAt = now + retryDelayMs(current.attempts);
         this.ctx.storage.sql.exec('UPDATE result_delivery SET value=? WHERE id=1', JSON.stringify(current));
       });
     }

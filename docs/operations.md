@@ -230,6 +230,16 @@ Competition serializes alarm updates and keeps an earlier pending deadline.
 A full maintenance pass can advance a deadline due when it began, while keeping
 alarms armed after its start. After dispatch, maintenance arms the next deadline.
 Repeated player requests cannot postpone a pending alarm.
+Failing work waits twice as long each time up to 60 seconds, so an outage costs a
+few wakeups a minute. Arena and casual items start at one second. Ranked match
+creation, a ranked result projection and a Game's result delivery start at two
+seconds; their cap was about four minutes before. A tournament recovery waits 30
+seconds, then a minute. A maintenance pass in which any stage failed also arms the
+next alarm no earlier than one second, then 2, 4 and so on up to 60 seconds after
+it, because a failed stage leaves its work due and skips the stages after it. The
+first pass without a failure ends the wait, and a restart begins at one second. A
+full D1 outage with work due cost one wakeup every millisecond and costs 15 in ten
+minutes now (local mocked-clock run, not staged or released).
 New arena entries reserve the existing 50-per-second, burst-100 registration
 bucket before external session, eligibility and budget checks. An empty bucket
 returns `ARENA_RETRY` without D1 or controller calls, event discovery or

@@ -18,6 +18,7 @@ import { LEADERBOARD_COLUMNS, LEADERBOARD_VALUES, leaderboardRow } from './leade
 import { initialRating, rateMatch } from './rating';
 import { RatingRepair, RECORD_ID, REPAIR_BATCH } from './rating-repair';
 import { nextReconcileAt, type EventBridge } from './events';
+import { retryDelayMs } from './retry';
 import type { Env } from './env';
 import {
   FORMATS, PRIOR_RULES_VERSIONS, RATING_VERSION, RULES_VERSION,
@@ -121,9 +122,6 @@ type Outbox = {
 
 function pairKey(a: string, b: string): string { return JSON.stringify([a, b].sort()); }
 
-/** Exponential retry delay for a failing item, capped at five minutes. */
-function backoffMs(attempts: number): number { return Math.min(300_000, 1_000 * 2 ** Math.min(attempts + 1, 8)); }
-
 /** Published matching policy: 100 rating points at join, 5 more each second of the shorter wait, up to 800. */
 function ratingWindow(waitedMs: number): number { return Math.min(800, 100 + Math.floor(waitedMs / 1_000) * 5); }
 
@@ -133,6 +131,9 @@ export class Competition extends DurableObject<Env> {
   private flushing = false;
   private retiring = false;
   private scheduling: Promise<void> = Promise.resolve();
+  /** The alarm never fires before this after a failed pass. A restart begins the count again. */
+  private passRetryAt = 0;
+  private failedPasses = 0;
   private queuedSchedule: { completedThrough: number | null; completion: Promise<void> } | null = null;
   protected recoveryDrill = false;
   private tournaments: TournamentControl;
@@ -583,8 +584,9 @@ export class Competition extends DurableObject<Env> {
         this.ctx.storage.sql.exec("UPDATE matches SET status='reserved',next_attempt_at=? WHERE id=? AND status='creating'", now + RETRY_MS, match.id);
       });
     } catch {
+      // The attempt count includes this failure, so the first retry waits two seconds.
       this.ctx.storage.sql.exec('UPDATE matches SET attempts=attempts+1,next_attempt_at=? WHERE id=? AND status=?',
-        now + backoffMs(match.attempts), match.id, 'creating');
+        now + retryDelayMs(match.attempts + 1), match.id, 'creating');
     }
   }
 
@@ -787,8 +789,9 @@ export class Competition extends DurableObject<Env> {
           }
           this.ctx.storage.sql.exec('DELETE FROM outbox WHERE id=?', row.id);
         } catch {
+          // Counts this failure too, as match creation does.
           this.ctx.storage.sql.exec('UPDATE outbox SET attempts=attempts+1,next_attempt_at=? WHERE id=?',
-            Date.now() + backoffMs(row.attempts), row.id);
+            Date.now() + retryDelayMs(row.attempts + 1), row.id);
         }
       }
     } finally { this.flushing = false; await this.ctx.storage.sync(); await this.schedule(); }
@@ -930,10 +933,10 @@ export class Competition extends DurableObject<Env> {
       if (current !== null) await this.ctx.storage.deleteAlarm();
       return;
     }
-    const due = Math.max(Date.now() + 1, Math.min(...times));
+    const due = Math.max(Date.now() + 1, this.passRetryAt, Math.min(...times));
     // A full maintenance pass may advance a deadline it has consumed. Keep
     // alarms armed after that pass began, including newly earlier work.
-    if (current === null || due < current || (completedThrough !== null && current <= completedThrough)) {
+    if (current === null || due < current || current < this.passRetryAt || (completedThrough !== null && current <= completedThrough)) {
       await this.ctx.storage.setAlarm(due);
     }
   }
@@ -983,6 +986,11 @@ export class Competition extends DurableObject<Env> {
     const completedAt = Date.now();
     if (errors.length) this.ctx.storage.sql.exec("INSERT INTO meta(key,value) VALUES('maintenance-error',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", JSON.stringify({ at: completedAt, stages: errors }));
     else this.ctx.storage.sql.exec("DELETE FROM meta WHERE key='maintenance-error'");
+    // A failed stage leaves its work due and skips the stages after it, so the alarm would fire again at once.
+    // Isolating stages would not help, since the failed stage's own due time stays past. A floor on the alarm
+    // covers every stage without per-stage bookkeeping, and a pass without a failure starts the count over.
+    if (errors.length) this.passRetryAt = completedAt + retryDelayMs(this.failedPasses++);
+    else this.passRetryAt = this.failedPasses = 0;
     await this.ctx.storage.sync();
     await this.schedule(startedAt);
     return { completedAt, errors };

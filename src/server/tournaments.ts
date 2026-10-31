@@ -5,6 +5,7 @@ import { ApiError } from './security';
 import { newWorkAllowed, reserveMonthlyWork } from './budget';
 import type { Env } from './env';
 import { assertNotClosing, NEW_GAMES_PAUSED, nextReconcileAt, requireSession, seatPair, type EventBridge } from './events';
+import { retryDelayMs } from './retry';
 import { CADENCE_POOL, CADENCES, GAME_WINDOW_MS, HISTORY_MS, MINUTE, occurrences, REGISTRATION_MS } from './schedule';
 import type { Actor, GameResult, Pool } from '../shared/protocol';
 import type { TournamentCadence, TournamentList, TournamentPlayerStatus, TournamentView } from '../shared/tournaments';
@@ -30,6 +31,8 @@ interface Event {
   finishedAt: number | null; nextAt: number | null; members: Member[]; games: Pairing[]; engine: TournamentData | null;
   admissionIds: string[];
   firstRoundAt: number | null;
+  /** Recovery steps that failed in a row, for their backoff. Events saved by earlier builds have none. */
+  failures?: number;
 }
 interface Bridge extends EventBridge {
   release(tournamentId: string): void;
@@ -377,9 +380,12 @@ export class TournamentControl {
       if (event.status === 'running') await this.runRound(event, now);
       event = this.load(id)!;
       if (over(event)) await this.release(event);
+      event = this.load(id)!;
+      if (event.failures) { delete event.failures; this.save(event); }
     } catch {
       const event = this.load(id)!;
-      event.nextAt = now + RECOVERY_RETRY_MS;
+      event.nextAt = now + retryDelayMs(event.failures ?? 0, RECOVERY_RETRY_MS);
+      event.failures = (event.failures ?? 0) + 1;
       // A finished or cancelled event keeps the reason players already see.
       if (!over(event)) event.reason = 'Recovery is pending after a service interruption.';
       this.save(event);

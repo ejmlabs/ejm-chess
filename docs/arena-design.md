@@ -178,12 +178,16 @@ retries once a second, so pairing latency is unchanged. A failing dependency is
 not waiting. A claim, release, game allocation, game read, standings publication
 or public page cleanup that fails retries after one second, then after 2, 4, 8
 and so on up to 60 seconds, and a success starts over at one second. A game past
-its deadline with no accepted result waits the same way. A draining event waits
-for its last settlement. A live game is read when its Game next reports work
-(its readiness end, clock deadline or cutoff) and never more than five minutes
-later, and publication, cleanup and release batches arm their own due times.
-The minute trigger still runs a full pass, so switching `ARENAS_ENABLED` off
-drains running events at the next pass.
+its deadline with no accepted result waits the same way. A maintenance pass in
+which any stage fails, such as the pairing read or an event cleanup proof read,
+also arms the next alarm no earlier than that wait counted in failed passes, since
+a failed stage leaves its work due and skips the stages after it. The first pass
+without a failure starts over, and a restart begins at one second. A draining
+event waits for its last settlement. A live game is read when its Game next
+reports work (its readiness end, clock deadline or cutoff) and never more than
+five minutes later, and publication, cleanup and release batches arm their own
+due times. The minute trigger still runs a full pass, so switching
+`ARENAS_ENABLED` off drains running events at the next pass.
 
 Implemented and tested locally with a mocked clock, not staged or released.
 An idle running hourly arena woke 3,665 times from start through close before
@@ -197,6 +201,12 @@ takes 15 and 19 now. A failing release went from 597 attempts and 596 wakeups
 to 15 and 17, and a failing game allocation from 600 and 603 to 15 and 18. A
 publication or page cleanup that failed with a cleanup marker already due woke
 the alarm every millisecond, and now takes 15 attempts and 14 or 15 wakeups.
+With every D1 call failing for ten minutes in the same kind of run, an arena with
+a waiting player and a game read that came due woke every second and then every
+millisecond (1,500 wakeups in the first 113 seconds, where the run stopped) and
+takes 15 now. An event cleanup whose proof read failed took 1,500 wakeups in 1.5
+seconds and takes 15 now. A ranked match waiting to be created took 1,500 in 3.5
+seconds and takes 15 now.
 
 ## Points and opponents
 
