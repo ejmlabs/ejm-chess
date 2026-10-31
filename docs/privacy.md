@@ -51,6 +51,9 @@ retains a neutral account label, creation time, opaque player ID and a minimal
 closure receipt. A durable Competition fence and database guards prevent
 in-flight sign-in, reset or admission from reviving the account. A lost response
 does not undo a committed closure. Old cookies and reset links lose access.
+A leaderboard page or public profile already in the edge cache can still show
+the account's previous public name and rating for up to 10 seconds after
+closure. No private field is ever cached.
 
 Game IDs, player IDs, PGNs, moves, results, historical player names, tournament
 records, rating/correction history, tombstones and minimal case audit remain.
