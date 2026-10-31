@@ -9,7 +9,7 @@ import type { Env } from '../src/server/env';
 import type { Actor, GameSnapshot } from '../src/shared/protocol';
 import type { Competition } from '../src/server/competition';
 import type { Game } from '../src/server/game';
-import { enableRanked, holdAlarms } from './authority-helpers';
+import { holdAlarms, rankedPair } from './authority-helpers';
 
 const origin = 'http://localhost:8787';
 let address = 1;
@@ -73,22 +73,12 @@ async function humanGame() {
 async function rankedGame() {
   const [first, second] = await Promise.all([user(true), user(true)]);
   const competition = env.COMPETITION.get(env.COMPETITION.idFromName('global'));
-  await runInDurableObject(competition, async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-    internal.env = { ...env, TOURNAMENTS_ENABLED: 'false', ARENAS_ENABLED: 'false' };
-    internal.schedule = async () => {};
-    await state.storage.deleteAlarm();
+  await holdAlarms(competition, { TOURNAMENTS_ENABLED: 'false', ARENAS_ENABLED: 'false', RANKED_ENABLED: 'true' });
+  await runInDurableObject(competition, (_instance, state) => {
     for (const table of ['matches', 'slots', 'queue']) state.storage.sql.exec(`DELETE FROM ${table}`);
   });
-  await enableRanked(competition);
-  await competition.joinQueue(first.actor, 'blitz');
-  const queue = await competition.joinQueue(second.actor, 'blitz');
-  if (queue.status !== 'reserved' && queue.status !== 'live') throw new Error('not_paired');
-  const id = queue.gameId;
-  const game = env.GAME.get(env.GAME.idFromName(id));
-  await enableRanked(game);
-  await quiet(game);
-  const initial = await game.snapshot(first.actor);
+  const { game, initial } = await rankedPair(competition, [first.actor, second.actor], { holdAlarms: true });
+  const id = initial.id;
   const white = initial.white.id === first.actor.id ? first : second;
   const black = initial.white.id === first.actor.id ? second : first;
   const snapshot = await ready(game, white.actor, black.actor, initial);

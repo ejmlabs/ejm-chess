@@ -1,5 +1,6 @@
 import type { Actor, GameResult, GameSnapshot, Pool } from '../shared/protocol';
 import { acquireTournamentSeat, competitiveAccountEligibility, revalidateActor } from './auth';
+import { ARENA_POLICY } from './arena-policy';
 import type { Env } from './env';
 import { ApiError } from './security';
 
@@ -28,11 +29,12 @@ export function gamePhase(status: GameSnapshot['status'] | undefined): 'creating
  * A flag keeps its original deadline as the result time, so a late read delays delivery only.
  */
 const RECONCILE_SAFETY_MS = 300_000;
-/** A due time already passed leaves work only the Game's own retry owns, so it is not polled in a tight loop. */
-const RECONCILE_RETRY_MS = 1_000;
 
 export function nextReconcileAt(now: number, dueAt: number | null | undefined): number {
-  const due = dueAt === null || dueAt === undefined ? Number.POSITIVE_INFINITY : dueAt > now ? dueAt : now + RECONCILE_RETRY_MS;
+  if (dueAt === null || dueAt === undefined) return now + RECONCILE_SAFETY_MS;
+  // A due time already passed leaves work only the Game's own retry owns. Waiting as long as it has been
+  // overdue doubles the gap up to the retry cap with no stored count, and the first poll stays one retry away.
+  const due = dueAt > now ? dueAt : now + Math.min(ARENA_POLICY.retryCapMs, Math.max(ARENA_POLICY.retryMs, now - dueAt));
   return Math.min(now + RECONCILE_SAFETY_MS, due);
 }
 

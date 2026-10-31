@@ -2,7 +2,7 @@ import type { Actor, GameResult, Pool } from '../shared/protocol';
 import type { ArenaMe, ArenaStatus, ArenaSummary } from '../shared/arenas';
 import type { TournamentCadence } from '../shared/tournaments';
 import { acquireTournamentAccount, competitiveSessionEligible } from './auth';
-import { ARENA_POLICY, arenaLimits } from './arena-policy';
+import { ARENA_POLICY, arenaLimits, retryDelayMs } from './arena-policy';
 import { ArenaProjection } from './arena-projection';
 import { newWorkAllowed, reserveMonthlyWork } from './budget';
 import type { Env } from './env';
@@ -25,7 +25,7 @@ type Entry = {
   event_id: string; user_id: string; actor: string; name: string; rating: number; state: EntryState;
   joined_at: number; queued_at: number | null; next_at: number | null; points_half: number; games: number;
   score_band: number; rating_band: number; color_balance: number; last_opponent: string | null;
-  game_id: string | null; release_to: 'registered' | 'paused' | 'withdrawn'; reason: string | null;
+  game_id: string | null; release_to: 'registered' | 'paused' | 'withdrawn'; reason: string | null; attempts: number;
 };
 type Intent = {
   game_id: string; event_id: string; reservation_id: string; white_id: string; black_id: string;
@@ -75,6 +75,10 @@ export class ArenaControl {
       joined_at INTEGER NOT NULL,queued_at INTEGER,next_at INTEGER,points_half INTEGER NOT NULL DEFAULT 0,games INTEGER NOT NULL DEFAULT 0,
       score_band INTEGER NOT NULL DEFAULT 0,rating_band INTEGER NOT NULL,color_balance INTEGER NOT NULL DEFAULT 0,
       last_opponent TEXT,game_id TEXT,release_to TEXT NOT NULL DEFAULT 'registered',reason TEXT,PRIMARY KEY(event_id,user_id))`);
+    // Failed claims and releases so far, for their backoff. Rows from earlier builds start at zero.
+    if (!sql.exec<{ name: string }>('PRAGMA table_info(arena_entries)').toArray().some(column => column.name === 'attempts')) {
+      sql.exec('ALTER TABLE arena_entries ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0');
+    }
     sql.exec('CREATE INDEX IF NOT EXISTS arena_waiting ON arena_entries(event_id,state,queued_at,user_id)');
     sql.exec('CREATE INDEX IF NOT EXISTS arena_lanes ON arena_entries(event_id,state,score_band,rating_band,queued_at,user_id)');
     sql.exec('CREATE INDEX IF NOT EXISTS arena_entry_work ON arena_entries(state,next_at,event_id,user_id)');
@@ -341,7 +345,7 @@ export class ArenaControl {
       if (entry.state === 'releasing') throw new ApiError(409, 'ARENA_RELEASE_PENDING', 'Your previous seat is still being released. Try again shortly.');
       if (this.bridge.busy(actor.id, id)) throw new ApiError(409, 'PLAYER_BUSY', 'Finish or leave your other game or queue first.');
       this.bridge.reserve(actor.id, id, event.pool);
-      this.ctx.storage.sql.exec(`UPDATE arena_entries SET state='claiming',actor=?,queued_at=?,next_at=?,reason=NULL
+      this.ctx.storage.sql.exec(`UPDATE arena_entries SET state='claiming',actor=?,queued_at=?,next_at=?,reason=NULL,attempts=0
         WHERE event_id=? AND user_id=?`, JSON.stringify(actor), now, now, id, actor.id);
       this.ctx.storage.sql.exec('UPDATE arena_events SET next_at=MIN(COALESCE(next_at,?),?) WHERE id=?', now, now, id);
     });
@@ -366,8 +370,15 @@ export class ArenaControl {
   }
 
   private releaseEntry(entry: Entry, target: Entry['release_to'], reason: string | null, now: number): void {
-    this.ctx.storage.sql.exec(`UPDATE arena_entries SET state='releasing',release_to=?,queued_at=NULL,next_at=?,reason=?
+    this.ctx.storage.sql.exec(`UPDATE arena_entries SET state='releasing',release_to=?,queued_at=NULL,next_at=?,reason=?,attempts=0
       WHERE event_id=? AND user_id=?`, target, now, reason, entry.event_id, entry.user_id);
+  }
+
+  /** A claim or release that failed waits twice as long as its last failure. Entering either state starts the count over. */
+  private retryEntry(eventId: string, userId: string, now: number): void {
+    const attempts = this.entry(eventId, userId)?.attempts ?? 0;
+    this.ctx.storage.sql.exec(`UPDATE arena_entries SET attempts=attempts+1,next_at=? WHERE event_id=? AND user_id=?
+      AND state IN ('claiming','releasing')`, now + retryDelayMs(attempts), eventId, userId);
   }
 
   private async claim(entry: Entry, now: number): Promise<void> {
@@ -388,7 +399,7 @@ export class ArenaControl {
         }
       });
     } catch {
-      this.ctx.storage.sql.exec("UPDATE arena_entries SET next_at=? WHERE event_id=? AND user_id=? AND state='claiming'", now + ARENA_POLICY.retryMs, entry.event_id, entry.user_id);
+      this.retryEntry(entry.event_id, entry.user_id, now);
     }
     await this.ctx.storage.sync();
   }
@@ -410,7 +421,7 @@ export class ArenaControl {
       AND NOT EXISTS(SELECT 1 FROM active_game_seats WHERE user_id=? AND released_at IS NULL) RETURNING user_id`)
       .bind(entry.user_id, entry.event_id, entry.user_id).first();
     if (!deleted && await db.prepare('SELECT 1 FROM tournament_account_locks WHERE user_id=? AND tournament_id=?').bind(entry.user_id, entry.event_id).first()) {
-      this.ctx.storage.sql.exec("UPDATE arena_entries SET next_at=? WHERE event_id=? AND user_id=? AND state='releasing'", now + ARENA_POLICY.retryMs, entry.event_id, entry.user_id);
+      this.retryEntry(entry.event_id, entry.user_id, now);
       return;
     }
     this.ctx.storage.transactionSync(() => {
@@ -570,15 +581,18 @@ export class ArenaControl {
         actual = await game.status();
       }
       if (actual?.result) await this.bridge.settle(actual.result);
+      // Past its deadline a game with no accepted result is waiting on settlement. That is a retry, not progress.
+      const late = now >= intent.deadline_at;
       this.ctx.storage.transactionSync(() => {
         const current = this.intent(intent.game_id);
         if (!current || ['finished', 'cancelled'].includes(current.status)) return;
-        this.ctx.storage.sql.exec('UPDATE arena_intents SET status=?,next_at=?,attempts=0,reason=NULL WHERE game_id=?', gamePhase(actual?.status),
-          Math.min(nextReconcileAt(now, actual?.dueAt), intent.deadline_at > now ? intent.deadline_at : now + ARENA_POLICY.retryMs), intent.game_id);
+        this.ctx.storage.sql.exec(`UPDATE arena_intents SET status=?,next_at=?,attempts=CASE WHEN ? THEN MIN(attempts+1,1000000) ELSE 0 END,reason=NULL
+          WHERE game_id=?`, gamePhase(actual?.status),
+        Math.min(nextReconcileAt(now, actual?.dueAt), late ? now + retryDelayMs(current.attempts) : intent.deadline_at), Number(late), intent.game_id);
       });
     } catch {
       this.ctx.storage.sql.exec(`UPDATE arena_intents SET attempts=MIN(attempts+1,1000000),next_at=?,reason='Recovery is pending.'
-        WHERE game_id=? AND status NOT IN ('finished','cancelled')`, now + ARENA_POLICY.retryMs, intent.game_id);
+        WHERE game_id=? AND status NOT IN ('finished','cancelled')`, now + retryDelayMs(intent.attempts), intent.game_id);
     }
     await this.ctx.storage.sync();
   }
@@ -611,7 +625,7 @@ export class ArenaControl {
     for (const [userId, half, ready] of [[intent.white_id, whiteHalf, result.white.ready], [intent.black_id, blackHalf, result.black!.ready]] as const) {
       const noShow = result.outcome.reason === 'readiness-expired' && !ready;
       const updated = sql.exec(`UPDATE arena_entries SET points_half=points_half+?,score_band=points_half+?,games=games+1,
-        state='releasing',release_to=?,queued_at=NULL,next_at=?,reason=?
+        state='releasing',release_to=?,queued_at=NULL,next_at=?,reason=?,attempts=0
         WHERE event_id=? AND user_id=? AND game_id=? RETURNING user_id`, half, half,
       noShow ? 'paused' : 'registered', now, noShow ? 'Readiness expired. Resume explicitly to queue again.' : null,
       event.id, userId, result.id).toArray();
@@ -683,17 +697,19 @@ export class ArenaControl {
       due('SELECT MIN(next_at) AS due FROM arena_events'),
       due("SELECT MIN(next_at) AS due FROM arena_entries WHERE state IN ('claiming','releasing') AND next_at IS NOT NULL"),
       due('SELECT MIN(next_at) AS due FROM arena_intents WHERE next_at IS NOT NULL'),
-      due('SELECT MIN(cleanup_after) AS due FROM arena_events WHERE cleanup_after IS NOT NULL'),
     ].filter((value): value is number => value !== null);
     const publishing = [due('SELECT MIN(project_after) AS due FROM arena_events WHERE revision>projected_revision'),
       sql.exec('SELECT 1 FROM arena_projection_builds LIMIT 1').toArray().length ? now + 1 : null].filter((value): value is number => value !== null);
     // Publication work waits out a failure instead of retrying on every millisecond.
     if (publishing.length) times.push(Math.max(Math.min(...publishing), this.projection.retryAt));
+    const publicCleanup = sql.exec<{ value: string }>("SELECT value FROM arena_meta WHERE key='public-cleanup-at'").toArray()[0];
+    // Cleanup follows publication in every pass, so a failing publication skips it. It waits out the same backoff.
+    const cleanups = [due('SELECT MIN(cleanup_after) AS due FROM arena_events WHERE cleanup_after IS NOT NULL'),
+      publicCleanup ? Number(publicCleanup.value) : null].filter((value): value is number => value !== null);
+    if (cleanups.length) times.push(Math.max(Math.min(...cleanups), this.projection.retryAt));
     // A release batch is bounded, so the rest of a closed event's queue is due at once.
     if (sql.exec(`SELECT 1 FROM arena_entries e JOIN arena_events v ON v.id=e.event_id WHERE ${STALE_QUEUED} LIMIT 1`,
       now, Number(this.enabled())).toArray().length) times.push(now);
-    const publicCleanup = sql.exec<{ value: string }>("SELECT value FROM arena_meta WHERE key='public-cleanup-at'").toArray()[0];
-    if (publicCleanup) times.push(Number(publicCleanup.value));
     return times.length ? Math.min(...times) : null;
   }
 
@@ -715,7 +731,7 @@ export class ArenaControl {
           if (entry.state === 'queued') this.releaseEntry(entry, 'paused', 'Arena pairing has closed.', now);
           await this.release(this.entry(entry.event_id, entry.user_id)!, now);
         }
-      } catch { this.ctx.storage.sql.exec('UPDATE arena_entries SET next_at=? WHERE event_id=? AND user_id=?', now + ARENA_POLICY.retryMs, entry.event_id, entry.user_id); }
+      } catch { this.retryEntry(entry.event_id, entry.user_id, now); }
     });
   }
 

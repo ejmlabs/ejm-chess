@@ -1,5 +1,5 @@
 import type { ArenaList, ArenaStandingsPage, ArenaSummary } from '../shared/arenas';
-import { ARENA_POLICY, arenaLimits } from './arena-policy';
+import { ARENA_POLICY, arenaLimits, retryDelayMs } from './arena-policy';
 import type { Env } from './env';
 import { ApiError } from './security';
 
@@ -184,13 +184,14 @@ export class ArenaProjection {
     });
   }
 
-  /** A failed publication retries after a second, never on every millisecond. */
+  /** A failed publication waits out its backoff, never a retry on every millisecond. */
   retryAt = 0;
+  private failures = 0;
 
   /** Advance one event and at most 32 version candidates. Publication is retryable. */
   async advance(now: number): Promise<void> {
-    try { await this.step(now); this.retryAt = 0; }
-    catch (error) { this.retryAt = Date.now() + ARENA_POLICY.retryMs; throw error; }
+    try { await this.step(now); this.retryAt = 0; this.failures = 0; }
+    catch (error) { this.retryAt = Date.now() + retryDelayMs(this.failures++); throw error; }
   }
 
   private async step(now: number): Promise<void> {
@@ -324,7 +325,15 @@ export class ArenaProjection {
     });
   }
 
+  private cleanupFailures = 0;
+
+  /** A failed sweep moves its own marker out by the backoff, or the overdue marker would wake the alarm every millisecond. */
   async cleanupPublic(now: number): Promise<void> {
+    try { await this.sweepPublic(now); this.cleanupFailures = 0; }
+    catch (error) { this.wakeCleanup(Date.now() + retryDelayMs(this.cleanupFailures++)); throw error; }
+  }
+
+  private async sweepPublic(now: number): Promise<void> {
     const sql = this.ctx.storage.sql;
     const epochs = this.cleanupEpochs();
     if (epochs.requested <= epochs.completed.public) { this.wakeCleanup(now + ARENA_POLICY.retryMs); return; }

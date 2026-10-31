@@ -2,9 +2,7 @@ import { env } from 'cloudflare:workers';
 import { runInDurableObject } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Competition } from '../src/server/competition';
-import type { Env } from '../src/server/env';
-import type { Actor, InitGame } from '../src/shared/protocol';
-import { holdAlarms, player } from './authority-helpers';
+import { gamesAnswering, heldCompetition, patchBindings, player, privates } from './authority-helpers';
 
 type Authority = DurableObjectStub<Competition>;
 const SAFETY_MS = 300_000;
@@ -15,29 +13,16 @@ interface Probe { status: number; fail: number; dueAt?: (real: number | null) =>
 
 /** A Competition that counts every Game status call it makes. Its own alarm is held so the test drives each pass. */
 async function watched(): Promise<{ competition: Authority; probe: Probe }> {
-  const competition: Authority = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
-  await holdAlarms(competition, { ARENAS_ENABLED: 'false', TOURNAMENTS_ENABLED: 'false', RANKED_ENABLED: 'true' });
+  const competition = await heldCompetition({ ARENAS_ENABLED: 'false', TOURNAMENTS_ENABLED: 'false', RANKED_ENABLED: 'true' });
   const probe: Probe = { status: 0, fail: 0 };
-  await runInDurableObject(competition, instance => {
-    const internal = instance as unknown as { env: Env };
-    const namespace = internal.env.GAME;
-    internal.env = { ...internal.env, GAME: {
-      idFromName: (name: string) => namespace.idFromName(name),
-      get: (id: DurableObjectId) => {
-        const game = namespace.get(id);
-        return {
-          status: async () => {
-            probe.status++;
-            if (probe.fail > 0) { probe.fail--; throw new Error('status reply lost'); }
-            const reply = await game.status();
-            return reply && probe.dueAt ? { ...reply, dueAt: probe.dueAt(reply.dueAt) } : reply;
-          },
-          init: (input: InitGame) => game.init(input),
-          lookup: (actor: Actor) => game.lookup(actor),
-        };
-      },
-    } as unknown as Env['GAME'] };
-  });
+  await patchBindings(competition, gamesAnswering(game => ({
+    status: async () => {
+      probe.status++;
+      if (probe.fail > 0) { probe.fail--; throw new Error('status reply lost'); }
+      const reply = await game.status();
+      return reply && probe.dueAt ? { ...reply, dueAt: probe.dueAt(reply.dueAt) } : reply;
+    },
+  })));
   return { competition, probe };
 }
 
@@ -58,8 +43,7 @@ async function liveCasualGame(competition: Authority) {
 const intent = (competition: Authority, id: string) => runInDurableObject(competition, (_instance, state) =>
   state.storage.sql.exec<{ state: string; next_at: number | null; attempts: number }>('SELECT state,next_at,attempts FROM casual_intents WHERE game_id=?', id).one());
 
-const nextDue = (competition: Authority) => runInDurableObject(competition, instance =>
-  (instance as unknown as { casuals: { nextDue(): number | null } }).casuals.nextDue());
+const nextDue = (competition: Authority) => runInDurableObject(competition, instance => privates(instance).casuals.nextDue());
 
 /** Wakes Competition at each due time up to `until`, as its alarm would, and returns how many times it woke. */
 async function wakeUntil(competition: Authority, clock: ReturnType<typeof vi.spyOn>, until: number): Promise<number> {

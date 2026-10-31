@@ -3,26 +3,16 @@ import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { acquireSeatGuard, acquireTournamentAccount, hasActiveSeat } from '../src/server/auth';
 import type { Competition } from '../src/server/competition';
-import type { Env } from '../src/server/env';
 import type { Actor, GameSnapshot, InitGame } from '../src/shared/protocol';
 import type { TournamentView } from '../src/shared/tournaments';
 import { TOURNAMENT_LIMITS } from '../src/server/tournaments';
-import { player } from './authority-helpers';
+import { gamesAnswering, heldCompetition, holdAlarms, intercept, patchBindings, player, settlesWith } from './authority-helpers';
 
 const HOUR = 3_600_000;
 type Authority = DurableObjectStub<Competition>;
 afterEach(() => { vi.restoreAllMocks(); });
 
-async function authority(existing?: Authority): Promise<Authority> {
-  const stub = existing ?? env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
-  await runInDurableObject(stub, async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-    internal.env = { ...internal.env, TOURNAMENTS_ENABLED: 'true', RANKED_ENABLED: 'true' };
-    internal.schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
-  return stub;
-}
+const authority = (existing?: Authority) => heldCompetition({ TOURNAMENTS_ENABLED: 'true', RANKED_ENABLED: 'true' }, existing);
 
 let clockIndex = 0;
 function startClock() {
@@ -46,17 +36,7 @@ async function event(competition: Authority, id: string, actor?: Actor): Promise
 
 async function gameFor(pairing: TournamentView['games'][number], competition: Authority) {
   const game = env.GAME.get(env.GAME.idFromName(pairing.id));
-  const authorityId = competition.id.toString();
-  await runInDurableObject(game, async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-    const original = internal.env.COMPETITION;
-    internal.env = { ...internal.env, COMPETITION: {
-      idFromName: (name: string) => original.idFromName(name),
-      get: () => original.get(original.idFromString(authorityId)),
-    } as unknown as Env['COMPETITION'] };
-    internal.schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
+  await holdAlarms(game, settlesWith(competition));
   return game;
 }
 
@@ -169,19 +149,12 @@ describe('scheduled tournament authority', () => {
     const competition = await authority();
     const { id, actors } = await enter(competition, 3, startsAt);
     await env.DB.prepare("UPDATE account SET password=NULL WHERE userId=? AND providerId='credential'").bind(actors[0].id).run();
-    await runInDurableObject(competition, instance => {
-      const internal = instance as unknown as { env: Env };
-      const original = internal.env.DB;
-      let fail = true;
-      internal.env = { ...internal.env, DB: new Proxy(original, { get(target, property) {
-        if (property !== 'prepare') { const value = Reflect.get(target, property); return typeof value === 'function' ? value.bind(target) : value; }
-        return (sql: string) => {
-          if (!fail || !sql.includes('DELETE FROM tournament_account_locks WHERE tournament_id=?')) return original.prepare(sql);
-          fail = false;
-          throw new Error('Simulated D1 failure while releasing the event');
-        };
-      } }) };
-    });
+    let fail = true;
+    await patchBindings(competition, ({ DB }) => ({ DB: intercept(DB, { prepare: (sql: string) => {
+      if (!fail || !sql.includes('DELETE FROM tournament_account_locks WHERE tournament_id=?')) return DB.prepare(sql);
+      fail = false;
+      throw new Error('Simulated D1 failure while releasing the event');
+    } }) }));
     clock.mockReturnValue(startsAt);
     await competition.maintenance();
     expect((await event(competition, id)).status).toBe('cancelled');
@@ -195,23 +168,16 @@ describe('scheduled tournament authority', () => {
     const { startsAt, clock } = startClock();
     let competition = await authority();
     const { id, actors } = await enter(competition, 3, startsAt);
-    await runInDurableObject(competition, instance => {
-      const internal = instance as unknown as { env: Env };
-      const original = internal.env.DB;
-      let fail = true;
-      internal.env = { ...internal.env, DB: new Proxy(original, { get(target, property) {
-        if (property !== 'prepare') { const value = Reflect.get(target, property); return typeof value === 'function' ? value.bind(target) : value; }
-        return (sql: string) => {
-          const statement = original.prepare(sql);
-          if (!fail || !sql.includes('INSERT INTO tournament_account_locks')) return statement;
-          return { bind: (...args: unknown[]) => ({ first: async () => {
-            const value = await statement.bind(...args).first();
-            fail = false;
-            throw new Error(`Simulated crash after D1 account claim ${Boolean(value)}`);
-          } }) } as unknown as D1PreparedStatement;
-        };
-      } }) };
-    });
+    let fail = true;
+    await patchBindings(competition, ({ DB }) => ({ DB: intercept(DB, { prepare: (sql: string) => {
+      const statement = DB.prepare(sql);
+      if (!fail || !sql.includes('INSERT INTO tournament_account_locks')) return statement;
+      return { bind: (...args: unknown[]) => ({ first: async () => {
+        const value = await statement.bind(...args).first();
+        fail = false;
+        throw new Error(`Simulated crash after D1 account claim ${Boolean(value)}`);
+      } }) } as unknown as D1PreparedStatement;
+    } }) }));
     clock.mockReturnValue(startsAt);
     await competition.maintenance();
     expect((await event(competition, id)).status).toBe('starting');
@@ -245,22 +211,12 @@ describe('scheduled tournament authority', () => {
     const { startsAt, clock } = startClock();
     let competition = await authority();
     const { id } = await enter(competition, 3, startsAt);
-    await runInDurableObject(competition, instance => {
-      const internal = instance as unknown as { env: Env };
-      const original = internal.env.GAME;
-      let fail = true;
-      internal.env = { ...internal.env, GAME: {
-        idFromName: (name: string) => original.idFromName(name),
-        get: (gameId: DurableObjectId) => {
-          const game = original.get(gameId);
-          return { status: () => game.status(), init: async (input: InitGame) => {
-            const value = await game.init(input);
-            if (fail) { fail = false; throw new Error('Simulated lost init response.'); }
-            return value;
-          } };
-        },
-      } as unknown as Env['GAME'] };
-    });
+    let fail = true;
+    await patchBindings(competition, gamesAnswering(game => ({ init: async (input: InitGame) => {
+      const value = await game.init(input);
+      if (fail) { fail = false; throw new Error('Simulated lost init response.'); }
+      return value;
+    } })));
     clock.mockReturnValue(startsAt);
     await competition.maintenance();
     const uncertain = await event(competition, id);
@@ -315,21 +271,14 @@ describe('scheduled tournament authority', () => {
     const { startsAt, clock } = startClock();
     let competition = await authority();
     const { id } = await enter(competition, 3, startsAt);
-    await runInDurableObject(competition, instance => {
-      const internal = instance as unknown as { env: Env };
-      const original = internal.env.DB;
-      internal.env = { ...internal.env, DB: new Proxy(original, { get(target, property) {
-        if (property !== 'prepare') { const value = Reflect.get(target, property); return typeof value === 'function' ? value.bind(target) : value; }
-        return (sql: string) => {
-          const statement = original.prepare(sql);
-          if (!sql.includes('INSERT INTO tournament_game_admissions')) return statement;
-          return { bind: (...args: unknown[]) => ({ run: async () => {
-            await statement.bind(...args).run();
-            throw new Error('Simulated lost D1 admission response.');
-          } }) } as unknown as D1PreparedStatement;
-        };
-      } }) };
-    });
+    await patchBindings(competition, ({ DB }) => ({ DB: intercept(DB, { prepare: (sql: string) => {
+      const statement = DB.prepare(sql);
+      if (!sql.includes('INSERT INTO tournament_game_admissions')) return statement;
+      return { bind: (...args: unknown[]) => ({ run: async () => {
+        await statement.bind(...args).run();
+        throw new Error('Simulated lost D1 admission response.');
+      } }) } as unknown as D1PreparedStatement;
+    } }) }));
     clock.mockReturnValue(startsAt);
     await competition.maintenance();
     expect((await event(competition, id)).status).toBe('starting');

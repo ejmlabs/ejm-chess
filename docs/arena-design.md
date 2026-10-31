@@ -174,7 +174,11 @@ games drain. No cap limits open events.
 
 The Competition alarm is armed for the next real due time only. A running
 event nobody waits in sleeps until its close. While a player is queued, pairing
-retries once a second, so pairing latency is unchanged. A draining event waits
+retries once a second, so pairing latency is unchanged. A failing dependency is
+not waiting. A claim, release, game allocation, game read, standings publication
+or public page cleanup that fails retries after one second, then after 2, 4, 8
+and so on up to 60 seconds, and a success starts over at one second. A game past
+its deadline with no accepted result waits the same way. A draining event waits
 for its last settlement. A live game is read when its Game next reports work
 (its readiness end, clock deadline or cutoff) and never more than five minutes
 later, and publication, cleanup and release batches arm their own due times.
@@ -187,7 +191,12 @@ this change and 7 times after. In the first two minutes after a start, an arena
 with one player left waiting woke 123 times before and after, and an arena
 whose queued players all had games woke 7 times, down from 123, and 4 times
 after Games reported their own due times, which moved their reads from every 30
-seconds to the end of the two-minute readiness wait.
+seconds to the end of the two-minute readiness wait. One entry whose D1 claim
+failed for ten minutes took 600 attempts and 604 wakeups at the fixed second and
+takes 15 and 19 now. A failing release went from 597 attempts and 596 wakeups
+to 15 and 17, and a failing game allocation from 600 and 603 to 15 and 18. A
+publication or page cleanup that failed with a cleanup marker already due woke
+the alarm every millisecond, and now takes 15 attempts and 14 or 15 wakeups.
 
 ## Points and opponents
 

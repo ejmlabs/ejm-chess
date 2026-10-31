@@ -5,7 +5,7 @@ import { Chess } from 'chess.js';
 import { parseReplay } from '../src/client/replay';
 import { positionOutcome, timeoutOutcome } from '../src/server/adjudication';
 import { ADJUDICATION_WAIT_MS } from '../src/server/game';
-import { activeGame, admitGameFixture, holdAlarms, pendingAdjudicationGame, player } from './authority-helpers';
+import { activeGame, admitGameFixture, holdAlarms, intercept, patchBindings, pendingAdjudicationGame, player } from './authority-helpers';
 import type { GameCommand, GameResult, InitGame, ServerMessage } from '../src/shared/protocol';
 
 afterEach(() => { vi.restoreAllMocks(); });
@@ -315,11 +315,7 @@ describe('durable game authority', () => {
   it('keeps the terminal outbox through a lost reply and releases seats after retry', async () => {
     const { game, white, black, snapshot } = await activeGame();
     await env.DB.batch([white, black].map(actor => env.DB.prepare('INSERT INTO active_game_seats(user_id,game_id,acquired_at) VALUES(?,?,?)').bind(actor.id, snapshot.id, Date.now())));
-    await runInDurableObject(game, instance => {
-      const internal = instance as unknown as { env: { COMPETITION: DurableObjectNamespace } };
-      const binding = internal.env.COMPETITION;
-      internal.env = { ...internal.env, COMPETITION: { ...binding, idFromName: binding.idFromName.bind(binding), get: () => ({ settle: async () => { throw new Error('lost_reply'); } }) } as unknown as DurableObjectNamespace };
-    });
+    await patchBindings(game, ({ COMPETITION }) => ({ COMPETITION: intercept(COMPETITION, { get: () => ({ settle: async () => { throw new Error('lost_reply'); } }) }) }));
     const done = await game.command(white, { type: 'resign', id: crypto.randomUUID(), expectedVersion: snapshot.version });
     expect(done.snapshot.status).toBe('finished');
     await game.flush();

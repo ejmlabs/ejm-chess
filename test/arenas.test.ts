@@ -8,23 +8,15 @@ import type { Competition } from '../src/server/competition';
 import type { Env } from '../src/server/env';
 import type { Actor, GameResult, GameSnapshot } from '../src/shared/protocol';
 import type { ArenaActionResult, ArenaMe, ArenaStanding } from '../src/shared/arenas';
-import { player } from './authority-helpers';
+import { gamesAnswering, heldCompetition, holdArenaEvents, holdDelivery, patchBindings, player, privates, spyOnSchedule } from './authority-helpers';
 
 type Authority = DurableObjectStub<Competition>;
 const HOUR = 3_600_000;
 let index = 0;
 afterEach(() => vi.restoreAllMocks());
 
-async function authority(settings: Partial<Env> = {}, existing?: Authority): Promise<Authority> {
-  const stub = existing ?? env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
-  await runInDurableObject(stub, async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-    internal.env = { ...internal.env, ARENAS_ENABLED: 'true', TOURNAMENTS_ENABLED: 'false', RANKED_ENABLED: 'true', ...settings };
-    internal.schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
-  return stub;
-}
+const authority = (settings: Partial<Env> = {}, existing?: Authority) =>
+  heldCompetition({ ARENAS_ENABLED: 'true', TOURNAMENTS_ENABLED: 'false', RANKED_ENABLED: 'true', ...settings }, existing);
 
 function value(result: ArenaActionResult): ArenaMe {
   if (!result.ok) throw new Error(result.error.code);
@@ -53,13 +45,8 @@ async function games(competition: Authority, actors: Actor[], id: string) {
 
 async function game(gameId: string, actors: Actor[]) {
   const stub = env.GAME.get(env.GAME.idFromName(gameId));
-  await runInDurableObject(stub, async (instance, state) => {
-    const internal = instance as unknown as { schedule(): Promise<void>; flush(): Promise<void> };
-    // The test explicitly delivers each authority result and can inject retries.
-    internal.schedule = async () => {};
-    internal.flush = async () => {};
-    await state.storage.deleteAlarm();
-  });
+  // The test explicitly delivers each authority result and can inject retries.
+  await holdDelivery(stub);
   const first = await stub.snapshot(actors[0]);
   const white = actors.find(actor => actor.id === first.white.id)!;
   const black = actors.find(actor => actor.id === first.black!.id)!;
@@ -71,7 +58,7 @@ async function ready(gameId: string, actors: Actor[]) {
   const stub = env.GAME.get(env.GAME.idFromName(gameId));
   let participant: Actor | undefined;
   await runInDurableObject(stub, (instance) => {
-    const state = (instance as unknown as { load(): { white: { id: string } } }).load();
+    const state = privates(instance).load();
     participant = actors.find(actor => actor.id === state.white.id);
   });
   const context = await game(gameId, [participant!, ...actors.filter(actor => actor.id !== participant!.id)]);
@@ -126,9 +113,8 @@ describe('timed arena authority', () => {
   it('leaves the legacy casual count to the Competition pass instead of reading it again in the arena stage', async () => {
     const { competition } = await prepare(2);
     await runInDurableObject(competition, async instance => {
-      const internal = instance as unknown as { arenas: { maintenance(): Promise<void> }; env: Env };
-      const prepared = vi.spyOn(internal.env.DB, 'prepare');
-      await internal.arenas.maintenance();
+      const prepared = vi.spyOn(privates(instance).env.DB, 'prepare');
+      await privates(instance).arenas.maintenance();
       expect(prepared.mock.calls.filter(([sql]) => sql.includes('legacy_live'))).toEqual([]);
     });
   });
@@ -140,10 +126,9 @@ describe('timed arena authority', () => {
     const [actor, retrying, waiting] = await Promise.all(Array.from({ length: 3 }, () => player(false, { recoveryEmail: false })));
     const id = `arena-hourly-${startsAt}`;
     await runInDurableObject<Competition, void>(competition, async (instance, state) => {
-      const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-      const schedule = vi.spyOn(internal, 'schedule').mockResolvedValue();
+      const schedule = spyOnSchedule(instance);
       const sync = vi.spyOn(state.storage, 'sync');
-      const prepare = vi.spyOn(internal.env.DB, 'prepare');
+      const prepare = vi.spyOn(privates(instance).env.DB, 'prepare');
       try {
         expect(value(await instance.registerArena(actor, id)).registered).toBe(true);
         expect(schedule).toHaveBeenCalledOnce();
@@ -247,8 +232,7 @@ describe('timed arena authority', () => {
     const actor = await player(false, { recoveryEmail: false });
     const databaseError = new Error('eligibility read unavailable');
     await runInDurableObject<Competition, void>(competition, async (instance, state) => {
-      const internal = instance as unknown as { env: Env };
-      const database = internal.env.DB;
+      const database = privates(instance).env.DB;
       const originalPrepare = database.prepare.bind(database);
       for (const [eligible, available, code] of [
         [false, new Error('controller unavailable'), 'ARENA_INELIGIBLE'],
@@ -295,8 +279,7 @@ describe('timed arena authority', () => {
     value(await competition.registerArena(existing, id));
     const databaseError = new Error('registration check unavailable');
     await runInDurableObject<Competition, void>(competition, async (instance, state) => {
-      const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-      const database = internal.env.DB, originalPrepare = database.prepare.bind(database);
+      const database = privates(instance).env.DB, originalPrepare = database.prepare.bind(database);
       for (const [offset, mode] of ['eligibility-failure', 'sync-failure', 'success'].entries()) {
         const firstAt = startsAt - 10 * 60_000 + offset * 10_000;
         clock.mockReturnValue(firstAt);
@@ -315,7 +298,7 @@ describe('timed arena authority', () => {
           : originalPrepare(query));
         const sync = vi.spyOn(state.storage, 'sync');
         if (mode === 'sync-failure') sync.mockRejectedValueOnce(databaseError);
-        const schedule = vi.spyOn(internal, 'schedule').mockResolvedValue();
+        const schedule = spyOnSchedule(instance);
         const pending = Array.from({ length: ARENA_POLICY.registrationAuthConcurrency }, (_, index) => {
           clock.mockReturnValue(firstAt + index * 67);
           return instance.registerArena(actor, id).then(value => ({ value }), error => ({ error }));
@@ -357,8 +340,7 @@ describe('timed arena authority', () => {
       () => player(false, { recoveryEmail: false })));
     clock.mockRestore();
     await runInDurableObject<Competition, void>(competition, async (instance, state) => {
-      const internal = instance as unknown as { env: Env };
-      const database = internal.env.DB, originalPrepare = database.prepare.bind(database);
+      const database = privates(instance).env.DB, originalPrepare = database.prepare.bind(database);
       let active = 0, maximum = 0;
       vi.useFakeTimers({ now: startsAt - 10 * 60_000, loopLimit: 1_000 });
       const prepare = vi.spyOn(database, 'prepare').mockImplementation(query => {
@@ -471,12 +453,7 @@ describe('timed arena authority', () => {
     const casualId = crypto.randomUUID();
     expect(await competition.createCasualGame(casualPlayer, { id: casualId, format: 'blitz' })).toMatchObject({ ok: true });
     const casual = env.GAME.get(env.GAME.idFromName(casualId));
-    await runInDurableObject(casual, async (instance, state) => {
-      const internal = instance as unknown as { schedule(): Promise<void>; flush(): Promise<void> };
-      internal.schedule = async () => {};
-      internal.flush = async () => {};
-      await state.storage.deleteAlarm();
-    });
+    await holdDelivery(casual);
     await competition.maintenance();
     expect(await games(competition, actors, id)).toEqual([]);
     clock.mockReturnValue(startsAt + 600_000);
@@ -488,8 +465,8 @@ describe('timed arena authority', () => {
   it('continues pairing a busy event after visiting an empty running event', async () => {
     const { competition, actors, id, startsAt, clock } = await prepare();
     for (const actor of actors) value(await competition.queueArena(actor, id));
-    await runInDurableObject(competition, (instance, state) => {
-      (instance as unknown as { arenas: { ensure(): void } }).arenas.ensure = () => {};
+    await holdArenaEvents(competition);
+    await runInDurableObject(competition, (_instance, state) => {
       state.storage.sql.exec('DELETE FROM arena_events WHERE id<>?', id);
       state.storage.sql.exec(`INSERT INTO arena_events(id,cadence,pool,starts_at,closes_at,status,next_at)
         VALUES('000-empty-running','hourly','blitz',?,?,'running',?)`, startsAt, startsAt + HOUR, startsAt);
@@ -594,26 +571,14 @@ describe('timed arena authority', () => {
     const { competition: original, actors, id, startsAt, clock } = await prepare(2);
     for (const actor of actors) value(await original.queueArena(actor, id));
     expect(await original.observeArenaReservation(actors[0], id)).toBeNull();
-    await runInDurableObject(original, instance => {
-      const internal = instance as unknown as { env: Env };
-      const namespace = internal.env.GAME;
-      let loseReply = true;
-      internal.env = { ...internal.env, GAME: {
-        idFromName: (name: string) => namespace.idFromName(name),
-        get: (gameId: DurableObjectId) => {
-          const actual = namespace.get(gameId);
-          return new Proxy(actual, { get(target, property) {
-            if (property === 'init') return async (...args: Parameters<typeof actual.init>) => {
-              const result = await actual.init(...args);
-              if (loseReply) { loseReply = false; throw new Error('lost_init_reply'); }
-              return result;
-            };
-            const value = Reflect.get(target, property);
-            return typeof value === 'function' ? (...args: unknown[]) => Reflect.apply(value, target, args) : value;
-          } });
-        },
-      } as unknown as Env['GAME'] };
-    });
+    let loseReply = true;
+    await patchBindings(original, gamesAnswering(game => ({
+      init: async (...args: Parameters<typeof game.init>) => {
+        const result = await game.init(...args);
+        if (loseReply) { loseReply = false; throw new Error('lost_init_reply'); }
+        return result;
+      },
+    })));
     clock.mockReturnValue(startsAt);
     await original.maintenance();
     const created = await runInDurableObject(original, (_instance, state) => state.storage.sql.exec<{ game_id: string }>('SELECT game_id FROM arena_intents').one().game_id);
@@ -645,13 +610,13 @@ describe('timed arena authority', () => {
   it('keeps visible and withdrawn standings anchors through updates and restart', async () => {
     const { competition, actors, id, clock } = await prepare(34, { ARENA_ENTRANT_LIMIT: '2000' });
     actors.sort((a, b) => a.id < b.id ? -1 : 1);
-    await runInDurableObject(competition, (instance, state) => {
-      (instance as unknown as { arenas: { ensure(): void } }).arenas.ensure = () => {};
+    await holdArenaEvents(competition);
+    await runInDurableObject(competition, (_instance, state) => {
       state.storage.sql.exec('DELETE FROM arena_events WHERE id<>?', id);
     });
     value(await competition.withdrawArena(actors[33], id));
     const frozen = await runInDurableObject(competition, async (instance, state) => {
-      await (instance as unknown as { arenas: { projection: { advance(now: number): Promise<void> } } }).arenas.projection.advance(Date.now());
+      await privates(instance).arenas.projection.advance(Date.now());
       return {
         build: state.storage.sql.exec<{ revision: number; scan_state: string }>('SELECT revision,scan_state FROM arena_projection_builds WHERE event_id=?', id).one(),
         anchors: state.storage.sql.exec(`SELECT user_id,revision,name,points_half,games,visible FROM arena_entry_versions
@@ -675,13 +640,9 @@ describe('timed arena authority', () => {
     expect(retained.anchors.some(row => row.user_id === actors[33].id && row.visible === 0)).toBe(true);
     await evictDurableObject(competition);
     const resumed = await authority({ ARENA_ENTRANT_LIMIT: '2000' }, competition);
-    await runInDurableObject(resumed, instance => {
-      (instance as unknown as { arenas: { ensure(): void } }).arenas.ensure = () => {};
-    });
+    await holdArenaEvents(resumed);
     const advance = () => runInDurableObject(resumed, async instance => {
-      for (let pass = 0; pass < 6; pass++) await (instance as unknown as {
-        arenas: { projection: { advance(now: number): Promise<void> } };
-      }).arenas.projection.advance(Date.now());
+      for (let pass = 0; pass < 6; pass++) await privates(instance).arenas.projection.advance(Date.now());
     });
     await advance();
     const first = await standings(id);
@@ -703,8 +664,8 @@ describe('timed arena authority', () => {
   it('keeps the frozen anchor behind a legacy version backlog while pruning at most two obsolete keys', async () => {
     const { competition, actors, id } = await prepare(1);
     const actor = actors[0];
-    const anchor = await runInDurableObject(competition, (instance, state) => {
-      (instance as unknown as { arenas: { ensure(): void } }).arenas.ensure = () => {};
+    await holdArenaEvents(competition);
+    const anchor = await runInDurableObject(competition, (_instance, state) => {
       const sql = state.storage.sql;
       const revision = sql.exec<{ revision: number }>('SELECT revision FROM arena_events WHERE id=?', id).one().revision;
       sql.exec(`INSERT INTO arena_projection_builds(event_id,generation,revision,watermark,generated_at,summary,phase)
@@ -729,8 +690,8 @@ describe('timed arena authority', () => {
     actors.sort((a, b) => a.id < b.id ? -1 : 1);
     const playing = actors.slice(-2);
     for (const actor of playing) value(await competition.queueArena(actor, id));
-    await runInDurableObject(competition, (instance, state) => {
-      (instance as unknown as { arenas: { ensure(): void } }).arenas.ensure = () => {};
+    await holdArenaEvents(competition);
+    await runInDurableObject(competition, (_instance, state) => {
       state.storage.sql.exec('DELETE FROM arena_events WHERE id<>?', id);
     });
     clock.mockReturnValue(startsAt);
@@ -868,9 +829,7 @@ describe('timed arena authority', () => {
 
   it('drains obsolete public pages after finalization while keeping both published generations', async () => {
     const competition = await authority();
-    await runInDurableObject(competition, instance => {
-      (instance as unknown as { arenas: { ensure(): void } }).arenas.ensure = () => {};
-    });
+    await holdArenaEvents(competition);
     const id = `arena-history-${crypto.randomUUID()}`;
     const now = Date.now();
     const clock = vi.spyOn(Date, 'now').mockReturnValue(now);

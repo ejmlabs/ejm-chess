@@ -3,12 +3,11 @@ import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { expect, it, vi } from 'vitest';
 import { readArenaStandings, readArenaSummary } from '../src/server/arena-projection';
 import type { Competition } from '../src/server/competition';
-import type { Env } from '../src/server/env';
 import { GAME_HOT_RETENTION_MS } from '../src/server/game';
 import { nextRetirementAt } from '../src/server/maintenance';
 import type { Actor, GameResult, GameSnapshot } from '../src/shared/protocol';
 import type { ArenaActionResult } from '../src/shared/arenas';
-import { holdAlarms, player } from '../test/authority-helpers';
+import { holdAlarms, patchBindings, player, swapBindings } from '../test/authority-helpers';
 import { authorityBindings } from './isolation';
 
 type Authority = DurableObjectStub<Competition>;
@@ -200,9 +199,7 @@ it('qualifies bounded native arena admission, game authority, sockets, scoring, 
       latency: timing(settlements), duplicates: results.length * 5, duplicateElapsedMs: performance.now() - duplicatesStart,
       accounting, scope: 'Native terminal Game verification plus atomic authority acceptance. D1 projection/release measured separately. Not the 15-minute sustained admission workload.' };
     await parallel(snapshots, 16, context => runInDurableObject(context.game, async (instance, state) => {
-      const internal = instance as unknown as { env: Env };
-      internal.env = { ...internal.env, COMPETITION: { idFromName: env.COMPETITION.idFromName.bind(env.COMPETITION),
-        get: () => env.COMPETITION.get(env.COMPETITION.idFromName(authorityName)) } as unknown as Env['COMPETITION'] };
+      swapBindings(instance, authorityBindings(authorityName));
       await instance.flush();
       expect(state.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM result_delivery').one().count).toBe(0);
     }));
@@ -253,10 +250,7 @@ it('qualifies bounded native arena admission, game authority, sockets, scoring, 
     }));
     const retirementAt = Math.max(...results.map(result => result.endedAt)) + GAME_HOT_RETENTION_MS;
     clock.mockReturnValue(retirementAt);
-    await runInDurableObject(competition, instance => {
-      const internal = instance as unknown as { env: Env };
-      internal.env = { ...internal.env, GAME_RETIREMENT_MODE: 'scaled' };
-    });
+    await patchBindings(competition, { GAME_RETIREMENT_MODE: 'scaled' });
     const retirementStart = performance.now();
     let retired = 0;
     let warmupAt: number | null = null;

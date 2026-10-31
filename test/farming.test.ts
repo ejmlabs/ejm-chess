@@ -3,7 +3,7 @@ import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { FARMING_PATTERNS, FARMING_POLICY, farmingStatus, initializeFarmingChecks, recordFarmingCheck } from '../src/server/farming';
 import { RULES_VERSION, type GameResult } from '../src/shared/protocol';
-import { enableRanked, player } from './authority-helpers';
+import { enableRanked, holdAlarms, player } from './authority-helpers';
 
 function result(overrides: Partial<GameResult> = {}): GameResult {
   const id = crypto.randomUUID();
@@ -224,9 +224,9 @@ describe('informational farming facts', () => {
   it('upgrades v1 through at most eight checks per maintenance call and resumes after restart', async () => {
     const competition = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
     const now = Date.now();
-    await runInDurableObject(competition, (instance, state) => {
-      // Keep the bounded upgrade page deterministic while checking catch-up.
-      (instance as unknown as { schedule(): Promise<void> }).schedule = async () => {};
+    // Keep the bounded upgrade page deterministic while checking catch-up.
+    await holdAlarms(competition);
+    await runInDurableObject(competition, (_instance, state) => {
       const sql = state.storage.sql;
       sql.exec('DROP TABLE rated_result_checks');
       sql.exec(`CREATE TABLE rated_result_checks

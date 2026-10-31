@@ -2,6 +2,7 @@ import type { Actor, GameResult, GameSnapshot, InitGame } from '../shared/protoc
 import { FORMATS } from '../shared/protocol';
 import { getEngineLevel, STOCKFISH_BUILD } from '../shared/engine';
 import { isGameId } from '../shared/gamePath';
+import { retryDelayMs } from './arena-policy';
 import { acquireSeatGuard, getActorBySessionId, knownGame } from './auth';
 import { newWorkAllowed } from './budget';
 import { aiEnabled, type Env } from './env';
@@ -158,7 +159,7 @@ export class CasualControl {
       return initialized;
     } catch (error) {
       this.ctx.storage.sql.exec(`UPDATE casual_intents SET attempts=MIN(attempts+1,1000000),next_at=?,error='Recovery is pending.'
-        WHERE game_id=? AND state<>'finished'`, Date.now() + 1_000, id);
+        WHERE game_id=? AND state<>'finished'`, Date.now() + retryDelayMs(intent.attempts), id);
       await this.ctx.storage.sync();
       if (error instanceof ApiError) throw error;
       return null;

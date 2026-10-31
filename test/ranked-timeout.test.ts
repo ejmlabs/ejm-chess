@@ -1,30 +1,14 @@
 import { env } from 'cloudflare:workers';
 import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Env } from '../src/server/env';
 import type { Game } from '../src/server/game';
 import { RULES_VERSION, type GameSnapshot, type Pool } from '../src/shared/protocol';
-import { enableRanked, player } from './authority-helpers';
+import { holdAlarms, player, rankedPair } from './authority-helpers';
 
 const competition = env.COMPETITION.get(env.COMPETITION.idFromName('global'));
 
-async function pauseAlarms(stub: DurableObjectStub<Game>): Promise<void> {
-  await runInDurableObject(stub, async (instance, state) => {
-    (instance as unknown as { schedule(): Promise<void> }).schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
-}
-
 async function pair(pool: Pool = 'blitz') {
-  const [a, b] = await Promise.all([player(), player()]);
-  await competition.joinQueue(a, pool);
-  const queue = await competition.joinQueue(b, pool);
-  if (queue.status !== 'reserved' && queue.status !== 'live') throw new Error('not_paired');
-  const game = env.GAME.get(env.GAME.idFromName(queue.gameId));
-  await enableRanked(game);
-  await pauseAlarms(game);
-  const initial = await game.snapshot(a);
-  return { game, initial, white: initial.white.id === a.id ? a : b, black: initial.white.id === a.id ? b : a };
+  return rankedPair(competition, await Promise.all([player(), player()]), { pool, holdAlarms: true });
 }
 
 async function start(match: Awaited<ReturnType<typeof pair>>): Promise<GameSnapshot> {
@@ -42,8 +26,7 @@ async function setPosition(game: DurableObjectStub<Game>, fen: string): Promise<
     state.storage.sql.exec('UPDATE game_state SET value=?', JSON.stringify(stored));
   });
   await evictDurableObject(game);
-  await enableRanked(game);
-  await pauseAlarms(game);
+  await holdAlarms(game, { RANKED_ENABLED: 'true' });
 }
 
 async function ratingScores(gameId: string): Promise<number[]> {
@@ -52,14 +35,10 @@ async function ratingScores(gameId: string): Promise<number[]> {
 }
 
 beforeEach(async () => {
-  await runInDurableObject(competition, async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-    internal.env = { ...env, TOURNAMENTS_ENABLED: 'false', ARENAS_ENABLED: 'false' };
-    internal.schedule = async () => {};
-    await state.storage.deleteAlarm();
+  await holdAlarms(competition, { TOURNAMENTS_ENABLED: 'false', ARENAS_ENABLED: 'false', RANKED_ENABLED: 'true' });
+  await runInDurableObject(competition, (_instance, state) => {
     for (const table of ['matches', 'slots', 'queue']) state.storage.sql.exec(`DELETE FROM ${table}`);
   });
-  await enableRanked(competition);
 });
 afterEach(() => { vi.restoreAllMocks(); });
 

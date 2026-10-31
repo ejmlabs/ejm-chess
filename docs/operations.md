@@ -217,9 +217,11 @@ arms its own alarm for these and pushes its result at once, so a read follows
 a status change and recovers a lost alarm or push. A move can bring a deadline
 forward; the Game alarm covers it, and the five-minute bound covers a lost
 alarm. A late read delays delivery only, because a flag keeps its original
-deadline as its result time. A failed status call retries after one second, as
-before, and a reply without a due time falls back to the five-minute bound.
-A due time already passed is retried after one second, never in a tight loop.
+deadline as its result time. For casual and arena games a failed status call
+retries after one second, then after twice as long each time up to 60 seconds,
+and a success starts over at one second. A reply without a due time falls back
+to the five-minute bound. A due time already passed is retried after one second,
+then after as long as it has been overdue, up to 60 seconds, never in a tight loop.
 Ten live rapid games cost 190 Game status reads over the first ten minutes of
 play at the earlier fixed 30-second poll and 11 now (local mocked-clock run,
 not staged or released). A resignation, a draw or a flag still settles through

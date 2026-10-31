@@ -7,31 +7,13 @@ import { GAME_HOT_RETENTION_MS, type Game } from '../src/server/game';
 import { maintainUnattendedGames } from '../src/server/maintenance';
 import type { Actor, InitGame } from '../src/shared/protocol';
 import { STOCKFISH_BUILD } from '../src/shared/engine';
-import { activeGame, admitGameFixture, player } from './authority-helpers';
+import { activeGame, admitGameFixture, gamesAnswering, heldCompetition, holdAlarms, holdDelivery, intercept, patchBindings, player, privates } from './authority-helpers';
 
 type Authority = DurableObjectStub<Competition>;
 afterEach(() => vi.restoreAllMocks());
 
-async function authority(settings: Partial<Env> = {}, existing?: Authority): Promise<Authority> {
-  const stub = existing ?? env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
-  await runInDurableObject(stub, async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-    internal.env = { ...internal.env, ARENAS_ENABLED: 'false', TOURNAMENTS_ENABLED: 'false', RANKED_ENABLED: 'true', ...settings };
-    internal.schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
-  return stub;
-}
-
-async function quiet(game: DurableObjectStub<Game>, settings: Partial<Env> = {}, suppressFlush = true): Promise<void> {
-  await runInDurableObject(game, async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void>; flush(): Promise<void> };
-    internal.env = { ...internal.env, ...settings };
-    internal.schedule = async () => {};
-    if (suppressFlush) internal.flush = async () => {};
-    await state.storage.deleteAlarm();
-  });
-}
+const authority = (settings: Partial<Env> = {}, existing?: Authority) =>
+  heldCompetition({ ARENAS_ENABLED: 'false', TOURNAMENTS_ENABLED: 'false', RANKED_ENABLED: 'true', ...settings }, existing);
 
 /** Parks every other ledger row so the four-per-minute recovery budget reaches only the rows under test. */
 async function parkOtherAdmissions(keep: string[]) {
@@ -68,7 +50,7 @@ describe('Competition-owned casual admission', () => {
     expect(await competition.createCasualGame(other, { id: crypto.randomUUID(), format: 'rapid' }))
       .toMatchObject({ ok: false, error: { code: 'SEAT_UNAVAILABLE' } });
     const game = env.GAME.get(env.GAME.idFromName(id));
-    await quiet(game);
+    await holdDelivery(game);
     expect(await competition.createCasualGame(actor, { id, format: 'rapid' }))
       .toMatchObject({ ok: true, created: false, snapshot: { id, format: 'blitz' } });
     const snapshot = accepted.ok ? accepted.snapshot : null;
@@ -103,21 +85,7 @@ describe('Competition-owned casual admission', () => {
     const original = await authority();
     const actor = await player();
     const id = crypto.randomUUID();
-    await runInDurableObject(original, instance => {
-      const internal = instance as unknown as { env: Env };
-      const namespace = internal.env.GAME;
-      internal.env = { ...internal.env, GAME: {
-        idFromName: (name: string) => namespace.idFromName(name),
-        get: (gameId: DurableObjectId) => {
-          const game = namespace.get(gameId);
-          return new Proxy(game, { get(target, property) {
-            if (property === 'init') return async () => { throw new Error('lost_before_initialization'); };
-            const value = Reflect.get(target, property);
-            return typeof value === 'function' ? (...args: unknown[]) => Reflect.apply(value, target, args) : value;
-          } });
-        },
-      } as unknown as Env['GAME'] };
-    });
+    await patchBindings(original, gamesAnswering(() => ({ init: async () => { throw new Error('lost_before_initialization'); } })));
     expect(await original.createCasualGame(actor, { id, format: 'blitz' }))
       .toMatchObject({ ok: false, error: { status: 503, code: 'GAME_INITIALIZATION_PENDING' } });
     const admission = await env.DB.prepare('SELECT reservation_id,created_at FROM casual_game_admissions WHERE game_id=?')
@@ -131,7 +99,7 @@ describe('Competition-owned casual admission', () => {
     const result = await competition.createCasualGame(actor, { id, format: 'blitz' });
     expect(result).toMatchObject({ ok: true, created: false, snapshot: { id, status: 'waiting', readinessDeadline: admission!.created_at + 600_000 } });
     const game = env.GAME.get(env.GAME.idFromName(id));
-    await quiet(game);
+    await holdDelivery(game);
     expect(await env.DB.prepare('SELECT reservation_id FROM casual_game_admissions WHERE game_id=?').bind(id).first('reservation_id')).toBe(admission!.reservation_id);
     expect(await competition.createCasualGame(actor, { id: crypto.randomUUID(), format: 'blitz' })).toMatchObject({ ok: false });
     clock.mockReturnValue(admission!.created_at + 600_000);
@@ -155,7 +123,7 @@ describe('Competition-owned casual admission', () => {
     await env.DB.prepare('INSERT INTO active_game_seats(user_id,game_id,acquired_at) VALUES(?,?,?)').bind(actor.id, id, Date.now()).run();
     const before = await env.DB.prepare("SELECT legacy_live FROM game_admission_counts WHERE kind='casual'").first<number>('legacy_live');
     const game = env.GAME.get(env.GAME.idFromName(id));
-    await quiet(game, { AI_ENABLED: 'false' }, false);
+    await holdAlarms(game, { AI_ENABLED: 'false' });
     await authority({ NEW_WORK_STOPPED: 'true', CASUAL_GAME_LIMIT: '0', CASUAL_GAME_ID_LIMIT: '0', ARENA_GAME_LIMIT: '0' }, competition);
     expect(await competition.createCasualGame(actor, { id, format: 'blitz', ai }))
       .toMatchObject({ ok: true, created: false, snapshot: { status: 'finished', outcome: { reason: 'ai-unavailable', score: null } } });
@@ -172,15 +140,14 @@ describe('Competition-owned casual admission', () => {
     const id = crypto.randomUUID();
     expect(await competition.createCasualGame({ ...actor, id: crypto.randomUUID() }, { id, format: 'blitz' }))
       .toMatchObject({ ok: false, error: { code: 'SIGN_IN_REQUIRED' } });
-    await runInDurableObject(competition, instance => {
-      const internal = instance as unknown as { env: Env; unknownGameCalls: number };
-      internal.unknownGameCalls = 0;
-      internal.env = { ...internal.env, GAME: { idFromName: () => { internal.unknownGameCalls++; throw new Error('unknown_game_allocation'); } } as unknown as Env['GAME'] };
-    });
+    let unknownGameCalls = 0;
+    await patchBindings(competition, ({ GAME }) => ({ GAME: intercept(GAME, {
+      idFromName: () => { unknownGameCalls++; throw new Error('unknown_game_allocation'); },
+    }) }));
     expect(await competition.createCasualGame(actor, { id, format: 'blitz' })).toMatchObject({ ok: false, error: { code: 'SEAT_UNAVAILABLE' } });
     await authority({ ARENA_AUTHORITY_BYTE_LIMIT: '268435456', CASUAL_GAME_ID_LIMIT: '0' }, competition);
     expect(await competition.createCasualGame(actor, { id, format: 'blitz' })).toMatchObject({ ok: false, error: { code: 'SEAT_UNAVAILABLE' } });
-    expect(await runInDurableObject(competition, instance => (instance as unknown as { unknownGameCalls: number }).unknownGameCalls)).toBe(0);
+    expect(unknownGameCalls).toBe(0);
     expect(await env.DB.prepare('SELECT 1 FROM casual_game_admissions WHERE game_id=?').bind(id).first()).toBeNull();
     expect((await competition.health()).casuals.unfinished).toBe(0);
   });
@@ -196,7 +163,7 @@ describe('Competition-owned casual admission', () => {
     expect(count).toBeGreaterThanOrEqual(1);
     const game = env.GAME.get(env.GAME.idFromName(id));
     await game.init(input);
-    await quiet(game);
+    await holdDelivery(game);
     const competition = await authority({ ARENA_GAME_LIMIT: String(count), NEW_WORK_STOPPED: 'true', CASUAL_GAME_LIMIT: '0' });
     expect(await competition.createCasualGame(actor, { id, format: 'rapid' })).toMatchObject({ ok: true, snapshot: { id, format: 'blitz' } });
     await authority({ NEW_WORK_STOPPED: 'false' }, competition);
@@ -212,7 +179,7 @@ describe('Competition-owned casual admission', () => {
     const id = crypto.randomUUID();
     const game = env.GAME.get(env.GAME.idFromName(id));
     const input: InitGame = { id, format: 'blitz', rated: false, white: actor, reservationId: crypto.randomUUID() };
-    await quiet(game);
+    await holdDelivery(game);
     await runInDurableObject(game, async instance => {
       await expect((instance as Game).init(input)).rejects.toThrow('casual_admission_required');
     });
@@ -268,7 +235,7 @@ describe('Competition-owned casual admission', () => {
     const created = await competition.createCasualGame(actor, { id, format: 'blitz' });
     expect(created).toMatchObject({ ok: true, created: true });
     const game = env.GAME.get(env.GAME.idFromName(id));
-    await quiet(game, {}, false);
+    await holdAlarms(game);
     await parkOtherAdmissions([id]);
     const admitted = await env.DB.prepare('SELECT created_at FROM casual_game_admissions WHERE game_id=?').bind(id).first<number>('created_at');
     const clock = vi.spyOn(Date, 'now').mockReturnValue(admitted! + 2 * 60 * 60_000);
@@ -353,8 +320,7 @@ describe('Competition-owned casual admission', () => {
     await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec(`INSERT INTO casual_intents(game_id,creator_id,reservation_id,payload,state,created_at,next_at)
       VALUES(?,?,?,?,'admitting',?,?)`, saved, actor.id, reservationId, JSON.stringify({ id: saved, format: 'blitz', rated: false, white: actor, reservationId }), Date.now(), Date.now()));
     const reads = await runInDurableObject<Competition, { resumed: number; afterNew: number }>(competition, async instance => {
-      const internal = instance as unknown as { env: Env };
-      const prepared = vi.spyOn(internal.env.DB, 'prepare');
+      const prepared = vi.spyOn(privates(instance).env.DB, 'prepare');
       const count = () => prepared.mock.calls.filter(([sql]) => sql.includes('legacy_live')).length;
       expect(await instance.createCasualGame(actor, { id: saved, format: 'blitz' })).toMatchObject({ ok: true, created: true });
       const resumed = count();

@@ -4,10 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { authHandler, beginIdentityChange, currentActor, type Actor } from '../src/server/auth';
 import { applyAccountClosure } from '../src/server/privacy';
 import { ACCOUNT_PRIVACY_POLICY, type AccountClosureReceipt, type AccountExportPage } from '../src/shared/privacy';
-import type { Env } from '../src/server/env';
 import type { Competition } from '../src/server/competition';
 import handler from '../src/server/index';
-import { enableRanked, player } from './authority-helpers';
+import { enableRanked, holdAlarms, intercept, player, privates, swapBindings } from './authority-helpers';
 
 const origin = 'http://localhost:8787';
 const password = 'privacy-test-password-12345';
@@ -226,36 +225,25 @@ describe('password-confirmed account data controls', () => {
 describe('closure and admission authority', () => {
   it.each(['ranked', 'casual'] as const)('fences %s admission that passed a primary session check before closure', async mode => {
     const competition = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
-    await enableRanked(competition);
+    await holdAlarms(competition, { RANKED_ENABLED: 'true' });
     const actor = await player();
     await runInDurableObject(competition, async (instance, state) => {
       const local = instance as Competition;
-      const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-      const original = internal.env;
-      const schedule = internal.schedule;
-      internal.schedule = async () => {};
-      await state.storage.deleteAlarm();
+      const original = privates(instance).env;
       let release!: () => void;
       let observed!: () => void;
       const paused = new Promise<void>(resolve => { observed = resolve; });
       const reply = new Promise<void>(resolve => { release = resolve; });
       let once = true;
-      const db = new Proxy(original.DB, { get(target, key) {
-        if (key === 'prepare') return (sql: string) => {
-          const wrap = (statement: D1PreparedStatement): D1PreparedStatement => new Proxy(statement, { get(value, method) {
-            if (method === 'bind') return (...args: unknown[]) => wrap(value.bind(...args));
-            if (method === 'first') return async (...args: unknown[]) => {
-              const result = await value.first(...args as []);
-              if (once && sql.includes(mode === 'ranked' ? 'AS restricted' : 'FROM session s JOIN user u')) { once = false; observed(); await reply; }
-              return result;
-            };
-            const result = Reflect.get(value, method); return typeof result === 'function' ? result.bind(value) : result;
-          } });
-          return wrap(target.prepare(sql));
-        };
-        const value = Reflect.get(target, key); return typeof value === 'function' ? value.bind(target) : value;
-      } });
-      internal.env = { ...original, DB: db };
+      const wrap = (sql: string, statement: D1PreparedStatement): D1PreparedStatement => intercept(statement, {
+        bind: (...args: unknown[]) => wrap(sql, statement.bind(...args)),
+        first: async (...args: unknown[]) => {
+          const result = await statement.first(...args as []);
+          if (once && sql.includes(mode === 'ranked' ? 'AS restricted' : 'FROM session s JOIN user u')) { once = false; observed(); await reply; }
+          return result;
+        },
+      });
+      const restore = swapBindings(instance, ({ DB }) => ({ DB: intercept(DB, { prepare: (sql: string) => wrap(sql, DB.prepare(sql)) }) }));
       try {
         const gameId = crypto.randomUUID();
         const pending = mode === 'ranked' ? local.joinQueue(actor, 'blitz') : local.createCasualGame(actor, { id: gameId, format: 'blitz' });
@@ -272,7 +260,7 @@ describe('closure and admission authority', () => {
         else expect(result).toMatchObject({ ok: false, error: { code: 'ACCOUNT_CLOSING' } });
         expect(state.storage.sql.exec('SELECT * FROM slots WHERE user_id=?', actor.id).toArray()).toEqual([]);
         expect(state.storage.sql.exec('SELECT * FROM casual_intents WHERE creator_id=?', actor.id).toArray()).toEqual([]);
-      } finally { release(); internal.env = original; internal.schedule = schedule; }
+      } finally { release(); restore(); }
     });
   });
 

@@ -2,9 +2,8 @@ import { env } from 'cloudflare:workers';
 import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { expect, it, vi } from 'vitest';
 import type { Actor, GameSnapshot } from '../src/shared/protocol';
-import type { Env } from '../src/server/env';
 import { readArenaStandings, readArenaSummary } from '../src/server/arena-projection';
-import { holdAlarms, player } from '../test/authority-helpers';
+import { gamesAnswering, holdAlarms, player, swapBindings } from '../test/authority-helpers';
 import { authorityBindings } from './isolation';
 
 type Intent = { game_id: string; event_id: string; white_actor: string; black_actor: string };
@@ -110,9 +109,7 @@ it('qualifies three native 2000-entry events sharing 1000 games across both form
       return (await context.game.status())!.result!;
     });
     await runInDurableObject(competition, async instance => {
-      const internal = instance as unknown as { env: Env };
-      internal.env = { ...internal.env, GAME: { idFromName: env.GAME.idFromName.bind(env.GAME),
-        get: () => ({ status: async () => { throw new Error('injected_verification_outage'); } }) } as unknown as Env['GAME'] };
+      swapBindings(instance, gamesAnswering(() => ({ status: async () => { throw new Error('injected_verification_outage'); } })));
       let error: string | null = null;
       try { await instance.settle(results[0]); } catch (failure) { error = (failure as Error).message; }
       expect(error).toBe('injected_verification_outage');

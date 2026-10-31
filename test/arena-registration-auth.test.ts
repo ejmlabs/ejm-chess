@@ -6,8 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { authOptions, createAuth } from '../src/server/auth';
 import { ARENA_POLICY } from '../src/server/arena-policy';
 import type { Competition } from '../src/server/competition';
-import type { Env } from '../src/server/env';
-import { player } from './authority-helpers';
+import { holdAlarms, player, privates } from './authority-helpers';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -19,11 +18,9 @@ async function fixture(work: (instance: Competition, state: DurableObjectState, 
   const name = getCookies(authOptions(bindings)).sessionToken.name;
   const cookie = `${name}=${encodeURIComponent(`${stored.token}.${await makeSignature(stored.token, env.AUTH_SECRET)}`)}`;
   const stub = env.COMPETITION.get(env.COMPETITION.idFromName(`registration-auth-${crypto.randomUUID()}`));
+  await holdAlarms(stub, { ...bindings, ARENAS_ENABLED: 'true', TOURNAMENTS_ENABLED: 'false' });
   await runInDurableObject(stub, async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-    internal.env = { ...bindings, ARENAS_ENABLED: 'true', TOURNAMENTS_ENABLED: 'false' };
-    internal.schedule = async () => {};
-    await (await createAuth(internal.env).$context).checkSchema?.();
+    await (await createAuth(privates(instance).env).$context).checkSchema?.();
     const startsAt = Math.ceil(Date.now() / 3_600_000) * 3_600_000;
     vi.spyOn(Date, 'now').mockReturnValue(startsAt - 600_000);
     const eventId = `arena-hourly-${startsAt}`;
@@ -34,7 +31,7 @@ async function fixture(work: (instance: Competition, state: DurableObjectState, 
 describe('global native registration authentication', () => {
   it('rejects excess work before primary auth and releases the global guard after real auth failure', async () => {
     await fixture(async (instance, state, request, eventId) => {
-      const database = (instance as unknown as { env: Env }).env.DB;
+      const database = privates(instance).env.DB;
       const original = database.prepare.bind(database);
       for (const fail of [true, false]) {
         let release!: () => void, started = 0;
@@ -72,7 +69,7 @@ describe('global native registration authentication', () => {
 
   it('releases auth slots before slower fresh eligibility while keeping credential checks authoritative', async () => {
     await fixture(async (instance, state, request, eventId) => {
-      const database = (instance as unknown as { env: Env }).env.DB;
+      const database = privates(instance).env.DB;
       const original = database.prepare.bind(database);
       let release!: () => void, started = 0;
       const paused = new Promise<void>(resolve => { release = resolve; });

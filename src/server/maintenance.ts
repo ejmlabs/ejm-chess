@@ -16,6 +16,11 @@ interface Candidate { ledger: Ledger; game_id: string; result_version: number; t
 export interface MaintenanceResult { attempted: number; completed: number; failed: number }
 
 const ledgers: Ledger[] = ['casual_game_admissions', 'tournament_game_admissions'];
+/**
+ * Competition projects a game to D1 only when its result lands, so an unwatched game has no projection while it
+ * plays. Recovery leaves it this long after admission for the Game's own alarm and delivery before polling it.
+ */
+const UNPROJECTED_GRACE_MS = 30_000;
 /** No game outlives its clocks: two initial allowances plus an increment for every ply of the cap is about 18 hours. */
 const GAME_MAX_AGE_MS = DAY;
 /** Competition polls every game it admitted through a durable intent. Only older casual admissions have none. */
@@ -193,7 +198,7 @@ async function recoverUnattendedGames(env: Env, now: number): Promise<Maintenanc
     WHERE ${ledger}.storage_state='retained' AND ${ledger}.archive_retry_at<=?
       AND ((g.status='pending-adjudication' AND g.ended_at<=?)
         OR (g.id IS NULL AND ${ledger}.created_at<=CASE WHEN ${UNWATCHED[ledger]} THEN ? ELSE ? END))`).join(' UNION ALL ');
-  const args = ledgers.flatMap(() => [now, now - ADJUDICATION_WAIT_MS, now - ADJUDICATION_WAIT_MS, now - GAME_MAX_AGE_MS]);
+  const args = ledgers.flatMap(() => [now, now - ADJUDICATION_WAIT_MS, now - UNPROJECTED_GRACE_MS, now - GAME_MAX_AGE_MS]);
   const candidates = (await env.DB.prepare(`${select} ORDER BY due_at,game_id LIMIT ?`)
     .bind(...args, GAME_MAINTENANCE_BATCH).all<Pick<Candidate, 'ledger' | 'game_id'> & { created_at: number }>()).results;
   const result = { attempted: 0, completed: 0, failed: 0 };

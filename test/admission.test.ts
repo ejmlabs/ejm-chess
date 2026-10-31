@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { createExecutionContext, runInDurableObject, waitOnExecutionContext } from 'cloudflare:test';
+import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import handler from '../src/server/index';
 import { acquireSeatGuard, currentActor } from '../src/server/auth';
@@ -8,26 +8,18 @@ import { GAME_HOT_RETENTION_MS } from '../src/server/game';
 import { retireGamePayloads } from '../src/server/maintenance';
 import type { Env } from '../src/server/env';
 import type { Actor, GameSnapshot, InitGame } from '../src/shared/protocol';
-import { player } from './authority-helpers';
+import { patchBindings, player } from './authority-helpers';
 
 const origin = 'http://localhost:8787';
-let originalCompetitionEnv: Env | undefined;
+let restoreAdmission: (() => Promise<void>) | undefined;
 async function configureAdmission(bindings: Env) {
-  const authority = env.COMPETITION.get(env.COMPETITION.idFromName('global'));
-  await runInDurableObject(authority, instance => {
-    const internal = instance as unknown as { env: Env };
-    originalCompetitionEnv ??= internal.env;
-    internal.env = { ...originalCompetitionEnv, ...bindings };
-  });
+  await restoreAdmission?.();
+  restoreAdmission = await patchBindings(env.COMPETITION.get(env.COMPETITION.idFromName('global')), bindings);
 }
 afterEach(async () => {
   vi.restoreAllMocks();
-  if (!originalCompetitionEnv) return;
-  const authority = env.COMPETITION.get(env.COMPETITION.idFromName('global'));
-  await runInDurableObject(authority, instance => {
-    (instance as unknown as { env: Env }).env = originalCompetitionEnv!;
-  });
-  originalCompetitionEnv = undefined;
+  await restoreAdmission?.();
+  restoreAdmission = undefined;
 });
 function request(path: string, cookie: string, body?: unknown, extra: Record<string, string> = {}) {
   return new Request(origin + path, { method: body === undefined ? 'GET' : 'POST',
@@ -236,10 +228,7 @@ describe('bounded game admission', () => {
     const id = crypto.randomUUID();
     const authority = env.GAME.get(env.GAME.idFromName(id));
     // The real authority needs practice enabled, matching the Worker fixture.
-    await runInDurableObject(authority, instance => {
-      const internal = instance as unknown as { env: Env };
-      internal.env = { ...internal.env, AI_ENABLED: 'true' };
-    });
+    await patchBindings(authority, { AI_ENABLED: 'true' });
     const init = vi.fn(async (input: InitGame) => {
       await env.GAME.get(env.GAME.idFromName(input.id)).init(input);
       throw new Error('Initialization reply lost after commit');

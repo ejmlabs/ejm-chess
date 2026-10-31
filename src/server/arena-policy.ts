@@ -5,11 +5,20 @@ export const ARENA_POLICY = {
   version: 'arena-v1', registrationMs: REGISTRATION_MS,
   historyMs: HISTORY_MS, candidateWindow: 64, pairBatch: 8, initBatch: 8,
   externalConcurrency: 4, workBatch: 32, pageRows: 32, pageBytes: 32 * 1024,
-  snapshotIntervalMs: 10_000, retryMs: 1_000, startRate: 32, registrationRate: 50, registrationBurst: 100,
+  snapshotIntervalMs: 10_000, retryMs: 1_000, retryCapMs: 60_000, startRate: 32, registrationRate: 50, registrationBurst: 100,
   registrationAuthConcurrency: 16, registrationConcurrency: 256,
   resultReserveBytes: 1_310_720,
   entryReserveBytes: 32 * 1024,
 } as const;
+
+/**
+ * A failing dependency is retried after retryMs, then twice as long each time up to retryCapMs, so an outage
+ * costs a few wakeups a minute instead of one a second while a single transient error still recovers at once.
+ * `failures` counts the failures before this one. Waiting that is no failure, such as a queued player, keeps retryMs.
+ */
+export function retryDelayMs(failures: number): number {
+  return Math.min(ARENA_POLICY.retryCapMs, ARENA_POLICY.retryMs * 2 ** failures);
+}
 
 function limit(value: string | undefined, fallback: number, maximum = Number.MAX_SAFE_INTEGER): number {
   if (value === undefined) return fallback;

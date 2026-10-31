@@ -2,9 +2,8 @@ import { env } from 'cloudflare:workers';
 import { runInDurableObject } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Competition } from '../src/server/competition';
-import type { Env } from '../src/server/env';
 import type { ArenaActionResult, ArenaMe } from '../src/shared/arenas';
-import { player } from './authority-helpers';
+import { patchBindings, player, privates } from './authority-helpers';
 
 type Authority = DurableObjectStub<Competition>;
 const HOUR = 3_600_000;
@@ -27,10 +26,7 @@ async function running(options: { players: number; queued: number }) {
   const clock = vi.spyOn(Date, 'now').mockReturnValue(startsAt - 600_000);
   const competition = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
   open.push(competition);
-  await runInDurableObject(competition, instance => {
-    const internal = instance as unknown as { env: Env };
-    internal.env = { ...internal.env, ARENAS_ENABLED: 'true', TOURNAMENTS_ENABLED: 'false', RANKED_ENABLED: 'true' };
-  });
+  await patchBindings(competition, { ARENAS_ENABLED: 'true', TOURNAMENTS_ENABLED: 'false', RANKED_ENABLED: 'true' });
   const actors = await Promise.all(Array.from({ length: options.players }, () => player(false, { recoveryEmail: false })));
   const id = `arena-hourly-${startsAt}`;
   for (const actor of actors) value(await competition.registerArena(actor, id));
@@ -95,12 +91,11 @@ describe('arena alarm schedule', () => {
     await wakeups(competition, clock, startsAt + 1_000);
     // More queued entries than one release batch.
     const waiting = Array.from({ length: 40 }, (_unused, number) => `waiting-${number}`);
-    await runInDurableObject(competition, (instance, state) => {
+    await runInDurableObject(competition, (_instance, state) => {
       for (const userId of waiting) state.storage.sql.exec(`INSERT INTO arena_entries(event_id,user_id,actor,name,rating,state,joined_at,queued_at,next_at,rating_band)
         VALUES(?,?,?,?,1500,'queued',?,?,?,7)`, id, userId, '{}', userId, startsAt, startsAt, startsAt + 60_000);
-      const internal = instance as unknown as { env: Env };
-      internal.env = { ...internal.env, ARENAS_ENABLED: 'false' };
     });
+    await patchBindings(competition, { ARENAS_ENABLED: 'false' });
     clock.mockReturnValue(startsAt + 5_000);
     await competition.maintenance();
     expect(await competition.getArenaMe(actors[0], id)).toMatchObject({ status: 'finished' });
@@ -116,7 +111,7 @@ describe('arena alarm schedule', () => {
     const { competition, clock, startsAt } = await running({ players: 2, queued: 0 });
     // The start pass publishes one event. The other new events still wait for their first publication.
     await runInDurableObject(competition, instance => {
-      vi.spyOn((instance as unknown as { env: Env }).env.DB, 'batch').mockRejectedValue(new Error('d1_unavailable'));
+      vi.spyOn(privates(instance).env.DB, 'batch').mockRejectedValue(new Error('d1_unavailable'));
     });
     clock.mockReturnValue(startsAt + 5);
     expect((await competition.maintenance()).errors).toContain('arena');
