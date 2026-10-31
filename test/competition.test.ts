@@ -393,11 +393,12 @@ describe('competitive authority', () => {
       value.deadline = Date.now() - 1;
       state.storage.sql.exec('UPDATE game_state SET value=?', JSON.stringify(value));
     });
-    const pending = await game.status();
-    expect(pending?.status).toBe('pending-adjudication');
-    await competition.settle(pending!.result!);
-    expect(await competition.joinQueue(white, 'rapid')).toMatchObject({ status: 'settling', pool: 'blitz', gameId: initial.id });
-    expect(await readRating(competition, white)).toBeNull();
+    const flagged = await game.status();
+    expect(flagged?.result?.outcome).toMatchObject({ winner: 'b', reason: 'timeout-win' });
+    expect(await competition.joinQueue(white, 'rapid')).toMatchObject({ status: 'live', pool: 'blitz', gameId: initial.id });
+    await competition.settle(flagged!.result!);
+    expect(await readRating(competition, white)).not.toBeNull();
+    expect(await competition.queueStatus(white)).toEqual({ status: 'idle' });
   });
 
   it('expires a paired ranked game without rating credit and recovers both account slots', async () => {

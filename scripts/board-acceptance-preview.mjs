@@ -45,8 +45,6 @@ const bindings = {
   NEW_WORK_STOPPED: 'false',
   OPERATION_MODE: 'unattended',
   RANKED_ENABLED: 'false',
-  TIMEOUT_PROOF_PROFILE: 'off',
-  MONTHLY_PROOF_LIMIT: '0',
   TOURNAMENTS_ENABLED: 'false',
   ARENAS_ENABLED: 'false',
   ANALYSIS_ENABLED: 'false',

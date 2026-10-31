@@ -17,7 +17,7 @@ import chess.pgn
 ENGINE_VERSION = "stockfish-17.1"
 PROFILE_VERSION = "screen-v1"
 RULES_VERSION = "online-2026-10-v2-unattended"
-PROOF_RULES_VERSION = "online-2026-10-v3-proof"
+CURRENT_RULES_VERSION = "online-2026-10-v4-unattended"
 MAX_BODY_BYTES = 32_768
 MAX_PGN_BYTES = 16_384
 MAX_PLIES = 512
@@ -37,7 +37,7 @@ def parse_game(job):
     if not isinstance(job, dict) or set(job) != expected:
         raise InvalidJob("INVALID_INPUT")
     if (job["engineVersion"] != ENGINE_VERSION or job["profileVersion"] != PROFILE_VERSION
-            or job["rulesVersion"] not in [RULES_VERSION, PROOF_RULES_VERSION] or type(job["resultVersion"]) is not int
+            or job["rulesVersion"] not in [RULES_VERSION, CURRENT_RULES_VERSION] or type(job["resultVersion"]) is not int
             or not 1 <= job["resultVersion"] <= 1_000_000
             or not isinstance(job["gameId"], str) or len(job["gameId"]) != 36
             or not isinstance(job["pgn"], str) or len(job["pgn"].encode()) > MAX_PGN_BYTES):

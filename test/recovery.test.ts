@@ -6,8 +6,7 @@ import drillWorker from '../src/server/recovery-drill';
 import { admittedRecoveryGame, captureNativePoint, fingerprintAuthority, recoveryInventory, recoverySha256, recognizedRecoveryPolicies } from '../src/server/recovery';
 import { assertDrillConfiguration, DRILL_SCHEMA, drillD1Schema, drillManifestProbes, drillResources, prepareDrillRestore, verifyDrillManifest,
   restartDrillObject, type DrillEnv, type DrillManifest } from '../src/server/recovery-drill-controls';
-import { RULES_VERSION, RATING_VERSION } from '../src/shared/protocol';
-import { PROOF_PROFILE, PROOF_RULES_VERSION } from '../src/server/proof-contract';
+import { PRIOR_RULES_VERSIONS, RULES_VERSION, RATING_VERSION } from '../src/shared/protocol';
 import { activeGame, player } from './authority-helpers';
 
 function isolatedConfig(): DrillEnv {
@@ -15,7 +14,6 @@ function isolatedConfig(): DrillEnv {
     RECOVERY_DRILL_SCOPE: 'ejm-chess-recovery-drill-local-test', RECOVERY_DATABASE_ID: '11111111-1111-1111-1111-111111111111',
     RECOVERY_GAME_NAMESPACE_ID: '1'.repeat(32), RECOVERY_COMPETITION_NAMESPACE_ID: '2'.repeat(32), RECOVERY_SOURCE_REVISION: 'a'.repeat(40),
     NEW_WORK_STOPPED: 'true', RANKED_ENABLED: 'false', TOURNAMENTS_ENABLED: 'false', ARENAS_ENABLED: 'false', ANALYSIS_ENABLED: 'false',
-    TIMEOUT_PROOF_PROFILE: 'off', MONTHLY_PROOF_LIMIT: '0', PROVER: undefined,
     EMAIL: undefined, ANALYSIS_QUEUE: undefined, ANALYZER: undefined };
 }
 
@@ -133,9 +131,6 @@ describe('isolated native restore controls', () => {
     expect(() => assertDrillConfiguration({ ...config, RECOVERY_DATABASE_ID: '99999999-9999-9999-9999-999999999999' })).toThrow();
     expect(() => assertDrillConfiguration({ ...config, RECOVERY_GAME_NAMESPACE_ID: '' })).toThrow();
     expect(() => assertDrillConfiguration({ ...config, NEW_WORK_STOPPED: 'false' })).toThrow();
-    expect(() => assertDrillConfiguration({ ...config, TIMEOUT_PROOF_PROFILE: PROOF_PROFILE })).toThrow();
-    expect(() => assertDrillConfiguration({ ...config, MONTHLY_PROOF_LIMIT: '1' })).toThrow();
-    expect(() => assertDrillConfiguration({ ...config, PROVER: {} as NonNullable<DrillEnv['PROVER']> })).toThrow();
   });
 
   it('rejects later accepted work and mismatched manifests before restore, then records undo before restart', async () => {
@@ -171,13 +166,13 @@ describe('isolated native restore controls', () => {
       expect(restore).not.toHaveBeenCalled();
       ctx.storage.sql.exec("DELETE FROM connections WHERE user_id='later-accepted-owner'");
       expect(recognizedRecoveryPolicies(point.policies)).toBe(true);
-      const proofPolicy = { ...manifest, points: { ...manifest.points, game: { ...point, policies: { ...point.policies, rules: PROOF_RULES_VERSION } } } };
-      const proofRestore = vi.fn(async () => 'test-proof-native-undo');
-      const proofReceipt = await prepareDrillRestore(shim(ctx, { restore: proofRestore }),
-        { ...config, RECOVERY_MANIFEST_SHA256: await recoverySha256(JSON.stringify(proofPolicy)) }, 'Game', proofPolicy);
-      expect(proofReceipt.authoritySha256).toBe(point.authority.sha256);
+      const priorPolicy = { ...manifest, points: { ...manifest.points, game: { ...point, policies: { ...point.policies, rules: PRIOR_RULES_VERSIONS[1] } } } };
+      const priorRestore = vi.fn(async () => 'test-prior-native-undo');
+      const priorReceipt = await prepareDrillRestore(shim(ctx, { restore: priorRestore }),
+        { ...config, RECOVERY_MANIFEST_SHA256: await recoverySha256(JSON.stringify(priorPolicy)) }, 'Game', priorPolicy);
+      expect(priorReceipt.authoritySha256).toBe(point.authority.sha256);
       expect(await fingerprintAuthority(ctx.storage)).toEqual(point.authority);
-      expect(proofRestore).toHaveBeenCalledWith(point.bookmark);
+      expect(priorRestore).toHaveBeenCalledWith(point.bookmark);
       const failedDb = { prepare: (sql: string) => sql.startsWith('INSERT INTO recovery_drill_restores')
         ? { bind: () => ({ run: async () => { throw new Error('isolated audit store unavailable'); } }) }
         : config.DB.prepare(sql) } as D1Database;

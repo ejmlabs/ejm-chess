@@ -19,6 +19,7 @@ __pycache__/
 # Private provider bindings and qualification configuration are restored locally.
 /wrangler.jsonc
 /wrangler.capacity.jsonc
+# Retired proof configs stay ignored so private copies are never committed.
 /wrangler.proof-acceptance.jsonc
 /wrangler.proof-qualification.jsonc
 /wrangler.proof-service.jsonc

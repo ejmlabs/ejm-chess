@@ -3,15 +3,13 @@ import { knownGame } from './auth';
 import { isGameId } from '../shared/gamePath';
 import { ApiError } from './security';
 import { PRIOR_RULES_VERSIONS, RULES_VERSION, RATING_VERSION } from '../shared/protocol';
-import { PROOF_RULES_VERSION } from './proof-contract';
 
 export const RECOVERY_SCHEMA = 'ejm-chess-native-recovery-v1';
 export const RECOVERY_SCAN_LIMIT = { tables: 128, rows: 4096, bytes: 2_097_152 } as const;
 export type RecoveryKind = 'Game' | 'Competition';
-export type RecoveryAuthorityKind = RecoveryKind | 'TimeoutProver';
 export interface RecoveryPoint {
   schema: typeof RECOVERY_SCHEMA;
-  kind: RecoveryAuthorityKind;
+  kind: RecoveryKind;
   objectId: string;
   name: string;
   bookmark: string;
@@ -24,15 +22,12 @@ export interface RecoveryPoint {
     moves?: number; receipts?: number; latestReceiptAt?: number | null; pendingDelivery?: boolean; archived?: boolean;
     watermarks?: Record<string, number>; publishedEpochs?: Record<string, number>; matches?: Array<{ status: string; count: number }>;
     pending?: Record<string, number>; repairInProgress?: boolean;
-    timeoutProof?: { profileVersion: string; pendingVersion?: number; attempt?: number; done?: boolean };
-    proofReservations?: { profileVersion: string; reserved: number; retained: number };
-    proofLifecycle?: { profileVersion: string; generation: number; attempts: number; stopDebt: boolean; pendingStops: number };
   };
 }
 
 /** Recognition is additive. The stored policy and authority hash remain exact. */
 export function recognizedRecoveryPolicies(policies: RecoveryPoint['policies'] | undefined): boolean {
-  return Boolean(policies && [RULES_VERSION, PRIOR_RULES_VERSIONS[1], PROOF_RULES_VERSION].includes(policies.rules) && policies.ratings === RATING_VERSION);
+  return Boolean(policies && [RULES_VERSION, PRIOR_RULES_VERSIONS[1]].includes(policies.rules) && policies.ratings === RATING_VERSION);
 }
 
 export async function recoverySha256(value: string): Promise<string> {

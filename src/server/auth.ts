@@ -274,7 +274,7 @@ export async function requireActor(request: Request, env: AuthEnv): Promise<Acto
 export async function requireRankedActor(request: Request, env: AuthEnv): Promise<Actor> {
   const actor = await requireActor(request, env);
   const eligibility = await rankedEligibility(env, actor.id);
-  if (!eligibility.eligible) throw new ApiError(403, eligibility.reason ?? 'RANKED_UNAVAILABLE', eligibility.reason === 'RANKED_CLOSED' ? 'Ranked play is closed while launch checks remain.' : 'Ranked play requires an eligible account.');
+  if (!eligibility.eligible) throw new ApiError(403, eligibility.reason ?? 'RANKED_UNAVAILABLE', eligibility.reason === 'RANKED_CLOSED' ? 'Ranked play is closed.' : 'Ranked play requires an eligible account.');
   return actor;
 }
 

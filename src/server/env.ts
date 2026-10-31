@@ -2,7 +2,6 @@ import type { Game } from './game';
 import type { Competition } from './competition';
 import type { StockfishAnalyzer } from './analysis';
 import type { BudgetEnv } from './budget';
-import type { TimeoutProver } from './proof-pool';
 
 export interface Env extends BudgetEnv {
   ASSETS: Fetcher;
@@ -24,10 +23,6 @@ export interface Env extends BudgetEnv {
   ARENA_AUTHORITY_BYTE_LIMIT?: string;
   GAME_RETIREMENT_MODE?: string;
   RANKED_ENABLED?: string;
-  /** Exact supported profile and a private binding are required for new ranked admission. */
-  TIMEOUT_PROOF_PROFILE?: string;
-  MONTHLY_PROOF_LIMIT?: string;
-  PROVER?: DurableObjectNamespace<TimeoutProver>;
   RANKED_GAME_LIMIT?: string;
   RANKED_QUEUE_LIMIT?: string;
   RANKED_RETAINED_GAME_LIMIT?: string;

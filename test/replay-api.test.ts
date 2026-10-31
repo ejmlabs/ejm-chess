@@ -77,8 +77,7 @@ async function humanGame() {
   return { id, game, white, black, snapshot };
 }
 
-/** Ranked proof-policy games are the only path that still enters pending-adjudication. */
-async function proofGame() {
+async function rankedGame() {
   const [first, second] = await Promise.all([user(true), user(true)]);
   const competition = env.COMPETITION.get(env.COMPETITION.idFromName('global'));
   await runInDurableObject(competition, async (instance, state) => {
@@ -86,7 +85,7 @@ async function proofGame() {
     internal.env = { ...env, TOURNAMENTS_ENABLED: 'false', ARENAS_ENABLED: 'false' };
     internal.schedule = async () => {};
     await state.storage.deleteAlarm();
-    for (const table of ['ranked_proof_slots', 'matches', 'slots', 'queue']) state.storage.sql.exec(`DELETE FROM ${table}`);
+    for (const table of ['matches', 'slots', 'queue']) state.storage.sql.exec(`DELETE FROM ${table}`);
   });
   await enableRanked(competition);
   await competition.joinQueue(first.actor, 'blitz');
@@ -148,8 +147,8 @@ describe('participant replay exports', () => {
     expect(rpc).not.toHaveBeenCalled();
   });
 
-  it('keeps active and pending-adjudication proof records out of replay and history downloads', async () => {
-    const { id, game, white, snapshot, competition } = await proofGame();
+  it('keeps an active ranked game out of replay and history downloads until its timeout result is projected', async () => {
+    const { id, game, white, snapshot, competition } = await rankedGame();
     expect((await http(request(`/api/games/${id}/pgn`, white.cookie))).status).toBe(404);
     await runInDurableObject(game, (_instance, state) => {
       const row = state.storage.sql.exec<{ value: string }>('SELECT value FROM game_state').one();
@@ -158,14 +157,15 @@ describe('participant replay exports', () => {
       state.storage.sql.exec('UPDATE game_state SET value=?', JSON.stringify(value));
     });
     const late = await game.command(white.actor, { type: 'resign', id: crypto.randomUUID(), expectedVersion: snapshot.version });
-    expect(late.snapshot.status).toBe('pending-adjudication');
+    expect(late).toMatchObject({ ok: false, code: 'game_over', snapshot: { status: 'finished', outcome: { reason: 'timeout-win' } } });
+    expect((await http(request(`/api/games/${id}/pgn`, white.cookie))).status).toBe(404);
     await project(game, competition);
-    const denied = await http(request(`/api/games/${id}/pgn`, white.cookie));
-    expect(denied.status).toBe(404);
-    expect(denied.headers.get('Cache-Control')).toBe('no-store');
+    const exported = await http(request(`/api/games/${id}/pgn`, white.cookie));
+    expect(exported.status).toBe(200);
+    expect(parseReplay(await readPgn(exported)).result).toBe('0-1');
     const history = await http(request('/api/history', white.cookie));
     const records = await history.json() as { games: { id: string; pgn?: string }[] };
-    expect(records.games.find(record => record.id === id)).not.toHaveProperty('pgn');
+    expect(records.games.find(record => record.id === id)).toHaveProperty('pgn');
   });
 
   it('replays a real completed computer export with its fixed build and difficulty labels', async () => {

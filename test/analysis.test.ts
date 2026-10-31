@@ -6,7 +6,6 @@ import {
   type AnalysisEnv, type AnalysisJob,
 } from '../src/server/analysis';
 import { RULES_VERSION } from '../src/shared/protocol';
-import { PROOF_RULES_VERSION } from '../src/server/proof-contract';
 import { rankedEligibility } from '../src/server/auth';
 import { expireReports, REPORT_REVIEW_WINDOW_MS } from '../src/server/fairplay';
 import { player } from './authority-helpers';
@@ -60,7 +59,6 @@ describe('bounded postgame analysis', () => {
   it('accepts only pinned metadata and strips private PGN fields before the engine boundary', () => {
     const value = job();
     expect(parseAnalysisJob(value)).toEqual(value);
-    expect(parseAnalysisJob({ ...value, rulesVersion: PROOF_RULES_VERSION })?.rulesVersion).toBe(PROOF_RULES_VERSION);
     for (const change of [{ enginePath: '/bin/sh' }, { nodes: 1e9 }, { engineVersion: 'latest' },
       { gameId: '../game' }, { resultVersion: 0 }, { resultVersion: Number.MAX_SAFE_INTEGER }, { rulesVersion: 'old' }]) {
       expect(parseAnalysisJob({ ...value, ...change })).toBeNull();
@@ -76,23 +74,6 @@ describe('bounded postgame analysis', () => {
     expect(() => validateAnalysisSummary({ ...summary(), nodes: 1_500_001 })).toThrow('INVALID_ENGINE_SUMMARY');
     expect(() => validateAnalysisSummary({ ...summary(), sides: { ...summary().sides,
       w: { ...summary().sides.w, forcedPositions: 5 } } })).toThrow('INVALID_ENGINE_SUMMARY');
-  });
-
-  it('recovers report analysis for the proof rules version through the same informational screening path', async () => {
-    const source = await game();
-    await env.DB.prepare('UPDATE games SET rules_version=? WHERE id=?').bind(PROOF_RULES_VERSION, source.id).run();
-    const reported = await report(source);
-    const fetcher = vi.fn(async (request: Request) => {
-      expect(await request.json()).toMatchObject({ gameId: source.id, rulesVersion: PROOF_RULES_VERSION });
-      return Response.json(summary());
-    });
-    const config = analysisEnv(fetcher);
-    await reconcileReportedAnalysis(config);
-    await drainAnalysis(config);
-    expect(fetcher).toHaveBeenCalledOnce();
-    expect(await env.DB.prepare('SELECT status FROM analysis_jobs WHERE game_id=?').bind(source.id).first('status')).toBe('done');
-    expect(await env.DB.prepare('SELECT status FROM fairplay_cases WHERE id=?').bind(reported.caseId).first('status')).toBe('open');
-    expect(await env.DB.prepare('SELECT COUNT(*) FROM fairplay_evidence WHERE case_id=?').bind(reported.caseId).first('COUNT(*)')).toBe(1);
   });
 
   it('denies public Container URLs and prevents overlapping private requests', async () => {

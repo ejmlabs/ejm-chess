@@ -325,7 +325,7 @@ describe('online adjudication boundary', () => {
     expect(timeoutOutcome(new Chess('3k4/8/3K4/8/8/8/8/R7 b - - 0 1'), 'w')).toMatchObject({ winner: null, score: 0.5, reason: 'timeout-insufficient-material' });
   });
 
-  it('scores a fully blocked position as a loss on time because only the proof service can see the draw', () => {
+  it('scores a fully blocked position as a loss on time because the material rule cannot see the draw', () => {
     const blocked = new Chess('5b2/p7/Pp3k2/1Pp1pBp1/2P1P1P1/5K2/8/8 w - - 0 1');
     expect(timeoutOutcome(blocked, 'w')).toEqual({ winner: 'b', score: 0, reason: 'timeout-win' });
   });

@@ -358,7 +358,7 @@ export class CapacityNativeHost<T extends Game | Competition> {
       } }) as unknown as Env['COMPETITION'],
       ASSETS: { fetch: async () => { throw new Error('capacity_no_assets'); }, connect: () => { throw new Error('capacity_no_assets'); } },
       AUTH_SECRET: env.AUTH_SECRET, AUTH_BASE_URL: 'https://chess.ejmlabs.com',
-      LOCAL_DEV: 'false', RANKED_ENABLED: 'false', TIMEOUT_PROOF_PROFILE: 'off', MONTHLY_PROOF_LIMIT: '0',
+      LOCAL_DEV: 'false', RANKED_ENABLED: 'false',
       NEW_WORK_STOPPED: 'false', MONTHLY_GAME_LIMIT: '10000', MONTHLY_EMAIL_LIMIT: '0', MONTHLY_ANALYSIS_LIMIT: '0',
       OPERATION_MODE: 'unattended', AI_ENABLED: 'false', ANALYSIS_ENABLED: 'false',
       TOURNAMENTS_ENABLED: 'true', ARENAS_ENABLED: 'true', ARENA_ENTRANT_LIMIT: '2000', ARENA_GAME_LIMIT: '1000',

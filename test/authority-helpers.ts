@@ -5,7 +5,6 @@ import type { Actor, GameSnapshot, InitGame } from '../src/shared/protocol';
 import type { Env } from '../src/server/env';
 import type { Competition } from '../src/server/competition';
 import type { Game } from '../src/server/game';
-import { PROOF_PROFILE, unknownProof, type TimeoutProofRequest } from '../src/server/proof-contract';
 
 export async function player(anonymous = false, options: { recoveryEmail?: boolean } = {}): Promise<Actor> {
   const now = Date.now();
@@ -28,11 +27,7 @@ export async function player(anonymous = false, options: { recoveryEmail?: boole
 export async function enableRanked(stub: DurableObjectStub<Competition> | DurableObjectStub<Game>): Promise<void> {
   await runInDurableObject(stub as DurableObjectStub<Game>, instance => {
     const internal = instance as unknown as { env: Env };
-    internal.env = { ...internal.env, RANKED_ENABLED: 'true', TIMEOUT_PROOF_PROFILE: PROOF_PROFILE, MONTHLY_PROOF_LIMIT: '1000',
-      // Existing authority tests use no native solver. Their private fixture
-      // can only report unknown, so it cannot invent a supported timeout win.
-      PROVER: { idFromName: (name: string) => name, get: () => ({ fetch: async (request: Request) =>
-        Response.json(unknownProof(await request.json() as TimeoutProofRequest, 'solver-undetermined')) }) } as unknown as Env['PROVER'] };
+    internal.env = { ...internal.env, RANKED_ENABLED: 'true' };
   });
 }
 

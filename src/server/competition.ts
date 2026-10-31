@@ -15,8 +15,6 @@ import { advanceFarmingChecks, farmingStatus, farmingWorkPending, initializeFarm
 import { nextRetirementAt, retirementMode, retirementStatus, runScaledRetirementPass, type MaintenanceResult } from './maintenance';
 import { GAME_HOT_RETENTION_MS } from './game';
 import { captureNativePoint } from './recovery';
-import { proofBudgetAvailable, proofBudgetStatus, proofConfigured, reserveProofAdmission } from './proof-budget';
-import { PROOF_PROFILE, PROOF_RULES_VERSION, PROOF_SLOTS } from './proof-contract';
 import type { Env } from './env';
 import {
   FORMATS, PRIOR_RULES_VERSIONS, RATING_VERSION, RULES_VERSION,
@@ -197,9 +195,6 @@ export class Competition extends DurableObject<Env> {
       (id TEXT PRIMARY KEY,reservation_id TEXT NOT NULL,pool TEXT NOT NULL,white_id TEXT NOT NULL,black_id TEXT NOT NULL,
       white_actor TEXT NOT NULL,black_actor TEXT NOT NULL,status TEXT NOT NULL,created_at INTEGER NOT NULL,next_attempt_at INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0)`);
     sql.exec('CREATE INDEX IF NOT EXISTS match_work ON matches(status,next_attempt_at)');
-    sql.exec(`CREATE TABLE IF NOT EXISTS ranked_proof_slots
-      (game_id TEXT PRIMARY KEY,profile TEXT NOT NULL,released_at INTEGER)`);
-    sql.exec('CREATE INDEX IF NOT EXISTS ranked_proof_capacity ON ranked_proof_slots(released_at)');
     sql.exec(`CREATE TABLE IF NOT EXISTS ratings (pool TEXT NOT NULL,user_id TEXT NOT NULL,value TEXT NOT NULL,PRIMARY KEY(pool,user_id))`);
     sql.exec(`CREATE TABLE IF NOT EXISTS opponents (pool TEXT NOT NULL,user_id TEXT NOT NULL,opponent_id TEXT NOT NULL,PRIMARY KEY(pool,user_id,opponent_id))`);
     sql.exec(`CREATE TABLE IF NOT EXISTS pair_games (game_id TEXT PRIMARY KEY,pair_key TEXT NOT NULL,started_at INTEGER NOT NULL)`);
@@ -451,30 +446,26 @@ export class Competition extends DurableObject<Env> {
   private canCreateRankedGame(): boolean {
     const limits = this.admissionLimits();
     const retained = this.ctx.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM matches').one().count;
-    const proofSlots = this.ctx.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM ranked_proof_slots WHERE released_at IS NULL').one().count;
-    return proofConfigured(this.env) && proofSlots < PROOF_SLOTS
-      && retained < limits.retainedGames && this.unsettledGames() < limits.unsettledGames && this.arenas.canReserveGames();
+    return retained < limits.retainedGames && this.unsettledGames() < limits.unsettledGames && this.arenas.canReserveGames();
   }
 
-  /** Private Game initialization check. Historical active matches need no new reservation. */
-  async hasTimeoutProofReservation(gameId: string, reservationId: string): Promise<boolean> {
+  /** Private Game initialization check. A ranked Game exists only for an open reservation. */
+  async hasRankedReservation(gameId: string, reservationId: string): Promise<boolean> {
     const match = this.match(gameId);
-    return Boolean(match && match.reservation_id === reservationId && !['finished', 'cancelled'].includes(match.status)
-      && this.ctx.storage.sql.exec('SELECT 1 FROM ranked_proof_slots WHERE game_id=? AND profile=? AND released_at IS NULL', gameId, PROOF_PROFILE).toArray()[0]);
+    return Boolean(match && match.reservation_id === reservationId && !['finished', 'cancelled'].includes(match.status));
   }
 
   async joinQueue(actor: Actor, pool: Pool, region = 'unknown'): Promise<QueueState> {
     const now = Date.now();
-    if (this.env.RANKED_ENABLED !== 'true') return { status: 'closed', reason: 'Ranked play is closed while launch checks remain.' };
+    if (this.env.RANKED_ENABLED !== 'true') return { status: 'closed', reason: 'Ranked play is closed.' };
     if (!Object.hasOwn(FORMATS, pool)) throw new Error('invalid_format');
     if (!await revalidateActor(actor, this.env, true)) throw new Error('ranked_ineligible');
     if (this.accountClosing(actor.id)) return { status: 'closed', reason: 'Account closure is pending.' };
     if (this.slot(actor.id)?.state === 'tournament') return this.queueView(actor.id);
-    if (!proofConfigured(this.env)) return { status: 'closed', reason: 'Ranked play is closed while timeout proof checks remain.' };
     if (this.poolPaused(pool)) return { status: 'closed', reason: 'Rating repair is in progress.' };
     this.expireTickets(now);
-    if (!this.slot(actor.id) && (!await newWorkAllowed(this.env, 'games', now) || !await proofBudgetAvailable(this.env, now))) {
-      return { status: 'closed', reason: 'New games are paused at the monthly safety limit. Existing games can finish.' };
+    if (!this.slot(actor.id) && !await newWorkAllowed(this.env, 'games', now)) {
+      return { status: 'closed', reason: 'New games are paused. Existing games will finish.' };
     }
     const admissionError = this.ctx.storage.transactionSync(() => {
       if (this.accountClosing(actor.id)) return 'Account closure is pending.';
@@ -554,7 +545,6 @@ export class Competition extends DurableObject<Env> {
         revalidateActor(JSON.parse(second.actor) as Actor, this.env, true),
       ]);
       const gameId = crypto.randomUUID();
-      if (eligibility.every(Boolean) && !await proofBudgetAvailable(this.env, now)) return false;
       const reserved = this.ctx.storage.transactionSync(() => {
         if (this.accountClosing(first.user_id) || this.accountClosing(second.user_id)) return false;
         if (this.slot(first.user_id)?.state !== 'queued' || this.slot(second.user_id)?.state !== 'queued') return false;
@@ -574,7 +564,6 @@ export class Competition extends DurableObject<Env> {
         const reservationId = crypto.randomUUID();
         this.ctx.storage.sql.exec(`INSERT INTO matches(id,reservation_id,pool,white_id,black_id,white_actor,black_actor,status,created_at,next_attempt_at)
           VALUES(?,?,?,?,?,?,?,'creating',?,?)`, gameId, reservationId, pool, white.user_id, black.user_id, white.actor, black.actor, now, now);
-        this.ctx.storage.sql.exec('INSERT INTO ranked_proof_slots(game_id,profile) VALUES(?,?)', gameId, PROOF_PROFILE);
         for (const ticket of [white, black]) {
           this.ctx.storage.sql.exec("UPDATE slots SET state='reserved',game_id=? WHERE user_id=?", gameId, ticket.user_id);
           this.ctx.storage.sql.exec('DELETE FROM queue WHERE user_id=?', ticket.user_id);
@@ -609,13 +598,10 @@ export class Competition extends DurableObject<Env> {
       const black = JSON.parse(match.black_actor) as Actor;
       const eligibility = await Promise.all([revalidateActor(white, this.env, true), revalidateActor(black, this.env, true)]);
       if (!eligibility.every(Boolean) || this.poolPaused(match.pool)
-        || !await this.hasTimeoutProofReservation(match.id, match.reservation_id)
-        || !await reserveMonthlyWork(this.env, 'games', `ranked:${match.id}`, now)
-        || !await reserveProofAdmission(this.env, match.id, now)) {
+        || !await reserveMonthlyWork(this.env, 'games', `ranked:${match.id}`, now)) {
         this.ctx.storage.transactionSync(() => {
           this.ctx.storage.sql.exec("UPDATE matches SET status='cancelled' WHERE id=? AND status='creating'", match.id);
           this.ctx.storage.sql.exec('DELETE FROM slots WHERE game_id=?', match.id);
-          this.ctx.storage.sql.exec('UPDATE ranked_proof_slots SET released_at=COALESCE(released_at,?) WHERE game_id=?', now, match.id);
         });
         await this.env.DB.prepare('UPDATE active_game_seats SET released_at=? WHERE game_id=? AND released_at IS NULL').bind(now, match.id).run();
         return;
@@ -629,8 +615,7 @@ export class Competition extends DurableObject<Env> {
         throw error;
       }
       if (!this.arenas.claimStart()) throw new Error('game_start_rate');
-      await game.init({ id: match.id, reservationId: match.reservation_id, format: match.pool, rated: true, white, black,
-        timeoutProof: { reservationId: match.id, profileVersion: PROOF_PROFILE } });
+      await game.init({ id: match.id, reservationId: match.reservation_id, format: match.pool, rated: true, white, black });
       this.ctx.storage.transactionSync(() => {
         this.ctx.storage.sql.exec("UPDATE matches SET status='reserved',next_attempt_at=? WHERE id=? AND status='creating'", now + 30_000, match.id);
       });
@@ -680,7 +665,7 @@ export class Competition extends DurableObject<Env> {
 
   async settle(result: GameResult): Promise<{ accepted: boolean; pending: boolean }> {
     const now = Date.now();
-    if (!result || !/^[\w-]{8,100}$/.test(result.id) || ![RULES_VERSION, PROOF_RULES_VERSION, ...PRIOR_RULES_VERSIONS].includes(result.rulesVersion) || (result.ai && result.rated)) throw new Error('invalid_result');
+    if (!result || !/^[\w-]{8,100}$/.test(result.id) || ![RULES_VERSION, ...PRIOR_RULES_VERSIONS].includes(result.rulesVersion) || (result.ai && result.rated)) throw new Error('invalid_result');
     if (result.black && result.white.id === result.black.id) throw new Error('self_play_result');
     const previous = this.ctx.storage.sql.exec<{ digest: string }>('SELECT digest FROM processed_results WHERE game_id=?', result.id).toArray()[0];
     if (previous) {
@@ -785,7 +770,6 @@ export class Competition extends DurableObject<Env> {
     if (result.rated) {
       this.ctx.storage.sql.exec("UPDATE matches SET status='finished' WHERE id=?", result.id);
       this.ctx.storage.sql.exec('DELETE FROM slots WHERE game_id=?', result.id);
-      this.ctx.storage.sql.exec('UPDATE ranked_proof_slots SET released_at=COALESCE(released_at,?) WHERE game_id=?', now, result.id);
     }
     return projection;
   }
@@ -1119,9 +1103,7 @@ export class Competition extends DurableObject<Env> {
   }
 
   async captureRecoveryPoint() {
-    const retained = this.ctx.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM ranked_proof_slots').one().count;
-    const rules = retained ? PROOF_RULES_VERSION : RULES_VERSION;
-    return captureNativePoint(this.ctx, { kind: 'Competition', name: 'global', policies: { rules, ratings: RATING_VERSION } }, () => ({
+    return captureNativePoint(this.ctx, { kind: 'Competition', name: 'global', policies: { rules: RULES_VERSION, ratings: RATING_VERSION } }, () => ({
       watermarks: Object.fromEntries(Object.entries(JOURNALS).map(([kind, journal]) => [kind,
         this.ctx.storage.sql.exec<{ watermark: number }>(`SELECT COALESCE(MAX(rowid),0) AS watermark FROM ${journal.table}`).one().watermark])),
       publishedEpochs: Object.fromEntries((['blitz', 'rapid'] as const).map(pool => [pool,
@@ -1130,8 +1112,6 @@ export class Competition extends DurableObject<Env> {
       pending: Object.fromEntries(['queue', 'outbox', 'pending_results', 'slots'].map(table => [table,
         this.ctx.storage.sql.exec<{ count: number }>(`SELECT COUNT(*) AS count FROM ${table}`).one().count])),
       repairInProgress: Boolean(this.ctx.storage.sql.exec("SELECT 1 FROM correction_runs WHERE phase<>'complete' LIMIT 1").toArray()[0]),
-      ...(retained ? { proofReservations: { profileVersion: PROOF_PROFILE, retained,
-        reserved: this.ctx.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM ranked_proof_slots WHERE released_at IS NULL').one().count } } : {}),
     }), this.recoveryDrill);
   }
 
@@ -1176,9 +1156,7 @@ export class Competition extends DurableObject<Env> {
     const correctionError = await this.env.DB.prepare('SELECT last_error FROM rating_correction_outbox WHERE completed_at IS NULL AND last_error IS NOT NULL ORDER BY created_at,decision_id LIMIT 1').first<string>('last_error');
     const maintenance = this.ctx.storage.sql.exec<{ value: string }>("SELECT value FROM meta WHERE key='maintenance-error'").toArray()[0];
     return {
-      rankedOpen: this.env.RANKED_ENABLED === 'true' && proofConfigured(this.env), queued: count('queue'),
-      timeoutProof: { ...await proofBudgetStatus(this.env), slots: PROOF_SLOTS,
-        reserved: this.ctx.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM ranked_proof_slots WHERE released_at IS NULL').one().count },
+      rankedOpen: this.env.RANKED_ENABLED === 'true', queued: count('queue'),
       queuedByPool: Object.fromEntries((['blitz', 'rapid'] as const).map(pool => [pool, this.ctx.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM queue WHERE pool=?', pool).one().count])),
       unsettled: this.unsettledGames(),
       retainedRankedGames: this.ctx.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM matches').one().count,

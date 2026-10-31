@@ -1,15 +1,12 @@
 import { DurableObject } from 'cloudflare:workers';
 import { Chess } from 'chess.js';
 import { passwordAccountReady, rankedEligibility, revalidateActor, competitiveAccountEligibility } from './auth';
-import { positionOutcome, timeoutOutcome, provedTimeoutOutcome, TIMEOUT_AWAITING_PROOF } from './adjudication';
+import { positionOutcome, timeoutOutcome } from './adjudication';
 import { aiEnabled, type Env } from './env';
 import { consumeGameProtocol, countProtocolEvent, gameProtocolStatus, initializeProtocolLimits } from './abuse';
 import { getEngineLevel, STOCKFISH_BUILD } from '../shared/engine';
 import { captureNativePoint } from './recovery';
-import { ApiError, readJson } from './security';
-import { hasProofAdmission } from './proof-budget';
-import { parseProofResult, proofDigests, transientProof, PROOF_PROFILE, PROOF_RULES_VERSION, PROOF_INSTANCE, PROOF_RESULT_BYTES,
-  type TimeoutProofRequest } from './proof-contract';
+import { ApiError } from './security';
 import {
   FORMATS, PRIOR_RULES_VERSIONS, RULES_VERSION, RATING_VERSION,
   type Actor, type AiOpponent, type Color, type CommandReceipt, type CommandReply, type GameCommand,
@@ -59,7 +56,6 @@ interface State {
   /** Retained only to retire unfinished provider-era work safely. */
   ai?: AiOpponent & { turn?: unknown };
   tournament?: InitGame['tournament'];
-  timeoutProof?: InitGame['timeoutProof'];
 }
 
 interface Attachment {
@@ -71,15 +67,6 @@ interface Delivery {
   result: GameResult;
   attempts: number;
   nextAttemptAt: number;
-}
-
-interface ProofWork {
-  pendingVersion: number;
-  attempt: 1 | 2;
-  deliveries: number;
-  nextAttemptAt: number;
-  done: boolean;
-  request: TimeoutProofRequest | null;
 }
 
 function seat(actor: Actor): Seat {
@@ -120,7 +107,6 @@ export function parseCommand(value: unknown): GameCommand | null {
 export class Game extends DurableObject<Env> {
   private chess: Chess | null = null;
   private chessVersion = -1;
-  private proving = false;
   protected recoveryDrill = false;
 
   constructor(ctx: DurableObjectState, env: Env, internalContext?: DurableObjectState) {
@@ -134,17 +120,7 @@ export class Game extends DurableObject<Env> {
     ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS connections (user_id TEXT PRIMARY KEY, connection_id TEXT NOT NULL)`);
     ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS result_delivery (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)`);
     ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS archived_game (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)`);
-    ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS timeout_proof_work (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)`);
     initializeProtocolLimits(ctx.storage.sql);
-    const work = this.proofWork();
-    if (work?.request && !work.done) {
-      // A restarted delivery reconciles its saved pool receipt, within the
-      // original deadline and the same two-delivery ceiling per attempt.
-      work.done = work.deliveries >= 2;
-      work.nextAttemptAt = Math.min(work.nextAttemptAt, Date.now());
-      this.saveProofWork(work);
-      ctx.blockConcurrencyWhile(() => this.committed());
-    }
   }
 
   private load(): State | null {
@@ -164,33 +140,21 @@ export class Game extends DurableObject<Env> {
       throw new ApiError(409, 'RECOVERY_TARGET_MISMATCH', 'The game name does not identify this object.');
     }
     const savedRules = this.load()?.rulesVersion ?? this.archived()?.rulesVersion;
-    const rules = savedRules === PROOF_RULES_VERSION || savedRules === PRIOR_RULES_VERSIONS[1] ? savedRules : RULES_VERSION;
+    const rules = savedRules === PRIOR_RULES_VERSIONS[1] ? savedRules : RULES_VERSION;
     return captureNativePoint(this.ctx, { kind: 'Game', name, policies: { rules, ratings: RATING_VERSION } }, () => {
       const state = this.load();
       const archived = this.archived();
-      const work = this.proofWork();
       return { status: state?.status ?? (archived ? 'archived' : 'uninitialized'), version: state?.version ?? archived?.terminalVersion ?? null,
         rules: state?.rulesVersion ?? archived?.rulesVersion ?? RULES_VERSION, deadline: state?.deadline ?? null,
         readinessDeadline: state?.readinessDeadline ?? null, moves: state?.moves.length ?? 0,
         receipts: this.ctx.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM command_receipts').one().count,
         latestReceiptAt: this.ctx.storage.sql.exec<{ at: number | null }>('SELECT MAX(accepted_at) AS at FROM command_receipts').one().at,
-        pendingDelivery: Boolean(this.ctx.storage.sql.exec('SELECT 1 FROM result_delivery WHERE id=1').toArray()[0]), archived: Boolean(archived),
-        ...(state?.timeoutProof ? { timeoutProof: { profileVersion: state.timeoutProof.profileVersion,
-          ...(work ? { pendingVersion: work.pendingVersion, attempt: work.attempt, done: work.done } : {}) } } : {}) };
+        pendingDelivery: Boolean(this.ctx.storage.sql.exec('SELECT 1 FROM result_delivery WHERE id=1').toArray()[0]), archived: Boolean(archived) };
     }, this.recoveryDrill);
   }
 
   private save(state: State): void {
     this.ctx.storage.sql.exec('INSERT INTO game_state(id,value) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value', JSON.stringify(state));
-  }
-
-  private proofWork(): ProofWork | null {
-    const row = this.ctx.storage.sql.exec<{ value: string }>('SELECT value FROM timeout_proof_work WHERE id=1').toArray()[0];
-    return row ? JSON.parse(row.value) as ProofWork : null;
-  }
-
-  private saveProofWork(work: ProofWork): void {
-    this.ctx.storage.sql.exec('INSERT INTO timeout_proof_work(id,value) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value', JSON.stringify(work));
   }
 
   private engine(state: State): Chess {
@@ -262,7 +226,7 @@ export class Game extends DurableObject<Env> {
     const turn = this.engine(state).turn();
     if (state.status === 'active' && state.deadline !== null) state.remaining[turn] = Math.max(0, state.deadline - now);
     state.pgnHeaderVersion = 1;
-    state.status = outcome.reason === 'timeout-needs-review' ? 'pending-adjudication' : 'finished';
+    state.status = 'finished';
     state.outcome = outcome;
     state.endedAt = now;
     state.deadline = null;
@@ -272,9 +236,6 @@ export class Game extends DurableObject<Env> {
     if (state.ai?.turn) state.ai.turn = null;
     state.settlement = state.rated ? 'pending' : 'unrated';
     this.save(state);
-    if (state.status === 'pending-adjudication' && state.rulesVersion === PROOF_RULES_VERSION && state.timeoutProof) {
-      this.saveProofWork({ pendingVersion: state.version, attempt: 1, deliveries: 0, nextAttemptAt: now, done: false, request: null });
-    } else this.ctx.storage.sql.exec('DELETE FROM timeout_proof_work WHERE id=1');
     const delivery: Delivery = { result: this.result(state), attempts: 0, nextAttemptAt: now };
     this.ctx.storage.sql.exec('INSERT INTO result_delivery(id,value) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value', JSON.stringify(delivery));
   }
@@ -284,9 +245,7 @@ export class Game extends DurableObject<Env> {
     const roundDeadline = state.tournament?.deadlineAt ?? Number.POSITIVE_INFINITY;
     if (state.status === 'active' && state.deadline !== null && now >= state.deadline && state.deadline <= roundDeadline) {
       state.version++;
-      const flagged = timeoutOutcome(this.engine(state), this.engine(state).turn());
-      const awaitingProof = flagged.reason === 'timeout-win' && state.rulesVersion === PROOF_RULES_VERSION && state.timeoutProof;
-      this.finish(state, awaitingProof ? TIMEOUT_AWAITING_PROOF : flagged, state.deadline);
+      this.finish(state, timeoutOutcome(this.engine(state), this.engine(state).turn()), state.deadline);
       changed = true;
     }
     if ((state.status === 'waiting' || state.status === 'ready') && state.readinessDeadline !== null && now >= state.readinessDeadline && state.readinessDeadline <= roundDeadline) {
@@ -303,8 +262,7 @@ export class Game extends DurableObject<Env> {
     const adjudicationDeadline = state.status === 'pending-adjudication' && state.endedAt !== null ? state.endedAt + ADJUDICATION_WAIT_MS : null;
     if (adjudicationDeadline !== null && now >= adjudicationDeadline && adjudicationDeadline <= roundDeadline) {
       state.version++;
-      const policy = state.rulesVersion === PROOF_RULES_VERSION ? PROOF_RULES_VERSION : RULES_VERSION;
-      const decisionId = `automatic:${policy}:adjudication:${state.id}:${state.version}`;
+      const decisionId = `automatic:${RULES_VERSION}:adjudication:${state.id}:${state.version}`;
       this.finish(state, { ...timeoutOutcome(this.engine(state), this.engine(state).turn()), decisionId }, adjudicationDeadline);
       return true;
     }
@@ -322,8 +280,6 @@ export class Game extends DurableObject<Env> {
     const delivery = this.delivery();
     const due = [state?.deadline, state?.readinessDeadline, delivery?.nextAttemptAt].filter((time): time is number => typeof time === 'number');
     if (state?.status === 'pending-adjudication' && state.endedAt !== null) due.push(state.endedAt + ADJUDICATION_WAIT_MS);
-    const proof = this.proofWork();
-    if (state?.status === 'pending-adjudication' && proof && !proof.done) due.push(proof.nextAttemptAt);
     if (state?.tournament && state.status !== 'finished') due.push(state.tournament.deadlineAt);
     const socketExpiry = this.ctx.getWebSockets().map(socket => {
       try { return (socket.deserializeAttachment() as Attachment).actor.sessionExpiresAt; } catch { return null; }
@@ -353,14 +309,10 @@ export class Game extends DurableObject<Env> {
         || (input.tournament.format === 'arena-v1' && input.tournament.round !== 1)
         || !Number.isSafeInteger(input.tournament.deadlineAt) || input.tournament.deadlineAt < 1))) throw new Error('invalid_game');
     const existingBeforeAdmission = this.load();
-    if (!existingBeforeAdmission && input.rated) {
-      if (!input.timeoutProof || input.timeoutProof.reservationId !== input.id || input.timeoutProof.profileVersion !== PROOF_PROFILE
-        || !await hasProofAdmission(this.env, input.id)
-        || !await this.env.COMPETITION.get(this.env.COMPETITION.idFromName('global')).hasTimeoutProofReservation(input.id, input.reservationId!)) {
-        throw new Error('ranked_proof_admission_required');
-      }
+    if (!existingBeforeAdmission && input.rated
+      && !await this.env.COMPETITION.get(this.env.COMPETITION.idFromName('global')).hasRankedReservation(input.id, input.reservationId!)) {
+      throw new Error('ranked_reservation_required');
     }
-    if (input.timeoutProof && (!input.rated || input.ai || input.tournament)) throw new Error('invalid_proof_game');
     let admittedAt = now;
     let acceptedCasual = false;
     if (!existingBeforeAdmission && !input.rated && !input.tournament) {
@@ -387,7 +339,6 @@ export class Game extends DurableObject<Env> {
           || existing.ai?.modelId !== input.ai?.modelId
           || existing.ai?.level !== input.ai?.level
           || JSON.stringify(existing.tournament ?? null) !== JSON.stringify(input.tournament ?? null)
-          || JSON.stringify(existing.timeoutProof ?? null) !== JSON.stringify(input.timeoutProof ?? null)
           || existing.reservationId !== (input.reservationId ?? null)) throw new Error('initialization_conflict');
         this.expire(existing, now);
         return existing;
@@ -395,7 +346,7 @@ export class Game extends DurableObject<Env> {
       const chess = new Chess();
       const value: State = {
         id: input.id, format: input.format, rated: input.rated, reservationId: input.reservationId ?? null,
-        rulesVersion: input.timeoutProof ? PROOF_RULES_VERSION : RULES_VERSION, status: input.black || ai ? 'ready' : 'waiting', version: 0,
+        rulesVersion: RULES_VERSION, status: input.black || ai ? 'ready' : 'waiting', version: 0,
         white: seat(input.white), black: ai ? { id: `ai:${input.id}`, name: `${ai.name} (AI)`.slice(0, 120), isAnonymous: false, ready: true } : input.black ? seat(input.black) : null, initialFen: chess.fen(), pgnHeaderVersion: 1, moves: [],
         remaining: { w: FORMATS[input.format].initialMs, b: FORMATS[input.format].initialMs },
         turnStartedAt: null, deadline: null, readinessDeadline: Math.min(admittedAt + (input.black || ai ? READY_WINDOW_MS : INVITE_WINDOW_MS), input.tournament?.deadlineAt ?? Number.POSITIVE_INFINITY),
@@ -403,7 +354,6 @@ export class Game extends DurableObject<Env> {
         createdAt: admittedAt, startedAt: null, endedAt: null,
         ...(ai ? { ai } : {}),
         ...(input.tournament ? { tournament: { ...input.tournament } } : {}),
-        ...(input.timeoutProof ? { timeoutProof: { ...input.timeoutProof } } : {}),
       };
       this.save(value);
       if (!tournamentEligible) {
@@ -815,87 +765,6 @@ export class Game extends DurableObject<Env> {
     if (state) this.broadcast(state, Date.now());
   }
 
-  /** Binding only. The public Worker exposes no proof submission endpoint. */
-  async acceptTimeoutProof(value: unknown): Promise<boolean> {
-    const now = Date.now();
-    const accepted = this.ctx.storage.transactionSync(() => {
-      const state = this.load();
-      const work = this.proofWork();
-      if (!state || state.status !== 'pending-adjudication' || state.rulesVersion !== PROOF_RULES_VERSION
-        || !state.timeoutProof || !work?.request || state.version !== work.pendingVersion) return false;
-      if (this.expire(state, now)) return false;
-      const proof = parseProofResult(value, work.request);
-      if (!proof || proof.expiresAt <= now) return false;
-      const outcome = provedTimeoutOutcome(proof);
-      if (!outcome) return false;
-      state.version++;
-      this.finish(state, outcome, state.endedAt!);
-      return true;
-    });
-    await this.committed();
-    const state = this.load();
-    if (state) this.broadcast(state, now);
-    return accepted;
-  }
-
-  /** Alarm work only, outside the synchronous move and clock transaction. */
-  async resolveTimeoutProof(): Promise<void> {
-    if (this.proving) return;
-    const state = this.load();
-    const work = this.proofWork();
-    if (!state || state.status !== 'pending-adjudication' || state.rulesVersion !== PROOF_RULES_VERSION || !state.timeoutProof
-      || !work || work.done || state.version !== work.pendingVersion || work.nextAttemptAt > Date.now()) return;
-    this.proving = true;
-    try {
-      if (!work.request) {
-        const source = { rulesVersion: PROOF_RULES_VERSION as typeof PROOF_RULES_VERSION, initialFen: state.initialFen,
-          moves: state.moves.map(move => move.from + move.to + (move.promotion ?? '')), fen: this.engine(state).fen(),
-          gameId: state.id, pendingVersion: state.version, survivor: this.engine(state).turn() === 'w' ? 'b' as const : 'w' as const };
-        const request: TimeoutProofRequest = { ...source, ...await proofDigests(source), v: 1,
-          profileVersion: PROOF_PROFILE, reservationId: state.id, requestId: `timeout:${state.id}:${state.version}`,
-          expiresAt: state.endedAt! + ADJUDICATION_WAIT_MS, attempt: work.attempt };
-        if (this.load()?.version !== work.pendingVersion) return;
-        work.request = request;
-      }
-      const request = work.request;
-      if (request.expiresAt <= Date.now()) return;
-      work.deliveries++;
-      work.nextAttemptAt = request.expiresAt;
-      this.saveProofWork(work);
-      await this.ctx.storage.sync();
-      let retryDelivery = false;
-      let transient = false;
-      const cancellation = new AbortController();
-      const timer = setTimeout(() => cancellation.abort(), Math.max(1, request.expiresAt - Date.now()));
-      try {
-        if (!this.env.PROVER) throw new Error('proof_binding_unavailable');
-        const response = await this.env.PROVER.get(this.env.PROVER.idFromName(PROOF_INSTANCE)).fetch(new Request('http://proof.internal/prove', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request),
-          signal: cancellation.signal,
-        }));
-        if (!response.ok) {
-          retryDelivery = response.status >= 500 || response.status === 429;
-        } else {
-          const result = parseProofResult(await readJson<unknown>(response, PROOF_RESULT_BYTES), request);
-          if (result && await this.acceptTimeoutProof(result)) return;
-          transient = Boolean(result && transientProof(result));
-        }
-      } catch { retryDelivery = true; }
-      finally { clearTimeout(timer); }
-      this.ctx.storage.transactionSync(() => {
-        const current = this.load();
-        if (current?.status !== 'pending-adjudication' || current.version !== work.pendingVersion) return;
-        if (transient && work.attempt === 1) {
-          work.attempt = 2;
-          work.deliveries = 0;
-          work.request = { ...request, attempt: 2 };
-        } else if (!(retryDelivery && work.deliveries < 2)) work.done = true;
-        work.nextAttemptAt = Math.min(request.expiresAt, Date.now() + 250);
-        this.saveProofWork(work);
-      });
-    } finally { this.proving = false; await this.committed(); }
-  }
-
   async alarm(): Promise<void> {
     const now = Date.now();
     const state = this.ctx.storage.transactionSync(() => {
@@ -909,7 +778,6 @@ export class Game extends DurableObject<Env> {
     }
     await this.ctx.storage.sync();
     if (state) this.broadcast(state, now);
-    await this.resolveTimeoutProof();
     await this.flush();
   }
 }

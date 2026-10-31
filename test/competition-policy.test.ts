@@ -24,7 +24,7 @@ async function authority(existing?: Authority): Promise<Authority> {
       get: (id: DurableObjectId) => {
         const game = original.GAME.get(id);
         return { status: () => game.status(), init: async (input: InitGame) => {
-          // The isolated fixture must answer Game's normal proof-reservation check.
+          // The isolated fixture must answer Game's normal ranked-reservation check.
           await runInDurableObject(game, gameInstance => {
             const fixture = gameInstance as unknown as { env: Env };
             const binding = fixture.env.COMPETITION;

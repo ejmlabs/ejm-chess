@@ -60,9 +60,7 @@ export function assertDrillConfiguration(env: DrillEnv): void {
     || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(env.RECOVERY_SOURCE_REVISION ?? '')
     || env.NEW_WORK_STOPPED !== 'true' || env.RANKED_ENABLED !== 'false'
     || env.TOURNAMENTS_ENABLED !== 'false' || env.ARENAS_ENABLED !== 'false' || env.ANALYSIS_ENABLED !== 'false'
-    || (env.TIMEOUT_PROOF_PROFILE !== undefined && env.TIMEOUT_PROOF_PROFILE !== 'off')
-    || (env.MONTHLY_PROOF_LIMIT !== undefined && env.MONTHLY_PROOF_LIMIT !== '0')
-    || env.EMAIL || env.ANALYSIS_QUEUE || env.ANALYZER || env.PROVER) {
+    || env.EMAIL || env.ANALYSIS_QUEUE || env.ANALYZER) {
     throw new ApiError(409, 'DRILL_TARGET_UNVERIFIED', 'Configure and review fresh isolated recovery resources before using this drill.');
   }
 }

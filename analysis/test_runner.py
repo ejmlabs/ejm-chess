@@ -7,7 +7,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from runner import ENGINE_VERSION, PROFILE_VERSION, RULES_VERSION, PROOF_RULES_VERSION, Handler, InvalidJob, parse_game, run_isolated
+from runner import ENGINE_VERSION, PROFILE_VERSION, RULES_VERSION, CURRENT_RULES_VERSION, Handler, InvalidJob, parse_game, run_isolated
 
 PGN = """[Result "1-0"]
 
@@ -27,7 +27,7 @@ def job():
 class InputBoundary(unittest.TestCase):
     def test_no_request_can_select_engine_options_paths_or_custom_positions(self):
         self.assertIsNotNone(parse_game(job()))
-        self.assertIsNotNone(parse_game({**job(), "rulesVersion": PROOF_RULES_VERSION}))
+        self.assertIsNotNone(parse_game({**job(), "rulesVersion": CURRENT_RULES_VERSION}))
         for extra in [{"enginePath": "/bin/sh"}, {"nodes": 1_000_000_000}, {"command": "go infinite"}]:
             with self.assertRaises(InvalidJob):
                 parse_game({**job(), **extra})

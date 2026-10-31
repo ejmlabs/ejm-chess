@@ -25,7 +25,6 @@ import type { Env } from './env';
 export { Game } from './game';
 export { Competition } from './competition';
 export { StockfishAnalyzer } from './analysis';
-export { TimeoutProver } from './proof-pool';
 
 /** Game authorities need a seat/session reference, never an email address. */
 function gameActor(actor: Actor): GameActor {
@@ -315,7 +314,7 @@ async function authenticatedRoute(request: Request, env: Env, ctx: ExecutionCont
     if (joining) {
       const eligibility = await rankedEligibility(env, actor.id);
       if (!eligibility.eligible) throw new ApiError(403, eligibility.reason ?? 'RANKED_UNAVAILABLE', eligibility.reason === 'RANKED_CLOSED'
-        ? 'Ranked play is closed while launch checks remain.' : 'Ranked play requires an eligible account.');
+        ? 'Ranked play is closed.' : 'Ranked play requires an eligible account.');
     }
     const competition = env.COMPETITION.get(env.COMPETITION.idFromName('global'));
     if (request.method === 'GET' && url.pathname === '/api/queue') return jsonResponse(await competition.queueStatus(gameActor(actor)));

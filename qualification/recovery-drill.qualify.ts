@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { SELF } from 'cloudflare:test';
 import { expect, it } from 'vitest';
-import { PROOF_PROFILE, PROOF_RULES_VERSION } from '../src/server/proof-contract';
+import { RULES_VERSION } from '../src/shared/protocol';
 import { reserveMonthlyWork } from '../src/server/budget';
 import type { DrillEnv } from '../src/server/recovery-drill-controls';
 
@@ -25,8 +25,6 @@ it('isolates synthetic active and ranked delivery fixtures without using product
   const start = await seeded.json<{ status: string; version: number; deadline: number }>();
   expect(start.status).toBe('active');
   expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM active_game_seats WHERE game_id=? AND released_at IS NULL').bind(gameId).first('count')).toBe(2);
-  expect(await env.DB.prepare('SELECT rules_version,profile_version,credits FROM timeout_proof_admissions WHERE game_id=?').bind(gameId).first())
-    .toEqual({ rules_version: PROOF_RULES_VERSION, profile_version: PROOF_PROFILE, credits: 2 });
   const control = await env.DB.prepare('SELECT * FROM operations_control').all();
   const budget = await (await operation({ operation: 'reserve-budget', gameId })).json<{ accepted: boolean; receipt: unknown }>();
   expect(budget.accepted).toBe(true);
@@ -51,7 +49,7 @@ it('isolates synthetic active and ranked delivery fixtures without using product
   else {
     expect(captured.status).toBe(200);
     expect(capture.points?.game.metadata.version).toBe(move.snapshot.version);
-    expect(capture.points?.game.policies.rules).toBe(PROOF_RULES_VERSION);
+    expect(capture.points?.game.policies.rules).toBe(RULES_VERSION);
     expect(capture.probeBoundary).toEqual({ schema: 'ejm-chess-drill-probes-v1', d1: 'original', game: 'original', competition: 'original' });
   }
   const retried = await operation({ operation: 'command', gameId, color: 'w', command });

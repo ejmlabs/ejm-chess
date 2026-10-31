@@ -94,29 +94,11 @@ See [analysis build and source details](docs/analysis.md#pins-and-source-obligat
 `3484c7e65247003fac8705a9290dc2b5d0978b94`, MIT, copyright 2021-2026
 Miguel Ambrona. The probe's Cargo lockfile records transitive dependencies.
 Selected blocked-position fixtures credit that revision's README and test corpus.
-That experimental probe is outside the browser and Worker runtime. The separate
-default-off native timeout-proof adapter below has its own qualification gate.
+That experimental probe is outside the browser and Worker runtime.
 
 Retain the candidate's complete MIT notice with any distributed compiled probe
 or copied code. Its upstream source and license are available at the
 [pinned revision](https://github.com/miguel-ambrona/chasolver/tree/3484c7e65247003fac8705a9290dc2b5d0978b94).
-
-## Private timeout-proof image
-
-`proof/` builds the unchanged MIT CHA-Solver revision above and its unchanged
-`analyzer` example. `pins.json` records the source archive, example, Cargo lock
-and official image hashes. The image retains complete upstream source and MIT
-notice, checksum-pinned dependency crate sources/notices, and Rust notices.
-
-Independent history and witness validation uses `chess` 1.11.2, the maintained
-python-chess distribution, licensed GPL-3.0-or-later. Its complete corresponding
-source archive, extracted source and original license are retained in
-`proof/vendor/` and the image's `/opt/source/` path. The source snapshot also
-includes the product adapters, image definition and local qualification inputs.
-Preserve these and any applicable combined-work source and notices before
-distributing the image. Review the GPL source-availability path before a public
-image release. No public image distribution or external license review is
-claimed. See `proof/NOTICES` and [timeout proofs](docs/timeout-proofs.md).
 
 ## Browser Stockfish practice
 

@@ -9,7 +9,6 @@ import { ApiError, errorResponse, jsonResponse, readJson } from './security';
 import { admittedRecoveryGame, recoveryInventory, recoverySha256 } from './recovery';
 import { reserveMonthlyWork } from './budget';
 import { retireGamePayloads } from './maintenance';
-import { PROOF_PROFILE, PROOF_RULES_VERSION } from './proof-contract';
 import { acquireSeatGuard, beginIdentityChange, createAuth, currentActor, hasRecoveryEmail } from './auth';
 import { applyAccountClosure, closeAccount, exportAccount } from './privacy';
 import { ACCOUNT_PRIVACY_POLICY, type AccountClosureReceipt, type AccountExportPage } from '../shared/privacy';
@@ -324,25 +323,10 @@ export class RecoveryDrillCompetition extends Competition {
   }
   async admitSyntheticRanked(gameId: string, white: Actor, black: Actor): Promise<string> {
     const reservation = `recovery-${gameId}`;
-    const existing = this.ctx.storage.sql.exec('SELECT 1 FROM ranked_proof_slots WHERE game_id=?', gameId).toArray()[0];
-    if (!existing && this.ctx.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM ranked_proof_slots WHERE released_at IS NULL').one().count >= 4) {
-      throw new ApiError(409, 'DRILL_RANKED_CAPACITY', 'Finish the current synthetic ranked fixtures before creating another.');
-    }
-    const now = Date.now();
-    const date = new Date(now);
-    const period = date.getUTCFullYear() * 12 + date.getUTCMonth();
-    // Synthetic recovery state only. No proof service or public admission is enabled.
-    await this.env.DB.batch([
-      this.env.DB.prepare(`INSERT INTO timeout_proof_months(slot,period) VALUES(?,?)
-        ON CONFLICT(slot) DO UPDATE SET period=excluded.period,used=0 WHERE timeout_proof_months.period<excluded.period`).bind(period % 12, period),
-      this.env.DB.prepare(`INSERT OR IGNORE INTO timeout_proof_admissions(game_id,rules_version,profile_version,credits,period,created_at)
-        VALUES(?,?,?,2,?,?)`).bind(gameId, PROOF_RULES_VERSION, PROOF_PROFILE, period, now),
-    ]);
     this.ctx.storage.transactionSync(() => {
       this.ctx.storage.sql.exec(`INSERT OR IGNORE INTO matches(id,reservation_id,pool,white_id,black_id,white_actor,black_actor,status,created_at,next_attempt_at)
         VALUES(?,?,'blitz',?,?,?,?,'live',?,?)`, gameId, reservation, white.id, black.id, JSON.stringify(white), JSON.stringify(black), Date.now(), Date.now() + 60_000);
       for (const actor of [white, black]) this.ctx.storage.sql.exec("INSERT OR IGNORE INTO slots(user_id,state,pool,game_id) VALUES(?,'live','blitz',?)", actor.id, gameId);
-      this.ctx.storage.sql.exec('INSERT OR IGNORE INTO ranked_proof_slots(game_id,profile) VALUES(?,?)', gameId, PROOF_PROFILE);
     });
     await this.ctx.storage.sync();
     return reservation;
@@ -490,7 +474,7 @@ async function route(request: Request, env: DrillEnv): Promise<Response> {
       }
     }
     let snapshot: GameSnapshot = await game.init({ id: gameId, format: 'blitz', rated, white, black,
-      ...(reservationId ? { reservationId, timeoutProof: { reservationId: gameId, profileVersion: PROOF_PROFILE } } : {}) });
+      ...(reservationId ? { reservationId } : {}) });
     for (const [actor, color] of [[white, 'w'], [black, 'b']] as const) {
       if (snapshot.status === 'ready') {
         const reply = await game.command(actor, { type: 'ready', id: `recovery-ready-${color}-${gameId}`, expectedVersion: snapshot.version });
