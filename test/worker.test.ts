@@ -243,7 +243,7 @@ describe('Worker admission and private read contracts', () => {
     const bindings = { ...env, AUTH_SECRET: '', COMPETITION: undefined as unknown as Env['COMPETITION'] };
     const list = await worker.fetch(request('/api/arenas'), bindings);
     expect(list.status).toBe(200);
-    expect(list.headers.get('Cache-Control')).toBe('public, max-age=10, s-maxage=10');
+    expect(list.headers.get('Cache-Control')).toBe('public, no-cache');
     for (const path of ['/api/arenas/missing-arena', '/api/arenas/missing-arena/standings']) {
       const missing = await worker.fetch(request(path), bindings);
       expect(missing.status).toBe(404);

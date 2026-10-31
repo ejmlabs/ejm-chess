@@ -292,8 +292,12 @@ advance step and needs retained-state CPU and row accounting before deployment.
 
 Publish the new generation head only after every page exists. Retain two
 complete generations and allow only one build per event at a time. Public
-responses declare `Cache-Control: public, max-age=10, s-maxage=10` and use the
-Cloudflare Cache API. A warm cache read skips D1 and session lookup. Public
+responses are stored in the Cloudflare Cache API for 10 seconds
+(`public, max-age=10, s-maxage=10`) and sent to browsers as `public, no-cache`,
+so a refresh revalidates against that edge copy instead of reusing a stale local
+one. Each event's public summary is rebuilt at most once every 10 seconds
+(`snapshotIntervalMs`), so a new registration can take up to about 20 seconds to
+appear in the public count. The registering player sees their own entry at once. A warm cache read skips D1 and session lookup. Public
 cache keys include only the path and documented standings cursor; cookies,
 authorization headers, and other query parameters do not create variants.
 Failed reads stay uncached. Deployed cache behavior and hit rate remain

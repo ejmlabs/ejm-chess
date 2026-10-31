@@ -1,3 +1,13 @@
+const EDGE_CACHE = 'public, max-age=10, s-maxage=10';
+// Browsers revalidate each read against the edge copy, so a refresh never stacks a stale local copy on the edge window.
+const BROWSER_CACHE = 'public, no-cache';
+
+function forBrowser(response: Response): Response {
+  const browser = new Response(response.body, response);
+  browser.headers.set('Cache-Control', BROWSER_CACHE);
+  return browser;
+}
+
 /** Public read cache. Keep private identity and mutations outside this helper. */
 export async function publicArenaJson(request: Request, ctx: ExecutionContext, load: () => Promise<unknown>): Promise<Response> {
   const url = new URL(request.url);
@@ -9,9 +19,9 @@ export async function publicArenaJson(request: Request, ctx: ExecutionContext, l
   const key = new Request(url.href);
   try {
     const cached = await caches.default.match(key);
-    if (cached) return cached;
+    if (cached) return forBrowser(cached);
   } catch { /* Cache failure falls through to the public read model. */ }
-  const response = Response.json(await load(), { headers: { 'Cache-Control': 'public, max-age=10, s-maxage=10' } });
+  const response = Response.json(await load(), { headers: { 'Cache-Control': EDGE_CACHE } });
   ctx.waitUntil(caches.default.put(key, response.clone()).catch(() => {}));
-  return response;
+  return forBrowser(response);
 }
