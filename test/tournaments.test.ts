@@ -466,31 +466,29 @@ describe('scheduled tournament authority', () => {
     expect((await competition.listTournaments()).events.length).toBeGreaterThan(0);
   });
 
-  it('closes admission at retained and permanent storage ceilings without booking accounts', async () => {
+  it('starts and admits games past the former event, retained and permanent ceilings', async () => {
     const { startsAt, clock } = startClock();
     const competition = await authority();
     const { id } = await enter(competition, 3, startsAt);
-    const alreadyRetained = await env.DB.prepare("SELECT COUNT(*) FROM tournament_game_admissions WHERE storage_state='retained'").first<number>('COUNT(*)');
-    await env.DB.prepare(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<?)
-      INSERT INTO tournament_game_admissions(game_id,tournament_id,created_at) SELECT 'cap-'||i,'fixture',? FROM n`)
-      .bind(TOURNAMENT_LIMITS.retainedGames - (alreadyRetained ?? 0), Date.now()).run();
+    // Fixtures exceed the removed limits: three other running events, 200 retained payloads and 10,200 permanent IDs.
+    await runInDurableObject(competition, (_instance, state) => {
+      for (const index of [1, 2, 3]) {
+        const filler = { id: `filler-${index}`, cadence: 'hourly', pool: 'blitz', startsAt: startsAt - HOUR, roundMs: HOUR, status: 'running', reason: null,
+          round: 1, roundDeadlineAt: null, nextRoundAt: null, finishedAt: null, nextAt: null, members: [], games: [], engine: null, admissionIds: [], firstRoundAt: null };
+        state.storage.sql.exec('INSERT INTO tournaments(id,starts_at,status,next_at,value) VALUES(?,?,?,NULL,?)', filler.id, filler.startsAt, filler.status, JSON.stringify(filler));
+      }
+    });
+    await env.DB.prepare(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<10200)
+      INSERT INTO tournament_game_admissions(game_id,tournament_id,created_at,storage_state,archived_at)
+      SELECT 'ceiling-'||i,'fixture',?,CASE WHEN i<=200 THEN 'retained' ELSE 'archived' END,CASE WHEN i<=200 THEN NULL ELSE ? END FROM n`)
+      .bind(Date.now(), Date.now()).run();
     clock.mockReturnValue(startsAt);
     await competition.maintenance();
-    expect((await event(competition, id)).status).toBe('cancelled');
-    expect(await env.DB.prepare('SELECT COUNT(*) FROM tournament_account_locks WHERE tournament_id=?').bind(id).first('COUNT(*)')).toBe(0);
-    expect(await env.DB.prepare('SELECT COUNT(*) FROM tournament_game_admissions WHERE tournament_id=?').bind(id).first('COUNT(*)')).toBe(0);
-    await env.DB.prepare("UPDATE tournament_game_admissions SET storage_state='archived',archived_at=?").bind(Date.now()).run();
-    clock.mockReturnValue(startsAt + HOUR - 10 * 60_000);
-    const next = await enter(competition, 3, startsAt + HOUR);
-    const total = await env.DB.prepare('SELECT COUNT(*) FROM tournament_game_admissions').first<number>('COUNT(*)');
-    await env.DB.prepare(`WITH RECURSIVE n(i) AS (SELECT ?+1 UNION ALL SELECT i+1 FROM n WHERE i<?)
-      INSERT INTO tournament_game_admissions(game_id,tournament_id,created_at,storage_state,archived_at)
-      SELECT 'cap-'||i,'fixture',?,'archived',? FROM n`)
-      .bind(total ?? 0, TOURNAMENT_LIMITS.permanentGameIds, Date.now(), Date.now()).run();
-    clock.mockReturnValue(startsAt + HOUR);
-    await competition.maintenance();
-    expect((await event(competition, next.id)).status).toBe('cancelled');
-    expect(await env.DB.prepare('SELECT COUNT(*) FROM tournament_game_admissions').first('COUNT(*)')).toBe(TOURNAMENT_LIMITS.permanentGameIds);
+    const started = await event(competition, id);
+    expect(started.status).toBe('running');
+    expect(started.games).toHaveLength(1);
+    expect(await env.DB.prepare('SELECT COUNT(*) FROM tournament_game_admissions WHERE tournament_id=?').bind(id).first('COUNT(*)')).toBe(3);
+    expect(await env.DB.prepare('SELECT COUNT(*) FROM tournament_account_locks WHERE tournament_id=?').bind(id).first('COUNT(*)')).toBe(3);
   });
 });
 

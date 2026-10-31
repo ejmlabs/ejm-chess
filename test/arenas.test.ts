@@ -444,35 +444,33 @@ describe('timed arena authority', () => {
     }
   });
 
-  it('finishes the old hourly event before admitting simultaneous daily and hourly starts while weekly games drain', async () => {
+  it('starts simultaneous daily and hourly events while two earlier events still drain, with no open-event ceiling', async () => {
     const boundary = Date.UTC(2026, 9, 25, 18);
     const clock = vi.spyOn(Date, 'now').mockReturnValue(boundary - 600_000);
     const competition = await authority();
-    const actors = await Promise.all(Array.from({ length: 6 }, () => player(false, { recoveryEmail: false })));
+    const actors = await Promise.all(Array.from({ length: 8 }, () => player(false, { recoveryEmail: false })));
     const weekly = `arena-weekly-${boundary - 2 * HOUR}`;
     const daily = `arena-daily-${boundary}`;
     const hourly = `arena-hourly-${boundary}`;
     const oldHourly = `arena-hourly-${boundary - HOUR}`;
-    for (const [event, entrants] of [[weekly, actors.slice(0, 2)], [daily, actors.slice(2, 4)], [hourly, actors.slice(4)]] as const)
-      for (const actor of entrants) value(await competition.registerArena(actor, event));
-    for (const actor of actors.slice(0, 2)) value(await competition.queueArena(actor, weekly));
+    const draining = [[weekly, actors.slice(0, 2)], [oldHourly, actors.slice(6)]] as const;
+    const starting = [[daily, actors.slice(2, 4)], [hourly, actors.slice(4, 6)]] as const;
+    for (const [event, entrants] of [...draining, ...starting]) for (const actor of entrants) value(await competition.registerArena(actor, event));
+    for (const [event, entrants] of draining) for (const actor of entrants) value(await competition.queueArena(actor, event));
     clock.mockReturnValue(boundary - 60_000);
     await competition.maintenance();
-    const [weeklyGame] = await games(competition, actors.slice(0, 2), weekly);
-    expect(weeklyGame).toBeTruthy();
-    await ready(weeklyGame, actors.slice(0, 2));
+    for (const [event, entrants] of draining) await ready((await games(competition, entrants, event))[0], entrants);
     clock.mockReturnValue(boundary - 59_500);
-    for (const actor of actors.slice(2, 4)) value(await competition.queueArena(actor, daily));
-    for (const actor of actors.slice(4)) value(await competition.queueArena(actor, hourly));
+    for (const [event, entrants] of starting) for (const actor of entrants) value(await competition.queueArena(actor, event));
     clock.mockReturnValue(boundary);
     await competition.maintenance();
+    // Stop the unplayed games from delivering readiness expiry after the mocked clock is restored.
+    for (const [event, entrants] of starting) await game((await games(competition, entrants, event))[0], entrants);
     const events = await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec<{
-      id: string; status: string; unresolved: number;
-    }>('SELECT id,status,unresolved FROM arena_events WHERE id IN (?,?,?,?)', weekly, daily, hourly, oldHourly).toArray());
-    expect(events.find(event => event.id === weekly)).toMatchObject({ status: 'draining', unresolved: 1 });
-    expect(events.find(event => event.id === oldHourly)).toMatchObject({ status: 'finished', unresolved: 0 });
-    for (const id of [daily, hourly]) expect(events.find(event => event.id === id)).toMatchObject({ status: 'running', unresolved: 1 });
-    expect(events.filter(event => ['running', 'draining'].includes(event.status))).toHaveLength(3);
+      id: string; status: string; unresolved: number; reason: string | null;
+    }>('SELECT id,status,unresolved,reason FROM arena_events WHERE id IN (?,?,?,?)', weekly, daily, hourly, oldHourly).toArray());
+    for (const id of [weekly, oldHourly]) expect(events.find(event => event.id === id)).toMatchObject({ status: 'draining', unresolved: 1 });
+    for (const id of [daily, hourly]) expect(events.find(event => event.id === id)).toMatchObject({ status: 'running', unresolved: 1, reason: null });
   });
 
   it('shares accepted game capacity with casual work and resumes arena pairing after its terminal settlement', async () => {

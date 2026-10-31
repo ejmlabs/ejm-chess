@@ -128,7 +128,7 @@ export class CasualControl {
             // No init was issued and its required D1 fence was never accepted.
             this.ctx.storage.sql.exec("DELETE FROM casual_intents WHERE game_id=? AND reservation_id=? AND state='admitting'", id, intent.reservation_id);
             await this.ctx.storage.sync();
-            throw new ApiError(409, 'SEAT_UNAVAILABLE', 'New game admission is at its safety limit, or this session cannot take another seat.');
+            throw new ApiError(409, 'SEAT_UNAVAILABLE', 'This account cannot take another game now. Finish your unfinished game or reservation, or sign in again.');
           }
           throw new Error('casual_admission_fence');
         }

@@ -10,9 +10,7 @@ import type { TournamentCadence, TournamentList, TournamentPlayerStatus, Tournam
 const MINUTE = 60_000;
 const DAY = 86_400_000;
 export const TOURNAMENT_LIMITS = {
-  minPlayers: 3, maxPlayers: 4, maxActive: 3, registrationMinutes: 15,
-  retainedEvents: 256, retainedGames: 128, permanentGameIds: 10_000,
-  historyDays: 7, rounds: 3, intermissionMs: MINUTE, startGraceMs: 5 * MINUTE,
+  minPlayers: 3, maxPlayers: 4, registrationMinutes: 15, historyDays: 7, rounds: 3, intermissionMs: MINUTE, startGraceMs: 5 * MINUTE,
 } as const;
 const SERIES: readonly { cadence: TournamentCadence; pool: Pool; roundMs: number }[] = [
   { cadence: 'hourly', pool: 'blitz', roundMs: 18 * MINUTE },
@@ -90,7 +88,6 @@ export class TournamentControl {
         if (startsAt < now - TOURNAMENT_LIMITS.startGraceMs) continue;
         const id = `${series.cadence}-${startsAt}`;
         if (this.load(id)) continue;
-        if (this.ctx.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM tournaments').one().count >= TOURNAMENT_LIMITS.retainedEvents) return;
         this.save({ ...series, id, startsAt, status: 'scheduled', reason: null, round: 0, roundDeadlineAt: null,
           nextRoundAt: null, finishedAt: null, nextAt: startsAt, members: [], games: [], engine: null, admissionIds: [], firstRoundAt: null });
       }
@@ -128,7 +125,7 @@ export class TournamentControl {
       WHERE status IN ('finished','cancelled') AND starts_at>=? ORDER BY starts_at DESC,id LIMIT 12`, now - TOURNAMENT_LIMITS.historyDays * DAY).toArray();
     const result = { enabled: this.enabled(), serverNow: now,
       events: [...rows, ...recent].map(row => this.view(JSON.parse(row.value) as Event, actor, now)),
-      limits: { minPlayers: TOURNAMENT_LIMITS.minPlayers, maxPlayers: TOURNAMENT_LIMITS.maxPlayers, maxActive: TOURNAMENT_LIMITS.maxActive,
+      limits: { minPlayers: TOURNAMENT_LIMITS.minPlayers, maxPlayers: TOURNAMENT_LIMITS.maxPlayers,
         registrationMinutes: TOURNAMENT_LIMITS.registrationMinutes } };
     await this.ctx.storage.sync();
     return result;
@@ -210,8 +207,6 @@ export class TournamentControl {
     if (event.status === 'scheduled') {
       if (!this.enabled()) { this.cancel(event, 'Tournaments are unavailable.', now); return; }
       if (now - event.startsAt > TOURNAMENT_LIMITS.startGraceMs) { this.cancel(event, 'The start was missed during a service interruption.', now); return; }
-      const active = this.ctx.storage.sql.exec<{ count: number }>("SELECT COUNT(*) AS count FROM tournaments WHERE status IN ('starting','running','intermission')").one().count;
-      if (active >= TOURNAMENT_LIMITS.maxActive) { this.cancel(event, 'The active tournament limit was reached.', now); return; }
       event.status = 'starting'; event.nextAt = now;
       this.save(event);
       await this.ctx.storage.sync();
@@ -286,17 +281,11 @@ export class TournamentControl {
       this.cancel(this.load(id)!, 'New games are paused at the monthly safety limit.', now);
       return;
     }
-    const planned = JSON.stringify(event.admissionIds);
+    // SQLite needs a WHERE clause to parse INSERT ... SELECT ... ON CONFLICT.
     await this.getEnv().DB.prepare(`INSERT INTO tournament_game_admissions(game_id,tournament_id,created_at)
-      SELECT value,?,? FROM json_each(?) WHERE
-        (SELECT permanent_ids FROM game_admission_counts WHERE kind='tournament')+(SELECT COUNT(*) FROM json_each(?) p
-          WHERE NOT EXISTS(SELECT 1 FROM tournament_game_admissions g WHERE g.game_id=p.value))<=?
-        AND (SELECT retained_payloads FROM game_admission_counts WHERE kind='tournament')+(SELECT COUNT(*) FROM json_each(?) p
-          WHERE NOT EXISTS(SELECT 1 FROM tournament_game_admissions g WHERE g.game_id=p.value))<=?
-      ON CONFLICT(game_id) DO NOTHING`).bind(event.id, now, planned, planned, TOURNAMENT_LIMITS.permanentGameIds, planned, TOURNAMENT_LIMITS.retainedGames).run();
-    const admitted = await this.getEnv().DB.prepare('SELECT COUNT(*) AS count FROM tournament_game_admissions WHERE tournament_id=?').bind(event.id).first<number>('count');
+      SELECT value,?,? FROM json_each(?) WHERE true ON CONFLICT(game_id) DO NOTHING`)
+      .bind(event.id, now, JSON.stringify(event.admissionIds)).run();
     event = this.load(id)!;
-    if (admitted !== event.admissionIds.length) { this.cancel(event, 'Tournament storage admission is at its safety limit.', now); return; }
     this.ctx.storage.transactionSync(() => this.startRound(event, event.firstRoundAt!));
     await this.ctx.storage.sync();
   }
@@ -323,7 +312,7 @@ export class TournamentControl {
     let actual = await game.status();
     if (!actual) {
       const admitted = await env.DB.prepare('SELECT 1 FROM tournament_game_admissions WHERE game_id=? AND tournament_id=?').bind(pairing.id, event.id).first();
-      if (!admitted) throw new Error('tournament_storage_limit');
+      if (!admitted) throw new Error('tournament_admission_missing');
       const white = event.members.find(item => item.actor.id === pairing.whiteId)!.actor;
       const black = event.members.find(item => item.actor.id === pairing.blackId)!.actor;
       const checks = await Promise.all([competitiveAccountEligibility(env, white.id), competitiveAccountEligibility(env, black.id)]);

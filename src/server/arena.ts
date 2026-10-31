@@ -191,8 +191,6 @@ export class ArenaControl {
         if (startsAt + series.pairingMs <= now) continue;
         const id = `arena-${series.cadence}-${startsAt}`;
         if (this.event(id)) continue;
-        const count = this.ctx.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM arena_events').one().count;
-        if (count >= ARENA_POLICY.maxEvents) return;
         this.ctx.storage.sql.exec(`INSERT INTO arena_events(id,cadence,pool,starts_at,closes_at,status,next_at)
           VALUES(?,?,?,?,?,'scheduled',?)`, id, series.cadence, series.pool, startsAt, startsAt + series.pairingMs, Math.max(now, startsAt));
         created = true;
@@ -443,8 +441,7 @@ export class ArenaControl {
   private authorityRoom(games = 0, entries = 0): boolean {
     const retainedEntries = this.ctx.storage.sql.exec<{ retained: number }>('SELECT retained FROM arena_entry_counts WHERE singleton=1').toArray()[0]?.retained;
     if (retainedEntries === undefined || !Number.isSafeInteger(retainedEntries) || retainedEntries < 0) return false;
-    const metadata = (retainedEntries + entries) * ARENA_POLICY.entryReserveBytes
-      + ARENA_POLICY.maxEvents * ARENA_POLICY.eventReserveBytes;
+    const metadata = (retainedEntries + entries) * ARENA_POLICY.entryReserveBytes;
     const accepted = (this.active() + this.bridge.otherGames() + this.legacyCasualGames + games) * ARENA_POLICY.resultReserveBytes;
     return this.ctx.storage.sql.databaseSize + metadata + accepted <= arenaLimits(this.getEnv()).authorityBytes;
   }
@@ -647,15 +644,12 @@ export class ArenaControl {
 
   private lifecycle(now: number): void {
     const sql = this.ctx.storage.sql;
-    // Close due active events before starts compete for the same open slots.
-    const due = sql.exec<Event>(`SELECT * FROM arena_events WHERE next_at<=?
-      ORDER BY CASE WHEN status IN ('running','draining') THEN 0 ELSE 1 END,next_at,id LIMIT ?`, now, ARENA_POLICY.maxOpen * 2).toArray();
+    const due = sql.exec<Event>('SELECT * FROM arena_events WHERE next_at<=? ORDER BY next_at,id LIMIT ?', now, ARENA_POLICY.workBatch).toArray();
     for (const event of due) {
       if (event.status === 'scheduled' && now >= event.starts_at) {
-        const open = sql.exec<{ count: number }>("SELECT COUNT(*) AS count FROM arena_events WHERE status IN ('running','draining')").one().count;
-        if (!this.enabled() || now >= event.closes_at || open >= ARENA_POLICY.maxOpen) {
+        if (!this.enabled() || now >= event.closes_at) {
           sql.exec(`UPDATE arena_events SET status='cancelled',finished_at=?,reason=?,revision=revision+1,next_at=NULL,cleanup_after=? WHERE id=?`,
-            now, !this.enabled() ? 'Arena entry is unavailable.' : now >= event.closes_at ? 'The pairing window was missed.' : 'The open arena limit was reached.', now + ARENA_POLICY.historyMs, event.id);
+            now, !this.enabled() ? 'Arena entry is unavailable.' : 'The pairing window was missed.', now + ARENA_POLICY.historyMs, event.id);
         } else sql.exec("UPDATE arena_events SET status='running',revision=revision+1,next_at=? WHERE id=?", now, event.id);
       }
       const current = this.event(event.id)!;
@@ -744,7 +738,7 @@ export class ArenaControl {
       if (room > 0) {
         const last = this.ctx.storage.sql.exec<{ value: string }>("SELECT value FROM arena_meta WHERE key='pair-cursor'").toArray()[0]?.value ?? '';
         const events = this.ctx.storage.sql.exec<{ id: string }>(`SELECT id FROM arena_events WHERE status='running'
-          ORDER BY CASE WHEN id>? THEN 0 ELSE 1 END,id LIMIT ?`, last, ARENA_POLICY.maxOpen).toArray();
+          ORDER BY CASE WHEN id>? THEN 0 ELSE 1 END,id LIMIT ?`, last, ARENA_POLICY.workBatch).toArray();
         let paired = 0;
         for (let pass = 0; pass < ARENA_POLICY.pairBatch && room > 0 && paired < ARENA_POLICY.pairBatch; pass++) {
           const before = paired;
