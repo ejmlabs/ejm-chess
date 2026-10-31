@@ -107,10 +107,10 @@ function FairPlayNotices() {
         <Link href="/fair-play/">review policy</Link>.
       </Text></AppGroup>
     {message && <Text as="p" role="status"><Status status="ok" label={message} /></Text>}
-    {error && <StateBlock kind="error" density="compact" message={error} />}
+    {error && <StateBlock kind="error" message={error} />}
     <div aria-live="polite" aria-busy={state.status === 'loading'}>
-      {state.status === 'loading' && <StateBlock kind="loading" density="compact" skeleton={false} message="Loading your notices…" />}
-      {state.status === 'error' && <StateBlock kind="error" density="compact" message="Your notices could not be loaded; try again."
+      {state.status === 'loading' && <StateBlock kind="loading" skeleton={false} message="Loading your notices…" />}
+      {state.status === 'error' && <StateBlock kind="error" message="Your notices could not be loaded; try again."
         action={{ label: 'Retry notices' }} onAction={() => setAttempt(value => value + 1)} />}
       {state.status === 'ready' && <AppFlow>
         {!state.data.reviewAvailable && <Text as="p" variant="muted">Human review is unavailable. Appeals are recorded and close without a decision after 14 days if unreviewed.</Text>}
@@ -118,7 +118,7 @@ function FairPlayNotices() {
           <Status status="warn" label="Ranked play restricted" /> until <time dateTime={new Date(item.expiresAt).toISOString()}>{dateFormat.format(item.expiresAt)}</time>.
           {' '}{item.reason}
         </Text>)}
-        {state.data.notices.length === 0 ? <StateBlock kind="empty" density="compact" message="No fair-play notices for this account." />
+        {state.data.notices.length === 0 ? <StateBlock kind="empty" message="No fair-play notices for this account." />
           : <AppFlow as="ul">{state.data.notices.map(notice => <AppGroup as="li" key={notice.id}>
             <AppHeading as="h3"><Text variant="strong">{decisionLabel(notice.outcome)}</Text></AppHeading>
             <Text as="p">{notice.reason}</Text>
@@ -156,7 +156,7 @@ function FairPlayNotices() {
           minLength={10} maxLength={2000} rows={5} required disabled={sending} aria-describedby="appeal-guidance" />
         <Text as="p" id="appeal-guidance" variant="muted">Use 10 to 2,000 characters. Give facts and context. Do not include secrets or another person’s private details.</Text>
       </AppField>
-      <div><Button type="submit" density="compact" disabled={sending || !decisionId || reason.trim().length < 10}>
+      <div><Button type="submit" disabled={sending || !decisionId || reason.trim().length < 10}>
         {sending ? 'Sending appeal…' : 'Submit appeal'}
       </Button></div>
     </AppForm>}
@@ -199,18 +199,18 @@ export default function History() {
       <Text as="p">Choose a completed game to replay its moves, or save the PGN file.</Text>
     </SectionHead>
     <AppFlow aria-live="polite" aria-busy={state.status === 'loading'}>
-      {state.status === 'loading' && <StateBlock kind="loading" density="compact" skeleton={false} message="Loading your games…" />}
+      {state.status === 'loading' && <StateBlock kind="loading" skeleton={false} message="Loading your games…" />}
       {state.status === 'signed-out' && <Text as="p"><Link href="/account/">Sign in</Link> to see your games.
         Your games appear here for the current account.</Text>}
-      {state.status === 'error' && <StateBlock kind="error" density="compact" message="Your games could not be loaded; try again."
+      {state.status === 'error' && <StateBlock kind="error" message="Your games could not be loaded; try again."
         action={{ label: 'Retry' }} onAction={() => setAttempt(value => value + 1)} />}
       {state.status === 'ready' && <>
         {state.guest && <Text as="p" variant="muted">This history belongs to a legacy guest session. Clearing the browser cookie can lose access to it. New games require an account.</Text>}
         {state.games.length === 0 ? <>
-          <StateBlock kind="empty" density="compact" message="No completed games yet." />
-          <div><Button asChild variant="link" density="compact"><Link href="/play/">Invite a friend to play</Link></Button></div>
+          <StateBlock kind="empty" message="No completed games yet." />
+          <div><Button asChild variant="link"><Link href="/play/">Invite a friend to play</Link></Button></div>
         </>
-          : <Table label="Completed games" columns={historyColumns} rowHeader="game" rowKey="id" density="compact" truncate={false}
+          : <Table label="Completed games" columns={historyColumns} rowHeader="game" rowKey="id" truncate={false}
             caption="Results read from White’s side. Pending results remain unresolved."
             rows={state.games.map(game => ({
               id: game.id,
@@ -220,7 +220,7 @@ export default function History() {
               </Link>,
               finished: <time dateTime={new Date(game.endedAt).toISOString()}>{dateFormat.format(game.endedAt)}</time>,
               result: resultLabel(game.result),
-              save: game.pgn ? <Button variant="link" density="compact" onClick={() => downloadPgn(game)}
+              save: game.pgn ? <Button variant="link" onClick={() => downloadPgn(game)}
                 aria-label={`Download PGN for ${dateFormat.format(game.endedAt)}`}>PGN</Button> : 'Unavailable',
             }))} />}
       </>}
