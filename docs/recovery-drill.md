@@ -43,12 +43,33 @@ with both DOs kept current. Task 6.3 no longer includes the drill. Follow-up
 work covers enabled events, broader concurrent accepted work, complete
 later-closure sets, independent backup and accepted retention policy.
 
-Capture reads at most 128 application tables, 512 schema entries, 4,096 rows and
-2 MiB of encoded schema and row data per object. It hashes table, index, trigger
-and view definitions and ordered application rows. Provider-owned SQLite tables
-are excluded. Binary application rows require a reviewed format change. Capture
-fails closed on unsupported native APIs or exceeded bounds. A larger authority
-needs a separately reviewed recovery plan; do not clear history to fit this one.
+Capture reads at most 128 application tables and 512 schema entries per object,
+and at most 4,096 rows and 2 MiB of encoded schema and row data per page. It
+hashes table, index, trigger and view definitions and ordered application rows.
+Provider-owned SQLite tables are excluded. Binary application rows require a
+reviewed format change. Capture fails closed on unsupported native APIs or
+exceeded bounds. Do not clear history to fit a page.
+
+The Competition is the one object that grows with play, so its capture pages. An
+authority within one page hashes exactly as before, so saved evidence still
+matches. A larger one is read one page per request in rowid order; a table
+split across pages hashes as a chain of its page digests. The bookmark, alarm and
+metadata are read with the last page only, and the pages are read at different
+times. A paged fingerprint therefore equals a later scan only if no row changed
+in between: capture after closing admission, compare `metadata.watermarks` and
+`pending` from two complete captures, and repeat if they differ. A cursor that is
+forged, or from before a schema change, is refused with
+`400 INVALID_RECOVERY_CURSOR` or `409 RECOVERY_SCAN_STALE`; start again without
+one. Paged capture is implemented and locally tested, not released, and no
+provider rehearsal has covered a multi-page capture.
+
+A Game does not page. It stores about one row and 0.4 KB per ply (measured: 55
+rows and 21 KB after 50 plies), so one page holds roughly 4,000 plies and a real
+game is far shorter. A Game over one page answers `409 RECOVERY_CAPTURE_LIMIT`
+and says only the Competition pages. The isolated drill is the same: its fixtures are
+small by construction, and its restore guards fingerprint the whole object in one
+barrier, so an isolated object over one page is refused rather than compared
+partly. That limit applies to the follow-up drill only.
 
 The envelope records format and policy versions, exact native object ID,
 logical name, native bookmark, capture time, alarm, hashes and bounded state
@@ -63,8 +84,8 @@ session and Access token required by `/admin/`:
 | Method | Route | Behavior |
 | --- | --- | --- |
 | GET | `/api/admin/operations/recovery/inventory?limit=50&after=<cursor>` | Keyset page of admitted IDs; omit `after` for the first page |
-| POST | `/api/admin/operations/recovery/competition` | Capture Competition metadata; JSON body `{}` |
-| POST | `/api/admin/operations/recovery/games/<id>` | Capture an admitted Game; JSON body `{}` |
+| POST | `/api/admin/operations/recovery/competition` | Capture Competition metadata. Body `{}`; a response `{ "complete": false, "cursor": "…", "scanned": {…} }` is not a capture, so repeat with `{ "cursor": "…" }` until the response is the complete envelope (it has a `bookmark`) |
+| POST | `/api/admin/operations/recovery/games/<id>` | Capture an admitted Game in one request; JSON body `{}` |
 
 Inventory merges bounded pages from permanent D1 admissions, seat and game
 records, and Competition match/casual/tournament/arena records. It includes
@@ -101,6 +122,12 @@ substitute the production database, object classes, namespace bindings or
 custom domain. Review the config before any provider command. It names only
 `RecoveryDrillGame`, `RecoveryDrillCompetition` and an isolated D1 database.
 There is no email, queue, Container, assets, cron or custom-domain binding.
+The drill Worker is reachable only at its own
+`ejm-chess-recovery-drill.<account>.workers.dev` host: `workers_dev` is `true`,
+preview URLs stay off and there is no route. Every request still needs the
+private bearer token and the reviewed target values. This leaves the production
+Worker's `workers_dev=false` unchanged. When the drill ends, set it to `false`
+and redeploy.
 
 ```sh
 npx wrangler d1 create ejm-chess-recovery-drill

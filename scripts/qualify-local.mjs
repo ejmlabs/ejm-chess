@@ -19,7 +19,8 @@ await mkdir(path, { recursive: true });
 const packageInfo = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
 const sourceFiles = ['package-lock.json', 'wrangler.jsonc', 'vitest.config.ts', 'vitest.qualification.config.ts',
   'src/server/competition.ts', 'src/server/game.ts', 'src/server/arena.ts', 'src/server/arena-policy.ts',
-  'src/server/maintenance.ts', 'migrations/0011_retirement_work.sql', `qualification/${phase}.qualify.ts`];
+  'src/server/maintenance.ts', 'migrations/0011_retirement_work.sql', 'test/authority-helpers.ts', 'qualification/isolation.ts',
+  `qualification/${phase}.qualify.ts`];
 const sources = Object.fromEntries(await Promise.all(sourceFiles.map(async file =>
   [file, createHash('sha256').update(await readFile(resolve(root, file))).digest('hex')])));
 const command = [process.execPath, resolve(root, 'node_modules/vitest/vitest.mjs'), 'run', '--config', 'vitest.qualification.config.ts'];

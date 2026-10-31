@@ -3,14 +3,14 @@ import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { expect, it, vi } from 'vitest';
 import { readArenaStandings, readArenaSummary } from '../src/server/arena-projection';
 import type { Competition } from '../src/server/competition';
+import type { Env } from '../src/server/env';
 import { GAME_HOT_RETENTION_MS } from '../src/server/game';
 import { nextRetirementAt } from '../src/server/maintenance';
-import type { Env } from '../src/server/env';
 import type { Actor, GameResult, GameSnapshot } from '../src/shared/protocol';
 import type { ArenaActionResult } from '../src/shared/arenas';
-import { player } from '../test/authority-helpers';
+import { holdAlarms, player } from '../test/authority-helpers';
+import { authorityBindings } from './isolation';
 
-declare const __QUALIFICATION_ENTRANTS__: number;
 type Authority = DurableObjectStub<Competition>;
 type Intent = { game_id: string; white_actor: string; black_actor: string };
 
@@ -37,18 +37,10 @@ function accepted(reply: ArenaActionResult) {
   return reply.value;
 }
 
-async function configure(competition: Authority) {
-  await runInDurableObject(competition, async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-    internal.env = { ...internal.env, ARENAS_ENABLED: 'true', TOURNAMENTS_ENABLED: 'false', RANKED_ENABLED: 'false',
-      ARENA_ENTRANT_LIMIT: '2000', ARENA_GAME_LIMIT: '1000', ARENA_RETAINED_GAME_LIMIT: '2000',
-      ARENA_AUTHORITY_BYTE_LIMIT: '2147483648' };
-    // The harness controls lifecycle and failure boundaries explicitly. This
-    // does not qualify provider alarm delivery or wall-clock scheduling.
-    internal.schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
-}
+// The harness controls lifecycle and failure boundaries explicitly. This
+// does not qualify provider alarm delivery or wall-clock scheduling.
+const configure = (competition: Authority) => holdAlarms(competition, { ARENAS_ENABLED: 'true', TOURNAMENTS_ENABLED: 'false', RANKED_ENABLED: 'false',
+  ARENA_ENTRANT_LIMIT: '2000', ARENA_GAME_LIMIT: '1000', ARENA_RETAINED_GAME_LIMIT: '2000', ARENA_AUTHORITY_BYTE_LIMIT: '2147483648' });
 
 async function intents(competition: Authority, id: string): Promise<Intent[]> {
   return runInDurableObject(competition, (_instance, state) => state.storage.sql.exec<Intent>(
@@ -142,16 +134,8 @@ it('qualifies bounded native arena admission, game authority, sockets, scoring, 
       const white = JSON.parse(intent.white_actor) as Actor;
       const black = JSON.parse(intent.black_actor) as Actor;
       const game = env.GAME.get(env.GAME.idFromName(intent.game_id));
-      await runInDurableObject(game, async (instance, state) => {
-        const internal = instance as unknown as { schedule(): Promise<void>; env: Env };
-        internal.schedule = async () => {};
-        // A unique local authority isolates this scenario. Production always
-        // uses the global Competition, including result acknowledgement.
-        internal.env = { ...internal.env, COMPETITION: { idFromName: env.COMPETITION.idFromName.bind(env.COMPETITION),
-          get: () => env.COMPETITION.get(env.COMPETITION.idFromName(authorityName)) } as unknown as Env['COMPETITION'] };
-        await state.storage.deleteAlarm();
-      });
-      let snapshot = await game.snapshot(white);
+      await holdAlarms(game, authorityBindings(authorityName));
+      let snapshot: GameSnapshot = await game.snapshot(white);
       for (const actor of [white, black]) {
         const reply = await game.command(actor, { type: 'ready', id: crypto.randomUUID(), expectedVersion: snapshot.version });
         expect(reply.ok).toBe(true); snapshot = reply.snapshot;

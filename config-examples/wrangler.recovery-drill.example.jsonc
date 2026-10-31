@@ -5,7 +5,8 @@
   "main": "src/server/recovery-drill.ts",
   "compatibility_date": "2026-10-19",
   "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": false,
+  // scripts/recovery-drill.mjs reaches this Worker only at its own workers.dev host. Set false and redeploy when the drill ends.
+  "workers_dev": true,
   "preview_urls": false,
   "routes": [],
   "limits": { "cpu_ms": 50 },
