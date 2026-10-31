@@ -40,10 +40,10 @@ workspace/
 
 The shared source is the public `ejmlabs/ejm-ui` revision recorded in
 [`.github/ui-source.json`](../.github/ui-source.json), the pin file the other
-consumers use. It is `64b42afee35412bd7f573f458b90ce185077c9b3`, the head of
-[ejm-ui PR #59](https://github.com/ejmlabs/ejm-ui/pull/59) (the systemic kit),
-which adds the public `@ejm/ui/components/Chessboard` leaf and `useSearch` from
-`@ejm/ssg`. The pin moves to the merge commit once that PR lands. A pin selects
+consumers use. It is `56301e39a8a78356851259fd50571f1551bc1cbf`, the ejm-ui
+`main` commit that merged [ejm-ui PR #59](https://github.com/ejmlabs/ejm-ui/pull/59)
+(the systemic kit), which includes the public `@ejm/ui/components/Chessboard`
+leaf and `useSearch` from `@ejm/ssg`. A pin selects
 source. It does not publish a package or prove compatibility; the install,
 typecheck and build below do. No shared implementation is vendored into this
 product.
