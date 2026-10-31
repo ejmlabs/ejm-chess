@@ -208,12 +208,12 @@ function ArenaEvents({ me, accountReady, now }: { me: Me | null; accountReady: b
       <Text as="p">Play successive unrated games while pairing is open. Register, then join the queue when you are ready.</Text>
     </AppGroup>
     <Text as="p" variant="muted">Pairing lasts one hour for blitz and two for rapid. Equal points share a rank. <Link href="#arena-rules">Arena rules</Link>.</Text>
-    {listError && <AppGroup><StateBlock kind="error" message={listError} density="compact" /><div><Button variant="link" density="compact" disabled={loading} onClick={() => void refresh()}>Retry arena schedule</Button></div></AppGroup>}
-    {!data && !listError && <StateBlock kind="loading" message="Loading arena events." density="compact" />}
+    {listError && <AppGroup><StateBlock kind="error" message={listError} /><div><Button variant="link" disabled={loading} onClick={() => void refresh()}>Retry arena schedule</Button></div></AppGroup>}
+    {!data && !listError && <StateBlock kind="loading" message="Loading arena events." />}
     {data && <>
       {!data.enabled && <div><Status status="info" label="New arena entry is closed on this service. Accepted games can finish." /></div>}
       {data.events.length === 0
-        ? <StateBlock kind="empty" message="No arena events are published yet. This schedule refreshes automatically." density="compact" />
+        ? <StateBlock kind="empty" message="No arena events are published yet. This schedule refreshes automatically." />
         : <AppFlow><Rule />{data.events.map(event => <div key={event.id}><AppFlow as="article">
           <AppGroup><AppHeading as="h3"><Button variant="link" aria-expanded={event.id === selectedId} onClick={() => select(event)}>{title(event)} arena</Button></AppHeading>
             <Text as="p"><time dateTime={new Date(event.startsAt).toISOString()}>{date.format(event.startsAt)}</time> · {FORMATS[event.pool].label}</Text>
@@ -223,7 +223,7 @@ function ArenaEvents({ me, accountReady, now }: { me: Me | null; accountReady: b
             </Text>
             {event.reason && <Text as="p" variant="muted">{event.reason}</Text>}
           </AppGroup>
-          <AppActions><Button variant="ghost" density="compact" onClick={() => select(event)}>View arena</Button></AppActions>
+          <AppActions><Button variant="ghost" onClick={() => select(event)}>View arena</Button></AppActions>
         </AppFlow><Rule /></div>)}</AppFlow>}
     </>}
     {selectedId && <AppFlow as="section" aria-labelledby="arena-detail-heading" aria-busy={loading}>
@@ -232,46 +232,46 @@ function ArenaEvents({ me, accountReady, now }: { me: Me | null; accountReady: b
           {selected.status === 'draining' && <> Accepted games are still resolving. Standings remain provisional.</>}
         </Text>}
       </AppGroup>
-      {detailError && <AppGroup><StateBlock kind="error" message={detailError} density="compact" /><div><Button variant="link" density="compact" disabled={loading} onClick={restartStandings}>Refresh from first page</Button></div></AppGroup>}
+      {detailError && <AppGroup><StateBlock kind="error" message={detailError} /><div><Button variant="link" disabled={loading} onClick={restartStandings}>Refresh from first page</Button></div></AppGroup>}
       {selected && <AppFlow as="section" aria-label="Your arena entry">
         <AppHeading as="h4">Your entry</AppHeading>
         {!accountReady ? <Text as="p">Checking your account.</Text>
           : !accountId ? <Text as="p">Use a username and password account to enter. <Link href="/account/">Open Account</Link> to sign in or finish your account, then return here. Recovery email is optional. You can read standings without signing in.</Text>
             : <>
-              {activePrivateError && <StateBlock kind="error" message={activePrivateError} density="compact" />}
-              {activeError && <StateBlock kind="error" message={activeError} density="compact" />}
+              {activePrivateError && <StateBlock kind="error" message={activePrivateError} />}
+              {activeError && <StateBlock kind="error" message={activeError} />}
               {activeNotice && <div role="status"><Status status="info" label={activeNotice} /></div>}
-              {!own && !activePrivateError && <StateBlock kind="loading" message="Loading your private arena status." density="compact" />}
+              {!own && !activePrivateError && <StateBlock kind="loading" message="Loading your private arena status." />}
               {own && <AppGroup><Text as="p">{own.state ? stateMessages[own.state] : 'You have not registered for this arena.'}</Text>
                 {own.registered && <Text as="p" variant="muted">Your accepted score: {own.points} points from {own.games} settled games. Published standings may follow later.</Text>}
                 {own.reason && <Text as="p">{own.reason}</Text>}
               </AppGroup>}
               <AppActions>
-                {own && !own.registered && <Button density="compact" disabled={!canAct || !entryOpen || selected.entrants >= selected.maxEntrants} onClick={() => void action('register')}>Register for arena</Button>}
-                {own?.state === 'registered' && <Button density="compact" disabled={!canAct || !entryOpen} onClick={() => void action('queue')}>{own.games ? 'Queue for another game' : 'Join queue'}</Button>}
-                {own?.state === 'paused' && <Button density="compact" disabled={!canAct || !entryOpen} onClick={() => void action('resume')}>Resume queue</Button>}
-                {own?.state === 'queued' && <Button variant="secondary" density="compact" disabled={!canAct} onClick={() => void action('pause')}>Pause queue</Button>}
-                {canWithdraw && <Button variant="ghost" density="compact" disabled={!canAct} onClick={() => void action('withdraw')}>Withdraw</Button>}
-                {own?.gameId && <Button asChild density="compact"><Link href={'/play/?game=' + encodeURIComponent(own.gameId)}>{own.state === 'releasing' ? 'View your game' : 'Open your game'}</Link></Button>}
-                <Button variant="link" density="compact" disabled={busy || loading} onClick={() => void refresh()}>Refresh your status</Button>
+                {own && !own.registered && <Button disabled={!canAct || !entryOpen || selected.entrants >= selected.maxEntrants} onClick={() => void action('register')}>Register for arena</Button>}
+                {own?.state === 'registered' && <Button disabled={!canAct || !entryOpen} onClick={() => void action('queue')}>{own.games ? 'Queue for another game' : 'Join queue'}</Button>}
+                {own?.state === 'paused' && <Button disabled={!canAct || !entryOpen} onClick={() => void action('resume')}>Resume queue</Button>}
+                {own?.state === 'queued' && <Button variant="secondary" disabled={!canAct} onClick={() => void action('pause')}>Pause queue</Button>}
+                {canWithdraw && <Button variant="ghost" disabled={!canAct} onClick={() => void action('withdraw')}>Withdraw</Button>}
+                {own?.gameId && <Button asChild><Link href={'/play/?game=' + encodeURIComponent(own.gameId)}>{own.state === 'releasing' ? 'View your game' : 'Open your game'}</Link></Button>}
+                <Button variant="link" disabled={busy || loading} onClick={() => void refresh()}>Refresh your status</Button>
               </AppActions>
               {!entryOpen && !['playing', 'reserving', 'releasing'].includes(own?.state ?? '') && <Text as="p" variant="muted">New entry and queueing need an open arena. Registration opens 15 minutes before the start.</Text>}
             </>}
       </AppFlow>}
       {pageNotice && <Text as="p" role="status">{pageNotice}</Text>}
-      {!standings && !detailError && <StateBlock kind="loading" message="Loading a standings page." density="compact" />}
+      {!standings && !detailError && <StateBlock kind="loading" message="Loading a standings page." />}
       {standings && standings.id === selectedId && <>
         <Text as="p" variant="muted">{standings.provisional ? 'Provisional standings' : 'Final standings'} · Snapshot {standings.generation} · Updated <time dateTime={new Date(standings.generatedAt).toISOString()}>{date.format(standings.generatedAt)}</time></Text>
-        {standings.standings.length === 0 ? <StateBlock kind="empty" message="No entrants appear in this standings snapshot yet. Refresh after registration." density="compact" />
+        {standings.standings.length === 0 ? <StateBlock kind="empty" message="No entrants appear in this standings snapshot yet. Refresh after registration." />
           : <Table label="Arena standings" caption="One page of up to 32 players. Equal points share a rank."
             columns={[{ key: 'rank', label: 'Rank', align: 'right' }, { key: 'player', label: 'Player' }, { key: 'points', label: 'Points', align: 'right' }, { key: 'games', label: 'Games', align: 'right' }]}
             rows={standings.standings.map(player => ({ id: player.id, rank: player.rank, player: <Link href={'/player/?id=' + encodeURIComponent(player.id)}>{player.name}</Link>, points: player.points, games: player.games }))}
-            rowHeader="player" rowKey="id" truncate={false} density="compact" />}
+            rowHeader="player" rowKey="id" truncate={false} />}
         <AppGroup><AppActions as="nav" aria-label="Arena standings pages">
-          <Button variant="secondary" density="compact" disabled={loading || pageNumber === 0} onClick={() => choosePage(standings.generation + ':' + (pageNumber - 1))}>Previous page</Button>
+          <Button variant="secondary" disabled={loading || pageNumber === 0} onClick={() => choosePage(standings.generation + ':' + (pageNumber - 1))}>Previous page</Button>
           <Text>Page {pageNumber + 1}</Text>
-          <Button variant="secondary" density="compact" disabled={loading || !standings.nextCursor} onClick={() => { if (standings.nextCursor) choosePage(standings.nextCursor); }}>Next page</Button>
-          <Button variant="link" density="compact" disabled={loading} onClick={restartStandings}>Latest first page</Button>
+          <Button variant="secondary" disabled={loading || !standings.nextCursor} onClick={() => { if (standings.nextCursor) choosePage(standings.nextCursor); }}>Next page</Button>
+          <Button variant="link" disabled={loading} onClick={restartStandings}>Latest first page</Button>
         </AppActions>
           <Text as="p" variant="muted">Pages stay within one snapshot. Latest first page restarts with the newest published standings.</Text></AppGroup>
       </>}
@@ -371,19 +371,19 @@ export default function Tournaments() {
       <Text as="p">Choose a timed arena or the small round-robin preview. All event games are unrated.</Text>
     </SectionHead>
     <Text as="p" variant="muted">Hourly blitz at the hour. Daily rapid at 18:00 UTC. Weekly rapid on Sundays at 16:00 UTC.</Text>
-    {error && <AppGroup><StateBlock kind="error" message={error} density="compact" /><div><Button variant="link" density="compact" disabled={busy} onClick={() => void refresh()}>Retry</Button></div></AppGroup>}
+    {error && <AppGroup><StateBlock kind="error" message={error} /><div><Button variant="link" disabled={busy} onClick={() => void refresh()}>Retry</Button></div></AppGroup>}
     {message && <div role="status"><Status status="info" label={message} /></div>}
     <ArenaEvents me={me} accountReady={accountReady} now={now} />
     <AppFlow as="section"><AppGroup as="header"><AppHeading as="h2"><Text variant="strong">Round-robin preview</Text></AppHeading>
       <Text as="p">Three or four players. Three rounds. The next round starts automatically.</Text>
     </AppGroup>
-      {!data && !error && <StateBlock kind="loading" message="Loading tournaments." density="compact" />}
+      {!data && !error && <StateBlock kind="loading" message="Loading tournaments." />}
       {data && <>
         {!data.enabled && <div><Status status="info" label="New round-robin preview entry is closed on this service." /></div>}
         {!eligible && <Text as="p">Join with a username and password account. <Link href="/account/">Open Account</Link> to sign in or finish your account, then return here. Recovery email is optional.</Text>}
         <Text as="p">Three or four players, three rounds, no prizes. Games are unrated and event points stay separate from global ratings.
           {' '}Stay on the tournament page between rounds. <Link href="#event-rules">Read the time and no-show rules</Link> before joining.</Text>
-        {data.events.length === 0 ? <StateBlock kind="empty" message="No events are scheduled yet; this page refreshes automatically." density="compact" /> : <AppFlow>
+        {data.events.length === 0 ? <StateBlock kind="empty" message="No events are scheduled yet; this page refreshes automatically." /> : <AppFlow>
           <Rule />
           {data.events.map(event => <div key={event.id}><AppFlow as="article">
             <AppGroup><AppHeading as="h3"><Button variant="link" aria-expanded={event.id === selectedId} onClick={() => select(event)}>{title(event)}</Button></AppHeading>
@@ -398,25 +398,25 @@ export default function Tournaments() {
               {event.myStatus === 'skipped-ineligible' && <Text as="p">Your account could not enter when this event started. Check your account status.</Text>}
             </AppGroup>
             <AppActions>
-              <Button variant="ghost" density="compact" onClick={() => select(event)}>Standings</Button>
+              <Button variant="ghost" onClick={() => select(event)}>Standings</Button>
               {event.status === 'registering' && event.myStatus === 'registered'
-                ? <Button variant="secondary" density="compact" disabled={busy} onClick={() => void action(event, 'withdraw')}>Leave</Button>
-                : event.status === 'registering' && <Button density="compact" disabled={busy || !eligible || !data.enabled || event.players.length >= event.maxPlayers} onClick={() => void action(event, 'register')}>Join tournament</Button>}
-              {event.myGameId && <Button asChild density="compact"><Link href={`/play/?game=${encodeURIComponent(event.myGameId)}`}>Open your game</Link></Button>}
+                ? <Button variant="secondary" disabled={busy} onClick={() => void action(event, 'withdraw')}>Leave</Button>
+                : event.status === 'registering' && <Button disabled={busy || !eligible || !data.enabled || event.players.length >= event.maxPlayers} onClick={() => void action(event, 'register')}>Join tournament</Button>}
+              {event.myGameId && <Button asChild><Link href={`/play/?game=${encodeURIComponent(event.myGameId)}`}>Open your game</Link></Button>}
             </AppActions>
           </AppFlow><Rule /></div>)}
         </AppFlow>}
-        {selectedId && !selected && <AppGroup><StateBlock kind="empty" message="This event is outside the current schedule." density="compact" /><Text as="p">Completed games remain in your private <Link href="/history/">History</Link>.</Text></AppGroup>}
+        {selectedId && !selected && <AppGroup><StateBlock kind="empty" message="This event is outside the current schedule." /><Text as="p">Completed games remain in your private <Link href="/history/">History</Link>.</Text></AppGroup>}
         {selected && <AppFlow as="section" aria-labelledby="event-heading">
           <AppGroup as="header"><AppHeading as="h3" id="event-heading" tabIndex={-1} ref={detailHeading}>{title(selected)} standings</AppHeading>
             <Text as="p"><time dateTime={new Date(selected.startsAt).toISOString()}>{date.format(selected.startsAt)}</time>. {status(selected.status)}.
               {selected.roundDeadlineAt && active(selected) && <> Round ends in {timeLeft(selected.roundDeadlineAt, now)}.</>}
               {selected.nextRoundAt && selected.status === 'intermission' && <> Next round in {timeLeft(selected.nextRoundAt, now)}.</>}
             </Text></AppGroup>
-          {selected.standings.length === 0 ? <StateBlock kind="empty" message="Standings appear when the event starts." density="compact" /> : <Table label="Tournament standings" caption="Equal points share a rank."
+          {selected.standings.length === 0 ? <StateBlock kind="empty" message="Standings appear when the event starts." /> : <Table label="Tournament standings" caption="Equal points share a rank."
             columns={[{ key: 'rank', label: 'Rank', align: 'right' }, { key: 'player', label: 'Player' }, { key: 'points', label: 'Points', align: 'right' }]}
             rows={selected.standings.map(player => ({ id: player.id, rank: player.rank, player: <Link href={`/player/?id=${encodeURIComponent(player.id)}`}>{player.name}</Link>, points: player.points }))}
-            rowHeader="player" rowKey="id" truncate={false} density="compact" />}
+            rowHeader="player" rowKey="id" truncate={false} />}
           {selected.games.length > 0 && <AppFlow as="section"><AppHeading as="h4">Games</AppHeading><AppGroup as="ol">{selected.games.map(game => <li key={game.id}><AppGroup>
             <Text>Round {game.round}: {selected.players.find(player => player.id === game.whiteId)?.name ?? 'White'} vs {selected.players.find(player => player.id === game.blackId)?.name ?? 'Black'}</Text>
             <Text>{game.whitePoints === null ? status(game.status) : `${game.whitePoints} : ${game.blackPoints}`}{game.reason ? ` · ${status(game.reason)}` : ''}</Text>

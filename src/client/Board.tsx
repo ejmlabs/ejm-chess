@@ -3,7 +3,7 @@ import { Chessboard, type ChessboardMove, type ChessboardProps } from '@ejm/ui/c
 import { getLegalDestinations } from './boardHints';
 
 export type Move = ChessboardMove;
-type Props = Omit<ChessboardProps, 'getLegalMoves' | 'className'>;
+type Props = Omit<ChessboardProps, 'getLegalMoves'>;
 
 /** Supply rules to the public visual surface. Accepted server snapshots own its position. */
 export default function Board(props: Props) {
