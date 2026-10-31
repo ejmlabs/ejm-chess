@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clockText, historyResult, ratingText, resultText } from '../src/client/gameText';
+import { clockText, endedConnection, endedText, historyResult, lastMoveText, ratingText, resultText } from '../src/client/gameText';
 import type { GameOutcome, GameSnapshot } from '../src/shared/protocol';
 
 const seat = { id: 'b', name: 'Bob', isAnonymous: false, ready: true };
@@ -48,5 +48,19 @@ describe('result text', () => {
     expect(historyResult('½-½', 'b')).toBe('Draw');
     expect(historyResult('Void', 'w')).toBe('Void');
     expect(historyResult('Pending adjudication', 'b')).toBe('Pending');
+  });
+
+  it('stops reconnecting for a close the server chose, and says why without promising a retry', () => {
+    expect(endedConnection(4001)).toBe('replaced');
+    for (const code of [4003, 4004, 4009, 4401, 4403, 4409]) expect(endedConnection(code)).toBe('closed');
+    for (const code of [1000, 1001, 1006, 1008, 1009, 1011]) expect(endedConnection(code)).toBeNull();
+    expect(endedText.replaced).toBe('This game is open in another tab.');
+    expect(Object.values(endedText).join(' ')).not.toMatch(/reconnecting|clocks keep running/i);
+  });
+
+  it('names the side that moved for a screen reader, and says nothing before the first move', () => {
+    expect(lastMoveText([])).toBe('');
+    expect(lastMoveText([{ san: 'e4' }])).toBe('White played e4.');
+    expect(lastMoveText([{ san: 'e4' }, { san: 'Nf6' }])).toBe('Black played Nf6.');
   });
 });

@@ -19,7 +19,7 @@ import Challenge from '../client/Challenge';
 import { useGame } from '../client/useGame';
 import { useComputer } from '../client/useComputer';
 import { submitLegalMove } from '../client/moveDispatch';
-import { clockText, ratingText, resultText } from '../client/gameText';
+import { clockText, endedText, lastMoveText, ratingText, resultText } from '../client/gameText';
 import type { Move } from '../client/Board';
 import { FORMATS, type Color, type GameSnapshot, type Pool, type QueueState } from '../shared/protocol';
 import { gamePath, isGameId } from '../shared/gamePath';
@@ -30,6 +30,7 @@ const LEGAL_MOVES_KEY = 'chess.showLegalMoves';
 const QUEUED = ['queued', 'reserved', 'settling', 'live'];
 const poolName = (pool: Pool) => pool === 'blitz' ? 'Blitz' : 'Rapid';
 const sideName = (color: Color) => color === 'w' ? 'White' : 'Black';
+const LOW_CLOCK_MS = 20_000;
 const unfinished = (state: GameSnapshot) => ['waiting', 'ready', 'active'].includes(state.status);
 
 /** Re-render while a host-estimated countdown is visible. The server still owns every deadline. */
@@ -42,14 +43,18 @@ function useTick(active: boolean) {
   }, [active]);
 }
 
-function Clock({ state, color, receivedAt }: { state: GameSnapshot; color: Color; receivedAt: number }) {
+function Clock({ state, color, receivedAt, mine }: { state: GameSnapshot; color: Color; receivedAt: number; mine: boolean }) {
   const running = state.status === 'active' && state.clocks.running === color;
   useTick(running);
   const remaining = Math.max(0, state.clocks[color] - (running ? Math.max(0, performance.now() - receivedAt) : 0));
   const seconds = Math.ceil(remaining / 1000);
-  const low = remaining < 20_000;
-  return <GameClock value={clockText(remaining)} running={running} low={low}
-    label={`${sideName(color)} clock, ${Math.floor(seconds / 60)} minutes ${seconds % 60} seconds${running ? ', running' : ''}${low ? ', low time' : ''}`} />;
+  const low = remaining < LOW_CLOCK_MS;
+  return <>
+    <GameClock value={clockText(remaining)} running={running} low={low} role="timer"
+      label={`${sideName(color)} clock, ${Math.floor(seconds / 60)} minutes ${seconds % 60} seconds${running ? ', running' : ''}${low ? ', low time' : ''}`} />
+    {/* The only clock announcement: once as a running clock falls under the limit, never per tick. */}
+    <span role="status" className="sr-only">{running && low ? `${mine ? 'Your' : 'Opponent'} clock is low.` : ''}</span>
+  </>;
 }
 
 /** Not a live region: a ticking countdown must not interrupt a screen reader every second. */
@@ -109,9 +114,10 @@ function PlaySession({ search }: { search: string }) {
   const createId = useRef<string | null>(null);
   const audio = useRef<AudioContext | null>(null);
   const soundedPly = useRef(0);
-  const { snapshot: state, connection, pending, error: gameError, send, receivedAt } = useGame(joinedId);
+  const { snapshot: state, connection, pending, error: gameError, send, resume, receivedAt } = useGame(joinedId);
   const color: Color = state?.white.id === me?.id ? 'w' : 'b';
   const active = state?.status === 'active';
+  const unavailable = pending || connection !== 'online';
   const computer = useComputer(state, me?.id, connection === 'online', pending, send);
 
   useEffect(() => {
@@ -276,8 +282,14 @@ function PlaySession({ search }: { search: string }) {
       }
     });
   }
+  /** A control that leaves or locks once used would drop keyboard focus, so land on the status line. */
+  const focusStatus = () => document.getElementById('game-status')?.focus();
+  function act(action: Parameters<typeof send>[0]) {
+    send(action);
+    focusStatus();
+  }
   function move(value: Move) {
-    if (!state || !active || connection !== 'online' || pending) return;
+    if (!state || !active || unavailable) return;
     setConfirmResign(false);
     if (state.turn === color) { submitLegalMove(state, value, send); return; }
     if (premoveEnabled) setPremove(value);
@@ -307,7 +319,9 @@ function PlaySession({ search }: { search: string }) {
     const kind = state.ai ? 'Stockfish practice' : state.tournament ? (state.tournament.format === 'arena-v1' ? 'Arena' : `Tournament round ${state.tournament.round}`) : state.rated ? 'Ranked' : 'Casual';
     const rating = ratingText(state, done);
     const played = state.status === 'finished' && state.moves.length > 0;
-    const status = done ? resultText(state, color)
+    const ended = connection === 'replaced' || connection === 'closed' ? connection : null;
+    const status = ended && state.status !== 'finished' ? endedText[ended]
+      : done ? resultText(state, color)
       : connection !== 'online' ? 'Reconnecting. The clocks keep running.'
         : state.status === 'waiting' ? 'Waiting for your friend to join.'
           : state.status === 'ready' ? (state.ai
@@ -320,28 +334,29 @@ function PlaySession({ search }: { search: string }) {
     const inviteUrl = typeof location === 'undefined' ? '' : `${location.origin}/play/?game=${state.id}`;
     return <Page variant="application">
       <GameWorkspace label="Chess game" detailsLabel="Game status, actions and moves" board={<AppGroup>
-        <PlayerStrip name={state.status === 'waiting' ? 'Waiting for an opponent' : opponentName} detail={sideName(color === 'w' ? 'b' : 'w')}><Clock state={state} color={color === 'w' ? 'b' : 'w'} receivedAt={receivedAt.current} /></PlayerStrip>
+        <PlayerStrip name={state.status === 'waiting' ? 'Waiting for an opponent' : opponentName} detail={sideName(color === 'w' ? 'b' : 'w')}><Clock state={state} color={color === 'w' ? 'b' : 'w'} receivedAt={receivedAt.current} mine={false} /></PlayerStrip>
         <Suspense fallback={<BoardPlaceholder><StateBlock kind="loading" message="Opening the chessboard." density="compact" skeleton={false} /></BoardPlaceholder>}><Board fen={state.fen} color={color} enabled={Boolean(active && connection === 'online' && !pending && (state.turn === color || premoveEnabled))} showLegalMoves={showLegalMoves} onMove={move} lastMove={state.moves.at(-1)} premove={premove} /></Suspense>
-        <PlayerStrip name={<>{self?.name ?? 'You'} <Text variant="muted">(you)</Text></>} detail={sideName(color)}><Clock state={state} color={color} receivedAt={receivedAt.current} /></PlayerStrip>
+        <PlayerStrip name={<>{self?.name ?? 'You'} <Text variant="muted">(you)</Text></>} detail={sideName(color)}><Clock state={state} color={color} receivedAt={receivedAt.current} mine /></PlayerStrip>
       </AppGroup>}>
         <SectionHead purpose="application" as="h1" title={FORMATS[state.format].label}><Text as="p" variant="muted">{poolName(state.format)} · {kind} · {rating}</Text></SectionHead>
         <AppGroup>
-          <Text as="p" role="status" aria-live="polite">{status}{premove && <> Premove {premove.from} to {premove.to}. <Button variant="link" density="compact" onClick={() => setPremove(null)}>Cancel premove</Button></>}</Text>
+          <Text as="p" id="game-status" tabIndex={-1} role="status" aria-live="polite">{status}{active && <span className="sr-only"> {lastMoveText(state.moves)}</span>}{premove && <> Premove {premove.from} to {premove.to}. <Button variant="link" density="compact" onClick={() => setPremove(null)}>Cancel premove</Button></>}</Text>
+          {connection === 'replaced' && state.status !== 'finished' && <AppActions><Button onClick={() => { resume(); focusStatus(); }}>Use this tab</Button></AppActions>}
           {state.status === 'waiting' && <AppGroup>
             <AppActions><Button onClick={() => void run(async () => { await navigator.clipboard.writeText(inviteUrl); setMessage('Link copied.'); })}>Copy invitation link</Button></AppActions>
             <Input aria-label="Invitation link" readOnly value={inviteUrl} onFocus={event => event.target.select()} />
           </AppGroup>}
-          {state.status === 'ready' && !self?.ready && <AppActions><Button disabled={pending || connection !== 'online' || Boolean(state.ai && !computer.ready)} onClick={() => send({ type: 'ready' })}>Ready</Button></AppActions>}
+          {state.status === 'ready' && !self?.ready && <AppActions><Button disabled={unavailable || Boolean(state.ai && !computer.ready)} onClick={() => act({ type: 'ready' })}>Ready</Button></AppActions>}
           {(state.status === 'waiting' || state.status === 'ready') && <Deadline state={state} receivedAt={receivedAt.current}>{state.status === 'waiting' ? 'The link expires in {time}.' : '{time} left to get ready.'}</Deadline>}
           {active && <AppActions>
             {!state.ai && (state.drawOfferedBy && state.drawOfferedBy !== color
-              ? <><Button variant="secondary" density="compact" disabled={pending} onClick={() => send({ type: 'accept-draw' })}>Accept draw</Button><Button variant="ghost" density="compact" disabled={pending} onClick={() => send({ type: 'decline-draw' })}>Decline draw</Button></>
-              : <Button variant="secondary" density="compact" disabled={pending || state.drawOfferedBy === color} onClick={() => send({ type: 'offer-draw' })}>{state.drawOfferedBy === color ? 'Draw offered' : 'Offer draw'}</Button>)}
-            {confirmResign
-              ? <><Button variant="danger" density="compact" disabled={pending} onClick={() => { send({ type: 'resign' }); setConfirmResign(false); }}>Confirm resign</Button><Button variant="ghost" density="compact" onClick={() => setConfirmResign(false)}>Keep playing</Button></>
-              : <Button variant="ghost" density="compact" onClick={() => setConfirmResign(true)}>Resign</Button>}
+              ? <><Button variant="secondary" density="compact" disabled={unavailable} onClick={() => act({ type: 'accept-draw' })}>Accept draw</Button><Button variant="ghost" density="compact" disabled={unavailable} onClick={() => act({ type: 'decline-draw' })}>Decline draw</Button></>
+              : <Button variant="secondary" density="compact" disabled={unavailable || state.drawOfferedBy === color} onClick={() => act({ type: 'offer-draw' })}>{state.drawOfferedBy === color ? 'Draw offered' : 'Offer draw'}</Button>)}
+            <Button id="resign" variant={confirmResign ? 'danger' : 'ghost'} density="compact" disabled={connection !== 'online' || (confirmResign && pending)}
+              onClick={() => { if (confirmResign) { act({ type: 'resign' }); setConfirmResign(false); } else setConfirmResign(true); }}>{confirmResign ? 'Confirm resign' : 'Resign'}</Button>
+            {confirmResign && <Button variant="ghost" density="compact" onClick={() => { setConfirmResign(false); document.getElementById('resign')?.focus(); }}>Keep playing</Button>}
           </AppActions>}
-          {state.ai && (computer.error || (gameError && state.turn === 'b' && active)) && <AppGroup>{computer.error && <StateBlock kind="error" message={computer.error} density="compact" />}<div><Button variant="secondary" disabled={pending || connection !== 'online'} onClick={computer.retry}>Retry Stockfish</Button></div></AppGroup>}
+          {state.ai && (computer.error || (gameError && state.turn === 'b' && active)) && <AppGroup>{computer.error && <StateBlock kind="error" message={computer.error} density="compact" />}<div><Button variant="secondary" disabled={unavailable} onClick={computer.retry}>Retry Stockfish</Button></div></AppGroup>}
           {done && <AppActions>
             {tournamentLink ? <Button asChild><Link href={tournamentLink}>Back to {state.tournament?.format === 'arena-v1' ? 'arena' : 'tournament'}</Link></Button> : <Button onClick={backToLobby}>New game</Button>}
             {played && <><Button asChild variant="secondary" density="compact"><Link href={`/replay/?game=${encodeURIComponent(state.id)}`}>Replay</Link></Button><Button asChild variant="ghost" density="compact"><a href={gamePath(state.id, 'pgn')}>Download PGN</a></Button></>}
@@ -357,7 +372,7 @@ function PlaySession({ search }: { search: string }) {
           <Switch density="compact" label="Premove" checked={premoveEnabled} onCheckedChange={value => { setPremoveEnabled(value); if (!value) setPremove(null); }} />
           <Switch density="compact" label="Sound" checked={sound} onCheckedChange={value => { setSound(value); if (value) { audio.current ??= new AudioContext(); void audio.current.resume(); } }} />
         </AppActions>
-        {active && <Disclosure summary="Type a move"><AppForm onSubmit={event => { event.preventDefault(); const match = /^([a-h][1-8])\s*([a-h][1-8])([qrbn])?$/.exec(textMove.trim().toLowerCase()); if (!match) { setError('Enter a move such as e2e4 or a7a8n.'); return; } move({ from: match[1], to: match[2], promotion: match[3] as Move['promotion'] }); setTextMove(''); }}><label htmlFor="text-move">From and to squares, plus a promotion letter if needed</label><AppActions><Input id="text-move" placeholder="e2e4" value={textMove} onChange={event => setTextMove(event.target.value)} maxLength={8} autoComplete="off" /><Button type="submit" variant="secondary" disabled={pending || connection !== 'online'}>Move</Button></AppActions></AppForm></Disclosure>}
+        {active && <Disclosure summary="Type a move"><AppForm onSubmit={event => { event.preventDefault(); const match = /^([a-h][1-8])\s*([a-h][1-8])([qrbn])?$/.exec(textMove.trim().toLowerCase()); if (!match) { setError('Enter a move such as e2e4 or a7a8n.'); return; } move({ from: match[1], to: match[2], promotion: match[3] as Move['promotion'] }); setTextMove(''); }}><label htmlFor="text-move">From and to squares, plus a promotion letter if needed</label><AppActions><Input id="text-move" placeholder="e2e4" value={textMove} onChange={event => setTextMove(event.target.value)} maxLength={8} autoComplete="off" /><Button type="submit" variant="secondary" disabled={unavailable}>Move</Button></AppActions></AppForm></Disclosure>}
         {played && !state.ai && config && <Disclosure open={reportOpen} onToggle={event => setReportOpen(event.currentTarget.open)} summary="Report a concern"><AppFlow>{!config.reviewAvailable && <Text as="p" variant="muted">Reports are stored privately. No reviewer is active, and reports never cause automatic penalties.</Text>}<AppForm onSubmit={event => { event.preventDefault(); void run(async () => { await api('/api/reports', { gameId: state.id, reason: reportReason, details: reportDetails }, reportToken); setMessage(config.reviewAvailable ? 'Your report was recorded for private review.' : 'Your report was recorded privately. No reviewer is active, and no automatic penalty follows.'); setReportOpen(false); }, 'report'); }}><AppField><label htmlFor="report-reason">Concern</label><Select id="report-reason" value={reportReason} onChange={event => setReportReason(event.target.value)}><option value="engine-assistance">Outside assistance</option><option value="rating-manipulation">Rating manipulation</option><option value="account-abuse">Account abuse</option><option value="other">Other</option></Select></AppField><AppField><label htmlFor="report-details">Details</label><Textarea required minLength={10} id="report-details" value={reportDetails} maxLength={1000} onChange={event => setReportDetails(event.target.value)} /></AppField><Challenge key={reportKey} config={config} action="report" onToken={setReportToken} /><div><Button type="submit" variant="secondary" disabled={busy || !reportToken}>Send report</Button></div></AppForm></AppFlow></Disclosure>}
         <Text as="p" variant="muted">{tournamentLink && !done && <><Link href={tournamentLink}>{state.tournament?.format === 'arena-v1' ? 'Arena' : 'Tournament'}</Link> · </>}<Link href="/help/">Help</Link> · <Link href="/rules/">Rules</Link></Text>
       </GameWorkspace>

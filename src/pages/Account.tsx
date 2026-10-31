@@ -41,6 +41,7 @@ export default function Account() {
   const [message, setMessage] = useState('');
   const pending = useRef(false);
   const errorElement = useRef<HTMLDivElement>(null);
+  const viewChosen = useRef(false);
 
   useEffect(() => {
     const query = new URLSearchParams(location.search);
@@ -66,9 +67,15 @@ export default function Account() {
   }, []);
 
   useEffect(() => { if (error) errorElement.current?.focus(); }, [error]);
+  // The control that switched the view is gone, so keyboard focus moves to the new first field.
+  useEffect(() => {
+    if (viewChosen.current) document.querySelector<HTMLElement>('main form input')?.focus();
+    viewChosen.current = false;
+  }, [view]);
 
   function changeView(next: View) {
     if (pending.current) return;
+    viewChosen.current = true;
     setView(next); setPassword(''); setResetToken(''); setError(''); setMessage('');
     setToken(''); setChallengeKey(value => value + 1);
   }

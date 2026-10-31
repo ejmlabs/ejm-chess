@@ -36,6 +36,12 @@ export function resultText(state: Pick<GameSnapshot, 'status' | 'outcome' | 'bla
   return outcome.winner === color ? won : lost;
 }
 
+/** What a screen reader hears after each accepted move, from either side. */
+export function lastMoveText(moves: readonly { san: string }[]): string {
+  const last = moves.at(-1);
+  return last ? `${moves.length % 2 ? 'White' : 'Black'} played ${last.san}.` : '';
+}
+
 export function clockText(ms: number): string {
   const seconds = Math.ceil(Math.max(0, ms) / 1000);
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
@@ -48,3 +54,16 @@ export function historyResult(result: string | null, color: Color): string {
   if (result !== '1-0' && result !== '0-1') return 'Pending';
   return (result === '1-0' ? 'w' : 'b') === color ? 'Won' : 'Lost';
 }
+
+export type EndedConnection = 'replaced' | 'closed';
+
+/** Codes the server closes a socket with on purpose. Reconnecting cannot help, so the client stops and says why. */
+export function endedConnection(code: number): EndedConnection | null {
+  if (code === 4001) return 'replaced';
+  return [4003, 4004, 4009, 4401, 4403, 4409].includes(code) ? 'closed' : null;
+}
+
+export const endedText: Record<EndedConnection, string> = {
+  replaced: 'This game is open in another tab.',
+  closed: 'This connection has ended. Reopen the game in this tab to continue.',
+};

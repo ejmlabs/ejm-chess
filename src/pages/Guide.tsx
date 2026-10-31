@@ -32,6 +32,7 @@ const guides: Record<string, GuideContent> = server ? {
       <AppHeading as="h2">If the connection drops</AppHeading>
       <p>The clocks keep running. Reopen the same game link, signed in to the same account, and you return to your seat directly.
         Wait for the server position before moving again. Legacy guest seats still need their original browser cookie.</p>
+      <p>A game follows one tab at a time. If it opens in another tab, this one says so. Choose Use this tab to take it back.</p>
       <AppHeading as="h2">After the game</AppHeading>
       <p>Open <Link href="/history/">History</Link> and choose a game to replay it. Step through moves, flip the board, or download the PGN.
         On a focused replay, Left and Right step, and Home and End jump. Replays are private to the players and limited to 1 MiB and 12,700 half-moves.</p>

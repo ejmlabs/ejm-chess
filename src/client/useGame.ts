@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GameCommand, GameSnapshot, ServerMessage } from '../shared/protocol';
 import { gamePath } from '../shared/gamePath';
+import { endedConnection, type EndedConnection } from './gameText';
 
 type Action = GameCommand extends infer C ? C extends GameCommand ? Omit<C, 'id' | 'expectedVersion'> : never : never;
 
 export function useGame(id: string | null) {
   const [snapshot, setSnapshot] = useState<GameSnapshot | null>(null);
-  const [connection, setConnection] = useState<'connecting' | 'online' | 'offline'>('connecting');
+  const [connection, setConnection] = useState<'connecting' | 'online' | 'offline' | EndedConnection>('connecting');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
   const current = useRef<GameSnapshot | null>(null);
   const socket = useRef<WebSocket | null>(null);
   const command = useRef<GameCommand | null>(null);
   const transmit = useRef<((ws: WebSocket, next: GameCommand) => void) | null>(null);
+  const reopen = useRef<(() => void) | null>(null);
   const receivedAt = useRef(0);
 
   useEffect(() => {
@@ -26,6 +28,7 @@ export function useGame(id: string | null) {
     setPending(false);
     setError('');
     transmit.current = null;
+    reopen.current = null;
     if (!id) { setConnection('offline'); return; }
     function reconnect(ws: WebSocket) {
       if (closed || socket.current !== ws) return;
@@ -47,6 +50,7 @@ export function useGame(id: string | null) {
       watchCommand(ws, next);
     }
     transmit.current = write;
+    reopen.current = () => { if (!socket.current) { attempts = 0; open(); } };
     function open() {
       if (closed) return;
       setConnection('connecting');
@@ -94,17 +98,16 @@ export function useGame(id: string | null) {
       ws.onclose = event => {
         if (closed || socket.current !== ws) return;
         clearTimeout(ackTimer);
-        setConnection('offline');
-        if ([4001, 4003, 4004, 4009, 4401, 4403, 4409].includes(event.code)) {
-          setError(event.code === 4004 ? 'This completed game has moved to Replay.' : 'This connection has ended. Reopen the game in this tab to continue.');
-          return;
-        }
-        reconnect(ws);
+        const ended = endedConnection(event.code);
+        if (!ended) { reconnect(ws); return; }
+        socket.current = null;
+        setConnection(ended);
+        if (event.code === 4004) setError('This completed game has moved to Replay.');
       };
       ws.onerror = () => { if (!closed && socket.current === ws) setConnection('offline'); };
     }
     open();
-    return () => { closed = true; clearTimeout(timer); clearTimeout(ackTimer); transmit.current = null; socket.current?.close(); socket.current = null; };
+    return () => { closed = true; clearTimeout(timer); clearTimeout(ackTimer); transmit.current = null; reopen.current = null; socket.current?.close(); socket.current = null; };
   }, [id]);
 
   const send = useCallback((action: Action, expectedVersion?: number) => {
@@ -118,7 +121,9 @@ export function useGame(id: string | null) {
     transmit.current?.(ws, next);
     return true;
   }, []);
-  return { snapshot, connection, pending, error, send, receivedAt };
+  /** Take the seat back from another tab. That tab is then the replaced one. */
+  const resume = useCallback(() => reopen.current?.(), []);
+  return { snapshot, connection, pending, error, send, resume, receivedAt };
 }
 
 function friendlyError(code: string) {

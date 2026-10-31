@@ -32,7 +32,7 @@ export default function AccountForm({ view, title, config, returnTo, busy, usern
 }) {
   const action = view === 'sign-up' ? 'sign-up' : view === 'sign-in' ? 'sign-in' : 'password-reset';
   return <>
-    {view !== 'reset' && <AppActions aria-label="Account navigation">
+    {view !== 'reset' && <AppActions role="group" aria-label="Account navigation">
       {view !== 'sign-in' && <Button variant="link" disabled={busy} onClick={() => changeView('sign-in')}>Sign in</Button>}
       {view !== 'sign-up' && <Button variant="link" disabled={busy} onClick={() => changeView('sign-up')}>Create account</Button>}
     </AppActions>}
