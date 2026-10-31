@@ -22,7 +22,9 @@ const sourceFiles = ['package-lock.json', 'wrangler.jsonc', 'vitest.config.ts', 
   'src/server/maintenance.ts', 'migrations/0011_retirement_work.sql', `qualification/${phase}.qualify.ts`];
 const sources = Object.fromEntries(await Promise.all(sourceFiles.map(async file =>
   [file, createHash('sha256').update(await readFile(resolve(root, file))).digest('hex')])));
-const command = [process.execPath, resolve(root, 'node_modules/vitest/vitest.mjs'), 'run', '--config', 'vitest.qualification.config.ts'];
+// mergeConfig concatenates `include`, so the config also lists every test/**/*.test.ts. Name the phase file to run only it.
+const command = [process.execPath, resolve(root, 'node_modules/vitest/vitest.mjs'), 'run', '--config', 'vitest.qualification.config.ts',
+  `qualification/${phase}.qualify.ts`];
 const wrapped = platform() === 'darwin' ? ['/usr/bin/time', '-l', ...command] : command;
 const child = spawn(wrapped[0], wrapped.slice(1), { cwd: root, env: { ...process.env, CHESS_QUALIFICATION_ENTRANTS: String(entrants),
   CHESS_QUALIFICATION_PHASE: phase, CHESS_QUALIFICATION_DURATION_MS: String(durationMs),
