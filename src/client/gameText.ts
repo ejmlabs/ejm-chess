@@ -15,6 +15,13 @@ const wins: Partial<Record<string, [won: string, lost: string]>> = {
   'timeout-win': ['You won on time.', 'You lost on time.'],
 };
 
+/** A settled ranked game changes ratings only when it has a score; an unstarted or void game does not. */
+export function ratingText(state: Pick<GameSnapshot, 'rated' | 'settlement' | 'outcome'>, done: boolean): string {
+  if (!state.rated) return 'Unrated';
+  if (state.settlement === 'settled') return state.outcome?.score == null ? 'No rating change' : 'Rating updated';
+  return done ? 'Rating pending' : 'Rated';
+}
+
 /** Put the server's accepted outcome in the player's own terms. The server decides every result. */
 export function resultText(state: Pick<GameSnapshot, 'status' | 'outcome' | 'black'>, color: Color): string {
   if (state.status === 'pending-adjudication') return 'Time ran out. The result follows within 30 seconds.';

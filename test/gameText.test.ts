@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clockText, historyResult, resultText } from '../src/client/gameText';
+import { clockText, historyResult, ratingText, resultText } from '../src/client/gameText';
 import type { GameOutcome, GameSnapshot } from '../src/shared/protocol';
 
 const seat = { id: 'b', name: 'Bob', isAnonymous: false, ready: true };
@@ -29,6 +29,16 @@ describe('result text', () => {
     expect(clockText(299_001)).toBe('5:00');
     expect(clockText(59_000)).toBe('0:59');
     expect(clockText(-5)).toBe('0:00');
+  });
+
+  it('says a rating changed only for a settled scored ranked game', () => {
+    const scored = { winner: 'w', score: 1, reason: 'timeout-win' } as GameOutcome;
+    const unstarted = { winner: null, score: null, reason: 'readiness-expired' } as GameOutcome;
+    expect(ratingText({ rated: true, settlement: 'settled', outcome: scored }, true)).toBe('Rating updated');
+    expect(ratingText({ rated: true, settlement: 'settled', outcome: unstarted }, true)).toBe('No rating change');
+    expect(ratingText({ rated: true, settlement: 'pending', outcome: scored }, true)).toBe('Rating pending');
+    expect(ratingText({ rated: true, settlement: 'pending', outcome: null }, false)).toBe('Rated');
+    expect(ratingText({ rated: false, settlement: 'unrated', outcome: scored }, true)).toBe('Unrated');
   });
 
   it('reads a history result from the player’s own color', () => {

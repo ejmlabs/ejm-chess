@@ -19,7 +19,7 @@ import Challenge from '../client/Challenge';
 import { useGame } from '../client/useGame';
 import { useComputer } from '../client/useComputer';
 import { submitLegalMove } from '../client/moveDispatch';
-import { clockText, resultText } from '../client/gameText';
+import { clockText, ratingText, resultText } from '../client/gameText';
 import type { Move } from '../client/Board';
 import { FORMATS, type Color, type GameSnapshot, type Pool, type QueueState } from '../shared/protocol';
 import { gamePath, isGameId } from '../shared/gamePath';
@@ -305,7 +305,8 @@ function PlaySession({ search }: { search: string }) {
   if (state) {
     const tournamentLink = state.tournament && `/tournaments/?${state.tournament.format === 'arena-v1' ? 'arena' : 'event'}=${encodeURIComponent(state.tournament.id)}`;
     const kind = state.ai ? 'Stockfish practice' : state.tournament ? (state.tournament.format === 'arena-v1' ? 'Arena' : `Tournament round ${state.tournament.round}`) : state.rated ? 'Ranked' : 'Casual';
-    const rating = !state.rated ? 'Unrated' : state.settlement === 'settled' ? 'Rating updated' : done ? 'Rating pending' : 'Rated';
+    const rating = ratingText(state, done);
+    const played = state.status === 'finished' && state.moves.length > 0;
     const status = done ? resultText(state, color)
       : connection !== 'online' ? 'Reconnecting. The clocks keep running.'
         : state.status === 'waiting' ? 'Waiting for your friend to join.'
@@ -343,7 +344,7 @@ function PlaySession({ search }: { search: string }) {
           {state.ai && (computer.error || (gameError && state.turn === 'b' && active)) && <AppGroup>{computer.error && <StateBlock kind="error" message={computer.error} density="compact" />}<div><Button variant="secondary" disabled={pending || connection !== 'online'} onClick={computer.retry}>Retry Stockfish</Button></div></AppGroup>}
           {done && <AppActions>
             {tournamentLink ? <Button asChild><Link href={tournamentLink}>Back to {state.tournament?.format === 'arena-v1' ? 'arena' : 'tournament'}</Link></Button> : <Button onClick={backToLobby}>New game</Button>}
-            {state.status === 'finished' && <><Button asChild variant="secondary" density="compact"><Link href={`/replay/?game=${encodeURIComponent(state.id)}`}>Replay</Link></Button><Button asChild variant="ghost" density="compact"><a href={gamePath(state.id, 'pgn')}>Download PGN</a></Button></>}
+            {played && <><Button asChild variant="secondary" density="compact"><Link href={`/replay/?game=${encodeURIComponent(state.id)}`}>Replay</Link></Button><Button asChild variant="ghost" density="compact"><a href={gamePath(state.id, 'pgn')}>Download PGN</a></Button></>}
           </AppActions>}
           {notice}
           {message && <Text as="p" role="status">{message}</Text>}
@@ -357,7 +358,7 @@ function PlaySession({ search }: { search: string }) {
           <Switch density="compact" label="Sound" checked={sound} onCheckedChange={value => { setSound(value); if (value) { audio.current ??= new AudioContext(); void audio.current.resume(); } }} />
         </AppActions>
         {active && <Disclosure summary="Type a move"><AppForm onSubmit={event => { event.preventDefault(); const match = /^([a-h][1-8])\s*([a-h][1-8])([qrbn])?$/.exec(textMove.trim().toLowerCase()); if (!match) { setError('Enter a move such as e2e4 or a7a8n.'); return; } move({ from: match[1], to: match[2], promotion: match[3] as Move['promotion'] }); setTextMove(''); }}><label htmlFor="text-move">From and to squares, plus a promotion letter if needed</label><AppActions><Input id="text-move" placeholder="e2e4" value={textMove} onChange={event => setTextMove(event.target.value)} maxLength={8} autoComplete="off" /><Button type="submit" variant="secondary" disabled={pending || connection !== 'online'}>Move</Button></AppActions></AppForm></Disclosure>}
-        {state.status === 'finished' && !state.ai && config && <Disclosure open={reportOpen} onToggle={event => setReportOpen(event.currentTarget.open)} summary="Report a concern"><AppFlow>{!config.reviewAvailable && <Text as="p" variant="muted">Reports are stored privately. No reviewer is active, and reports never cause automatic penalties.</Text>}<AppForm onSubmit={event => { event.preventDefault(); void run(async () => { await api('/api/reports', { gameId: state.id, reason: reportReason, details: reportDetails }, reportToken); setMessage(config.reviewAvailable ? 'Your report was recorded for private review.' : 'Your report was recorded privately. No reviewer is active, and no automatic penalty follows.'); setReportOpen(false); }, 'report'); }}><AppField><label htmlFor="report-reason">Concern</label><Select id="report-reason" value={reportReason} onChange={event => setReportReason(event.target.value)}><option value="engine-assistance">Outside assistance</option><option value="rating-manipulation">Rating manipulation</option><option value="account-abuse">Account abuse</option><option value="other">Other</option></Select></AppField><AppField><label htmlFor="report-details">Details</label><Textarea required minLength={10} id="report-details" value={reportDetails} maxLength={1000} onChange={event => setReportDetails(event.target.value)} /></AppField><Challenge key={reportKey} config={config} action="report" onToken={setReportToken} /><div><Button type="submit" variant="secondary" disabled={busy || !reportToken}>Send report</Button></div></AppForm></AppFlow></Disclosure>}
+        {played && !state.ai && config && <Disclosure open={reportOpen} onToggle={event => setReportOpen(event.currentTarget.open)} summary="Report a concern"><AppFlow>{!config.reviewAvailable && <Text as="p" variant="muted">Reports are stored privately. No reviewer is active, and reports never cause automatic penalties.</Text>}<AppForm onSubmit={event => { event.preventDefault(); void run(async () => { await api('/api/reports', { gameId: state.id, reason: reportReason, details: reportDetails }, reportToken); setMessage(config.reviewAvailable ? 'Your report was recorded for private review.' : 'Your report was recorded privately. No reviewer is active, and no automatic penalty follows.'); setReportOpen(false); }, 'report'); }}><AppField><label htmlFor="report-reason">Concern</label><Select id="report-reason" value={reportReason} onChange={event => setReportReason(event.target.value)}><option value="engine-assistance">Outside assistance</option><option value="rating-manipulation">Rating manipulation</option><option value="account-abuse">Account abuse</option><option value="other">Other</option></Select></AppField><AppField><label htmlFor="report-details">Details</label><Textarea required minLength={10} id="report-details" value={reportDetails} maxLength={1000} onChange={event => setReportDetails(event.target.value)} /></AppField><Challenge key={reportKey} config={config} action="report" onToken={setReportToken} /><div><Button type="submit" variant="secondary" disabled={busy || !reportToken}>Send report</Button></div></AppForm></AppFlow></Disclosure>}
         <Text as="p" variant="muted">{tournamentLink && !done && <><Link href={tournamentLink}>{state.tournament?.format === 'arena-v1' ? 'Arena' : 'Tournament'}</Link> · </>}<Link href="/help/">Help</Link> · <Link href="/rules/">Rules</Link></Text>
       </GameWorkspace>
     </Page>;
