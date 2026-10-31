@@ -9,14 +9,16 @@ Specialty config templates: [config-examples](../config-examples/README.md).
 
 ## Status and scope
 
-The recorded protected baseline at `https://chess.ejmlabs.com` used version `[id in private provider record]`, read back on
-2026-10-22 at 10:17 UTC. It retains the redesign, 8-character password minimum,
-single account-form submit action and signup-attempt enforcement. Its server
-bundle is unchanged from the preceding protected revision. The
-[provider inventory](provider-inventory.md) retains historical versions and
-source hashes. This section records that protected baseline. Final ranked and
-arena activation uses a separately checked release build with its own version
-readback; source changes and these instructions do not claim publication.
+The protected canary at `https://chess.ejmlabs.com` runs Worker version
+`6aa3ef0c-7286-4fab-9cc7-d3790792c882`, deployed from `main` on 2026-10-30
+(see the [verification record](verification.md#protected-canary-deployment-2026-10-30)).
+It retains the redesign, 8-character password minimum, single account-form
+submit action, explicit Join and the material timeout rule. The
+[provider inventory](provider-inventory.md) retains earlier versions and source
+hashes. This section records that protected baseline. Final ranked and arena
+activation uses a separately checked release build with its own version
+readback; source changes and these instructions do not claim publication. The
+ordered Level 2 release sequence is in [live-ready prep](live-ready-prep.md).
 
 D1 migrations `0001` through `0015` are applied remotely. They include bounded
 proof bookkeeping, account-closure fences and the signup-attempt counter.
@@ -26,8 +28,9 @@ attempts and games and 5,000 account emails per UTC month, with 100,000 lifetime
 signup attempts. The 2026-10-30 demand policy later removed those application
 caps; the settings are usage counters only. `NEW_WORK_STOPPED=false`; saved
 account/game and email stops are clear. Server analysis remains stopped. The recorded protected version
-keeps ranked, tournaments, arenas and browser Stockfish disabled until the final
-release. Both `workers_dev` and preview URLs are disabled. The public Worker
+keeps ranked, tournaments, arenas and server analysis closed. Browser Stockfish
+is enabled and game retirement uses the scaled coordinator. Both `workers_dev`
+and preview URLs are disabled. The public Worker
 CPU limit is 50 ms. Minute and daily cron expressions are configured. Keep
 scheduled-execution evidence separate from a saved cron expression.
 
@@ -49,7 +52,8 @@ email sender and canonical domain. Public access is protected during release
 checks. Queues and server-analysis Containers remain absent. The local
 placeholder is confined to `env.local`. The final release keeps the existing
 production D1, Game and Competition identities and adds a fresh private
-timeout-proof service. Never attach an acceptance namespace to production.
+timeout-proof service, bound as `PROVER` through a cross-script Durable Object
+binding. Never attach an acceptance namespace to production.
 
 The owner approved one $100 monthly chess target, with alerts and an emergency
 stop. Earlier per-service allocations no longer gate launch. Record the exact
@@ -149,8 +153,8 @@ top-level production configuration through `--env ''`; local work continues
 to use explicit `--env local` and `--local`.
 
 Prepare a reviewable production configuration with the following initial
-values. Keep the reviewed monthly, retained-storage, permanent-ID, queue, and
-CPU limits as well.
+values. Keep the reviewed CPU limit and any retained-storage, permanent-ID or
+queue limit the owner sets. Application monthly caps no longer exist.
 
 ```jsonc
 "AUTH_BASE_URL": "https://chess.ejmlabs.com",
@@ -164,12 +168,14 @@ CPU limits as well.
 "AI_ENABLED": "false"
 ```
 
-Those values describe the initial stopped deployment. Current checked-in
-production settings have `NEW_WORK_STOPPED=false` and practical monthly
-allowances; game feature flags remain closed in the recorded protected build.
-The final qualified release enables ranked, tournaments, arenas and browser
-Stockfish. Keep server analysis disabled. A stop preserves accepted games,
-clocks, result delivery, replay, receipts and scheduled recovery.
+Those values describe the initial stopped deployment. The recorded protected
+build has `NEW_WORK_STOPPED=false`, no application monthly caps,
+`AI_ENABLED=true` and scaled retirement, with ranked, tournaments and arenas
+closed. The Level 2 release enables ranked, arenas and browser Stockfish; its
+exact values are in [live-ready prep](live-ready-prep.md#level-2-production-values).
+`TOURNAMENTS_ENABLED` stays an owner choice there. Keep server analysis
+disabled. A stop preserves accepted games, clocks, result delivery, replay,
+receipts and scheduled recovery.
 
 Run the normal checks and finish the frontend build before the Worker dry run:
 
@@ -365,7 +371,8 @@ traffic, subscriptions, storage, and accepted work can exceed the envelope.
 Keep public ranked admission, large arenas, analysis, shared project discovery,
 and release claims closed until their own documented gates pass. Remove the
 full-host canary restriction only under the approved release scope, retaining
-the owner protection on admin page/API paths.
+the owner protection on admin page/API paths. The order and checks are in
+[live-ready prep](live-ready-prep.md#sequence).
 
 ## Rollback and recovery
 

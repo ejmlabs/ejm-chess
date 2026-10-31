@@ -24,7 +24,8 @@ record does not qualify a later candidate.
 New deployments default to closed ranked admission. Enable `RANKED_ENABLED`
 only with the qualified private proof binding and the release's player and
 recovery checks. A static build or Worker dry run alone does not establish a
-working production release.
+working production release. The ordered release sequence and exact production
+values are in [live-ready prep](live-ready-prep.md).
 
 ## Local preview
 
@@ -69,29 +70,30 @@ origin in each.
 | `LOCAL_DEV` | Explicit loopback development only; never enable on the public host |
 | `OPERATION_MODE` | `unattended` by default; only exact `reviewed` enables new human case decisions |
 | `GAME_RETIREMENT_MODE` | Missing or `preview` keeps four archive attempts per minute; exact `scaled` enables the bounded shared coordinator described below; other values close retirement |
-| `TOURNAMENTS_ENABLED` | Enables new automatic unrated round-robin events and entry; accepted events drain when disabled |
-| `ARENAS_ENABLED` | Enables timed arenas; their release settings require the corresponding capacity qualification |
-| `ARENA_ENTRANT_LIMIT` | No product cap by default; a positive integer may set one. Platform storage and the monthly budget apply |
-| `ARENA_GAME_LIMIT` | No product cap by default; a positive integer may set one. Platform storage and the monthly budget apply |
-| `ARENA_RETAINED_GAME_LIMIT` | No product cap by default; a positive integer may set one. Retirement and the monthly budget bound growth |
-| `ARENA_GAME_ID_LIMIT` | No product cap by default; a positive integer may set one. The monthly budget bounds new IDs |
-| `ARENA_AUTHORITY_BYTE_LIMIT` | 4 GiB Competition SQLite platform safety stop, including reserved unfinished-game headroom; accepted results still drain |
-| `RANKED_ENABLED` | Closed by default; credential-backed accounts still need eligibility checks; recovery email is optional |
+| `TOURNAMENTS_ENABLED` | Exact `true` enables new automatic unrated round-robin events and entry; any other value closes them. Disabling cancels events that have not started; running events finish. Shares the D1 tournament game ledger with arenas, so arena games count against the preview's fixed limits |
+| `ARENAS_ENABLED` | Exact `true` opens timed arenas, independent of ranked and proof settings; any other value closes them. Disabling cancels unstarted events; running events finish. Release settings require the corresponding capacity qualification |
+| `ARENA_ENTRANT_LIMIT` | Unset means no product cap; a positive integer sets one; `0` or a malformed value closes admission. Platform storage and the monthly budget apply |
+| `ARENA_GAME_LIMIT` | Unset means no product cap; a positive integer sets one; `0` or a malformed value closes admission. Platform storage and the monthly budget apply |
+| `ARENA_RETAINED_GAME_LIMIT` | Unset means no product cap; a positive integer sets one; `0` or a malformed value closes admission. Retirement and the monthly budget bound growth |
+| `ARENA_GAME_ID_LIMIT` | Unset means no product cap; a positive integer sets one; `0` or a malformed value closes admission. The monthly budget bounds new IDs |
+| `ARENA_AUTHORITY_BYTE_LIMIT` | 4 GiB (`4294967296`) is both default and maximum; a lower positive integer reduces it; `0`, a malformed or a larger value closes admission. Competition SQLite platform safety stop, including reserved unfinished-game headroom; accepted results still drain |
+| `RANKED_ENABLED` | Exact `true` opens ranked eligibility; closed otherwise. Credential-backed accounts still need eligibility checks; recovery email is optional. Ranked also needs the two proof settings below. `/api/config` reports `ranked` from this flag alone, so set all three together |
 | `TIMEOUT_PROOF_PROFILE` | `off`; only exact `cha-native-3484c7e6-v1` with qualified private binding and positive proof limit permits new ranked games |
-| `MONTHLY_PROOF_LIMIT` | `0`; positive settings capped at 1,000 games per UTC month, with two credits per accepted game and 1,000 permanent receipts total |
-| `PROVER` | Optional private timeout-proof Container namespace; absent from default configuration; one fixed singleton, four shared ranked slots, one native job |
-| `NEW_WORK_STOPPED` | Exact `true` stops new signup attempts, game reservations, account-security sends, and server engine calls; existing signin and accepted games/results retain their recovery paths |
+| `MONTHLY_PROOF_LIMIT` | `0` closes ranked admission (default). An integer from `1` to `1000` sets the UTC-month limit; any other value closes it. Two credits per accepted game. Receipts are permanent and the 1,000 total ends ranked admission for good |
+| `PROVER` | Private timeout-proof binding, absent from default configuration. The release form is a cross-script Durable Object binding to class `TimeoutProver` of script `ejm-chess-timeout-proofs`; one fixed singleton, four shared ranked slots, one native job |
+| `PRODUCTION_RESOURCE_IDS` | Private comma list of production D1 and namespace IDs. The isolated recovery, qualification and acceptance Workers read it and refuse those resources; unset or empty refuses every run. The public Worker does not read it |
+| `NEW_WORK_STOPPED` | Unset or exact `false` leaves new work open. `true`, and any other value, stops new signup attempts, game reservations, account-security sends, and server engine calls; existing signin and accepted games/results retain their recovery paths |
 | `MONTHLY_GAME_LIMIT` | Deprecated; usage counter only. No admission cap |
 | `MONTHLY_EMAIL_LIMIT` | Deprecated; usage counter only. No admission cap |
 | `MONTHLY_ANALYSIS_LIMIT` | Deprecated; usage counter only. Analysis remains disabled |
 | `MONTHLY_SIGNUP_LIMIT` | Deprecated; usage counter only. No admission cap |
 | `SIGNUP_ATTEMPT_LIMIT` | Deprecated; lifetime usage counter only. No admission cap |
-| `CASUAL_GAME_LIMIT` | No product cap by default; a positive integer may set one. Retirement and the monthly budget bound growth |
-| `CASUAL_GAME_ID_LIMIT` | No product cap by default; a positive integer may set one. The monthly budget bounds new IDs |
-| `RANKED_GAME_LIMIT` | No product cap by default; a positive integer may set one |
-| `RANKED_QUEUE_LIMIT` | No product cap by default; a positive integer may set one |
-| `RANKED_RETAINED_GAME_LIMIT` | No product cap by default; a positive integer may set one |
-| `AI_ENABLED` | Browser Stockfish practice gate; enabled in local config and set explicitly in the public release. No provider key or token quota; see [computer practice](ai-opponents.md). |
+| `CASUAL_GAME_LIMIT` | Unset means no product cap; a positive integer sets one; `0` or a malformed value closes new casual admission. Retirement and the monthly budget bound growth |
+| `CASUAL_GAME_ID_LIMIT` | Unset means no product cap; a positive integer sets one; `0` or a malformed value closes new casual admission. The monthly budget bounds new IDs |
+| `RANKED_GAME_LIMIT` | No product cap by default; a positive integer sets one. `0` or a malformed value keeps no cap |
+| `RANKED_QUEUE_LIMIT` | No product cap by default; a positive integer sets one. `0` or a malformed value keeps no cap |
+| `RANKED_RETAINED_GAME_LIMIT` | No product cap by default; a positive integer sets one. `0` or a malformed value keeps no cap |
+| `AI_ENABLED` | Browser Stockfish practice gate. Exact `true` opens new practice; unset or any other value closes it. Enabled in local config and in the protected canary. No provider key or token quota; see [computer practice](ai-opponents.md). |
 | `TURNSTILE_SITE_KEY` | Public challenge key for the configured hostname and actions |
 | `TURNSTILE_SECRET_KEY` | Private server verification secret |
 | `EMAIL` and `EMAIL_FROM` | Email binding and approved sender `chess@ejmlabs.com`; onboarding and verification/recovery delivery to the approved recipient are recorded; broad delivery, outage and complete cost checks remain open |
@@ -101,7 +103,7 @@ origin in each.
 | `OWNER_EMAILS` | Explicit verified account allowlist, also matched to Access identity |
 | `ANALYSIS_QUEUE` | Optional delivery hint; D1 retains analysis work for scheduled recovery |
 | `ANALYSIS_ENABLED` | `false`; separate from ranked admission |
-| `ANALYSIS_DAILY_LIMIT` | 20 attempts per UTC day by default, hard ceiling 100 |
+| `ANALYSIS_DAILY_LIMIT` | 20 attempts per UTC day by default; integers 0 to 100; any other value closes analysis |
 | `ANALYZER` | Optional private sleeping Stockfish Container namespace |
 | `ANALYSIS_DEAD_LETTER_QUEUE` | Optional notification path; durable dead letters stay in D1 |
 
@@ -164,9 +166,11 @@ may join an available retained invitation when the cap is full.
 Unknown IDs and cap-denied creates must not invoke a Game RPC and allocate
 empty object storage. Invalid casual limits close new admission.
 
-Ranked limits use their defaults for invalid/nonpositive values, cap positive
-values at 1000, and can be reduced before a deployment. The retained-ranked
-ceiling is separate from the unsettled limit. Existing games and result
+Ranked limits default to no product cap. A nonpositive or malformed value keeps
+that default, and a positive value sets the cap before a deployment. The
+fixed ranked ceilings are four shared proof slots and 1,000 permanent proof
+receipts in total. The retained-ranked ceiling is separate from the unsettled
+limit. Existing games and result
 outboxes must drain even while new admission is closed. Do not delete a ledger
 or raise a ceiling to hide storage growth. Ranked authority and rating events
 are not retired by the casual payload job. Their retained ceiling still closes
@@ -271,8 +275,10 @@ games, with a 60-second intermission. A blitz round ends after 18 minutes and a
 rapid round after 40 minutes. Event standings are separate from global ratings.
 Missing players, changed eligibility, service interruptions, and round cutoffs
 use stored cancellation or no-score outcomes and release event reservations.
-The current fixed safety limits are three active events, 256 retained event
-records, 100,000 retained event Game payloads, and 1,000,000 permanent event game IDs.
+The fixed round-robin limits are three active events, 256 retained event
+records, 128 retained event Game payloads, and 10,000 permanent event game IDs.
+Arenas count against the same two game counters, keep their own three open
+events and 256 retained event records, and add no other fixed ceiling.
 Old event presentation records can be removed after seven days once all their
 Game payloads are retired; game replay and permanent ID records remain.
 
@@ -507,11 +513,12 @@ endpoint or copy private production data into fixtures.
 
 ## Public launch gates
 
-**Owner policy update, 2026-10-30.** Do not gate public opening on a pre-run
-2,000-player workload. The monthly billing stop, security controls and
-platform-safety ceilings govern admission. Measure demand after opening. The
-capacity-run requirements below are retained as follow-up qualification, not a
-launch blocker.
+**Owner policy update, 2026-10-30.** Do not gate casual public opening on a
+pre-run 2,000-player workload. The monthly billing stop, security controls and
+platform-safety ceilings govern admission. Measure demand after opening. Public
+ranked play and first-tier arenas still need the full first-tier provider run
+(task 7.2). The longer capacity requirements below are follow-up qualification,
+not a launch blocker.
 
 The owner approved the initial release sequence on 2026-10-21 UTC. Public
 ranked play and the first large-arena tier open together after four checks:
