@@ -8,8 +8,6 @@ export interface BudgetEnv {
   MONTHLY_GAME_LIMIT?: string;
   MONTHLY_EMAIL_LIMIT?: string;
   MONTHLY_ANALYSIS_LIMIT?: string;
-  MONTHLY_SIGNUP_LIMIT?: string;
-  SIGNUP_ATTEMPT_LIMIT?: string;
 }
 
 const policies = {

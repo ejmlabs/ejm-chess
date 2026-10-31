@@ -73,7 +73,7 @@ export async function readJson<T = Record<string, unknown>>(request: Pick<Reques
 }
 
 /** Siteverify consumes each valid token. A local bypass requires both explicit mode and an exact loopback origin. */
-export async function verifyTurnstile(request: Request, env: SecurityEnv, action: 'guest' | 'sign-up' | 'sign-in' | 'password-reset' | 'verify-email' | 'account-complete' | 'report', fetcher: typeof fetch = fetch): Promise<void> {
+export async function verifyTurnstile(request: Request, env: SecurityEnv, action: 'sign-up' | 'sign-in' | 'password-reset' | 'verify-email' | 'account-complete' | 'report', fetcher: typeof fetch = fetch): Promise<void> {
   if (isLocalRequest(request, env) && request.headers.get('X-Turnstile-Token') === 'local-development') return;
   const token = request.headers.get('X-Turnstile-Token');
   if (!env.TURNSTILE_SECRET_KEY) throw new ApiError(503, 'CHALLENGE_UNAVAILABLE', 'The security check is unavailable. Try again later.');

@@ -53,6 +53,11 @@ describe('Worker admission and private read contracts', () => {
     const result = await worker.fetch(request('/api/games', cookie, { id, format: 'blitz' }, { Origin: 'https://unrelated.example' }), env);
     expect(result.status).toBe(403);
     expect(await env.GAME.get(env.GAME.idFromName(id)).status()).toBeNull();
+    for (const path of ['/api/account/complete', '/api/account/export', '/api/account/close', '/api/reports', '/api/appeals', '/api/admin/decisions']) {
+      const denied = await worker.fetch(request(path, cookie, {}, { Origin: 'https://unrelated.example' }), env);
+      expect(denied.status, path).toBe(403);
+      expect(await denied.json(), path).toMatchObject({ error: 'INVALID_ORIGIN' });
+    }
   });
 
   it('does not let a third player claim an occupied invitation', async () => {
@@ -96,6 +101,31 @@ describe('Worker admission and private read contracts', () => {
     }
     const retry = await worker.fetch(request('/api/admin/operations/maintenance', '', {}), env);
     expect([401, 403]).toContain(retry.status);
+  });
+
+  it('redirects other hosts to the canonical origin and never to a host named in the path', async () => {
+    const other = 'http://127.0.0.1:8787';
+    const page = await worker.fetch(new Request(`${other}/play/?game=1`), env);
+    expect(page.status).toBe(308);
+    expect(page.headers.get('Location')).toBe(`${origin}/play/?game=1`);
+    const smuggled = await worker.fetch(new Request(`${other}//evil.example/x?y=1`), env);
+    expect(smuggled.status).toBe(308);
+    expect(new URL(smuggled.headers.get('Location')!).origin).toBe(origin);
+  });
+
+  it('applies the owner gate and private headers to every spelling of an admin or account page', async () => {
+    for (const path of ['/%61dmin/', '/%61dmin/index.html', '//admin/', '/admin%2f', '/admin.html', '/Admin/']) {
+      const denied = await worker.fetch(request(path), env);
+      expect(denied.status, path).toBe(403);
+      expect(await denied.json()).toMatchObject({ error: 'ADMIN_REQUIRED' });
+    }
+    for (const path of ['/account/', '/%61ccount/', '//account/', '/account.html']) {
+      const page = await worker.fetch(request(path), env);
+      expect(page.status, path).toBe(200);
+      expect(page.headers.get('Cache-Control'), path).toBe('no-store');
+      expect(page.headers.get('X-Robots-Tag'), path).toContain('noindex');
+      await page.body?.cancel();
+    }
   });
 
   it('keeps account recovery pages private and uses the configured local socket origin', async () => {
@@ -153,6 +183,22 @@ describe('Worker admission and private read contracts', () => {
     expect(connected.headers.get('Content-Security-Policy')).toContain("frame-ancestors 'none'");
     connected.webSocket!.accept();
     connected.webSocket!.close(1000, 'Test complete');
+  });
+
+  it('gives the private Game binding the seat identity but never the browser identity or session cookie', async () => {
+    const cookie = await account();
+    const id = crypto.randomUUID();
+    await worker.fetch(request('/api/games', cookie, { id, format: 'blitz' }), env);
+    const me = await (await worker.fetch(request('/api/me', cookie), env)).json() as { id: string };
+    let forwarded: Headers | undefined;
+    const stub = { fetch: async (internal: Request) => { forwarded = internal.headers; return new Response('ok'); } };
+    const bindings = { ...env, GAME: { idFromName: (name: string) => name, get: () => stub } } as unknown as Env;
+    const connect = request(`/api/games/${id}/connect`, cookie, undefined, { Upgrade: 'websocket', 'x-chess-actor': JSON.stringify({ id: 'forged' }) });
+    expect((await worker.fetch(connect, bindings)).status).toBe(200);
+    expect(forwarded!.get('Cookie')).toBeNull();
+    const actor = JSON.parse(forwarded!.get('x-chess-actor')!);
+    expect(actor.id).toBe(me.id);
+    expect(actor).not.toHaveProperty('email');
   });
 
   it('limits malformed writes and unknown connection IDs before their route-specific work', async () => {

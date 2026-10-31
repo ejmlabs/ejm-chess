@@ -97,7 +97,8 @@ describe('native D1 player accounts', () => {
 
   it('charges failed signup work, rejects stopped signup before hashing, and keeps existing signin available', async () => {
     const created = await account();
-    const guarded = { ...env, MONTHLY_SIGNUP_LIMIT: '1000' };
+    // A distinct env object gets its own Better Auth instance, so the spy cannot leak into other tests.
+    const guarded = { ...env };
     const native = vi.spyOn(createAuth(guarded), 'handler');
     const originalControl = (await budgetStatus(guarded)).control;
     try {

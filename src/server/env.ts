@@ -1,19 +1,15 @@
 import type { Game } from './game';
 import type { Competition } from './competition';
 import type { StockfishAnalyzer } from './analysis';
-import type { BudgetEnv } from './budget';
+import type { AuthEnv } from './auth';
+import type { BudgetWebhookEnv } from './budget-webhook';
+import type { ProductionResourceEnv } from './production-resources';
 
-export interface Env extends BudgetEnv {
+/** Each module declares the bindings it reads. Only bindings no single module owns are declared here. */
+export interface Env extends AuthEnv, BudgetWebhookEnv, ProductionResourceEnv {
   ASSETS: Fetcher;
-  DB: D1Database;
   GAME: DurableObjectNamespace<Game>;
   COMPETITION: DurableObjectNamespace<Competition>;
-  AUTH_SECRET: string;
-  AUTH_BASE_URL: string;
-  BUDGET_STOP_WEBHOOK_SECRET?: string;
-  LOCAL_DEV?: string;
-  PRODUCTION_RESOURCE_IDS?: string;
-  OPERATION_MODE?: string;
   TOURNAMENTS_ENABLED?: string;
   ARENAS_ENABLED?: string;
   ARENA_ENTRANT_LIMIT?: string;
@@ -22,20 +18,11 @@ export interface Env extends BudgetEnv {
   ARENA_GAME_ID_LIMIT?: string;
   ARENA_AUTHORITY_BYTE_LIMIT?: string;
   GAME_RETIREMENT_MODE?: string;
-  RANKED_ENABLED?: string;
   RANKED_GAME_LIMIT?: string;
   RANKED_QUEUE_LIMIT?: string;
   RANKED_RETAINED_GAME_LIMIT?: string;
-  CASUAL_GAME_LIMIT?: string;
-  CASUAL_GAME_ID_LIMIT?: string;
   AI_ENABLED?: string;
-  TURNSTILE_SECRET_KEY?: string;
   TURNSTILE_SITE_KEY?: string;
-  EMAIL?: { send(message: { from: string; to: string[]; subject: string; text: string }): Promise<unknown> };
-  EMAIL_FROM?: string;
-  CF_ACCESS_TEAM_DOMAIN?: string;
-  CF_ACCESS_AUD?: string;
-  OWNER_EMAILS?: string;
   ANALYSIS_QUEUE?: Queue;
   ANALYZER?: DurableObjectNamespace<StockfishAnalyzer>;
   ANALYSIS_ENABLED?: string;
@@ -43,7 +30,7 @@ export interface Env extends BudgetEnv {
   ANALYSIS_DEAD_LETTER_QUEUE?: Queue;
 }
 
-/** The browser engine needs no provider credential. Explicit false remains a kill switch. */
+/** Computer practice runs in the browser and needs no provider credential. Only exact `true` enables it. */
 export function aiEnabled(env: Pick<Env, 'AI_ENABLED'>): boolean {
   return env.AI_ENABLED === 'true';
 }

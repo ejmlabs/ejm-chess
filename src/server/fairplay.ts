@@ -1,5 +1,5 @@
 import { expireRestrictions, type Actor, type AuthEnv } from './auth';
-import { ApiError, jsonResponse, readJson, requireAdmin, requireSameOrigin, verifyTurnstile } from './security';
+import { ApiError, jsonResponse, readJson, requireAdmin, verifyTurnstile } from './security';
 
 export const APPEAL_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 export const EVIDENCE_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
@@ -423,7 +423,6 @@ export async function fairPlayHandler(request: Request, env: AuthEnv, actor: Act
   const path = new URL(request.url).pathname;
   if (!path.startsWith('/api/admin/') && !['/api/reports', '/api/appeals', '/api/me/fair-play'].includes(path)) return null;
   if (!actor) throw new ApiError(401, 'SIGN_IN_REQUIRED', 'Sign in to continue.');
-  if (request.method !== 'GET') requireSameOrigin(request, env);
   if (path.startsWith('/api/admin/')) {
     await requireAdmin(request, env, actor);
     if (path === '/api/admin/cases' && request.method === 'GET') return adminCases(request, env);
