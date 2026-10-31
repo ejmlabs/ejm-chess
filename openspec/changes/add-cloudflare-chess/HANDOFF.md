@@ -154,10 +154,10 @@ closed to the public:
 
 ### Configuration and shared UI notes
 
-- Matching `ejm-ui` source for chess contracts remains local branch
-  `wip/preserve-all-20261025` in the sibling `ejm-ui` checkout. Publish discovery
-  and Studio listing only after public opening is approved; do not merge that
-  branch to `ejm-ui` main solely for the protected canary.
+- Matching `ejm-ui` source for chess contracts is published on branch
+  `codex/chess-public-contracts` at `d476d1c` (PR #51, 2026-10-31), not yet on
+  `main`. Publish discovery and Studio listing only after public opening is
+  approved.
 - Local production `wrangler.jsonc` (gitignored) is reconstructed with
   `env.local` for Worker tests and canary deploy. Only
   `wrangler.recovery-drill.jsonc` is still needed and absent from this checkout;

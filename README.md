@@ -12,10 +12,10 @@ shared ejm-ui design, including account, replay and private review workflows.
 > is in [live-ready prep](docs/live-ready-prep.md). A clean checkout still needs
 > the matching shared UI source and reviewed private configuration:
 >
-> - The matching shared UI source, checked out as `../ejm-ui` (`@ejm/*` packages
->   are `file:` dependencies). It must provide `@ejm/ui/components/Chessboard` and
->   a `useSearch` export from `@ejm/ssg`; without them typecheck reports two
->   errors (`src/client/Board.tsx`, `src/pages/Play.tsx`) and the build fails.
+> - The shared UI source, checked out as `../ejm-ui` (`@ejm/*` packages are
+>   `file:` dependencies), on branch `codex/chess-public-contracts` at `d476d1c`
+>   or later. That published commit provides `@ejm/ui/components/Chessboard` and
+>   the `useSearch` export from `@ejm/ssg` that `src/pages/Play.tsx` needs.
 > - The private Worker configurations (`wrangler.jsonc`,
 >   `wrangler.recovery-drill.jsonc`), which are git-ignored. Worker tests, the
 >   Worker dry run and recovery tests cannot run without them. They also supply `PRODUCTION_RESOURCE_IDS`, the
@@ -72,9 +72,10 @@ Known limits:
 
 Use Node 24. The repository declares public `@ejm/*` packages through portable
 sibling `file:../ejm-ui/packages/<package>` dependencies in the manifest and
-lockfile. Use the matching retained shared source described in the
+lockfile. Check out `ejm-ui` branch `codex/chess-public-contracts` at `d476d1c`
+or later beside this repository; see the
 [source handoff](docs/source-handoff.md#shared-ui-dependency). A package version
-alone does not identify the unpublished owner changes this source consumed:
+alone does not identify that commit:
 
 ```text
 workspace/

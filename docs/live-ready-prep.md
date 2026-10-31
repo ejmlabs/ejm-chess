@@ -43,7 +43,7 @@ configuration is in [config examples](../config-examples/README.md).
 
 | Area | OpenSpec | Still needs live |
 | --- | --- | --- |
-| Shared UI contracts | **1.3**, **1.5** checked; `useSearch` unpublished | Publish (step 1) |
+| Shared UI contracts | **1.3**, **1.5** checked; published on `codex/chess-public-contracts` at `d476d1c` | Pin that commit (step 1); accessibility follow-up patch optional |
 | Ranked, privacy and ops docs | **4.5**, **6.2**, **6.3** checked | Two-session verify (step 4); mail, alert, cron, stop readback (step 5) |
 | ejm-ui discovery draft | **7.3a** checked (`discoverable: false`) | Enable and Studio publish (step 8) |
 | Player checklist, ranked, arena and tournament open | **3.6**, **7.1** open; **7.2** waits on them and on step 5 | Steps 3 to 7 |
@@ -110,26 +110,26 @@ Run from the product root with Node 24. `--env ''` selects the production
 config. Read-only commands come first in each block. A failed step stops the
 sequence. Keep its receipts.
 
-### 1. Publish the ejm-ui chess contracts (1.5)
+### 1. Pin the published ejm-ui chess contracts (1.5)
 
-`useSearch` from `@ejm/ssg` (used by `src/pages/Play.tsx`) is in no pushed
-ejm-ui branch. Remote `codex/chess-public-contracts` has every other chess
-contract. The owner's local `wip/preserve-all-20261025` must be pushed and
-published before any release build.
+Every chess contract, including `useSearch` from `@ejm/ssg`, the centred
+`GameWorkspace` and the themed board, is published on `ejm-ui` branch
+`codex/chess-public-contracts` at `d476d1c` (PR #51). It is not on `ejm-ui`
+`main` yet. A follow-up patch with five shared accessibility fixes (board
+labels, coordinate and danger-button contrast, `GameClock` timer role and a
+non-colour low-time cue) applies cleanly on that commit; ship it first if you
+want those fixes at launch.
 
 ```sh
 cd ../ejm-ui
-git status --short && git branch --show-current
-git grep -n useSearch -- packages/ssg/src
-git fetch origin && git log --oneline origin/main..HEAD && git branch -r --contains HEAD
-# change
-git push origin wip/preserve-all-20261025        # then PR, review, merge to main
-git switch main && git pull --ff-only && git rev-parse HEAD
+git fetch origin && git switch codex/chess-public-contracts && git pull --ff-only
+git merge-base --is-ancestor d476d1c HEAD && git status --short && git rev-parse HEAD
 npm ci && npm run build
 ```
 
-**Pass:** ejm-ui is clean at a commit on `origin/main`; its SHA is recorded.
-**Stop:** unpushed or dirty shared source. Nothing is deployed yet.
+**Pass:** ejm-ui is clean at `d476d1c` or a later commit on that branch (or on
+`main` after a merge); its SHA is recorded. **Stop:** a dirty or unpushed
+shared source. Nothing is deployed yet.
 
 ### 2. Build
 
