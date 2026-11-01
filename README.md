@@ -1,6 +1,6 @@
 # Chess by ejmlabs
 
-Chess by ejmlabs is a multiplayer chess game built on Cloudflare. It uses a
+Chess by ejmlabs is a multiplayer chess game that runs on Cloudflare. It uses a
 server to manage games, legal moves, clocks and results. The source also
 includes computer practice, game replays and competition features.
 
@@ -23,9 +23,9 @@ The source includes:
   the ranked launch gates.
 - Unrated round-robin tournaments and timed arenas, subject to release checks.
 
-New games require an account. A recovery email is optional and is used only for
-verification and password recovery. Without one, a lost password cannot be
-reset by email. See [accounts](docs/accounts.md) and
+New games require an account. A recovery email is optional. The app uses it only
+for verification and password recovery. Without one, you cannot reset a lost
+password by email. See [accounts](docs/accounts.md) and
 [computer practice](docs/ai-opponents.md).
 
 The app uses React and TypeScript, the shared [ejm-ui](https://github.com/ejmlabs/ejm-ui)
@@ -47,7 +47,7 @@ npm --prefix ../ejm-ui ci --ignore-scripts
 npm ci --ignore-scripts
 ```
 
-The revision is recorded in [`.github/ui-source.json`](.github/ui-source.json).
+[`.github/ui-source.json`](.github/ui-source.json) records the revision.
 After setting up the local bindings, follow the
 [local preview steps](docs/operations.md#local-preview) to set a development
 secret and apply migrations, then run:
