@@ -1,4 +1,4 @@
-import { csp, directives } from '@ejm/site/headers';
+import { directives } from '@ejm/site/headers';
 import { chessHeaders } from '../policy';
 import { FORMATS, type Actor as GameActor, type Color, type Pool } from '../shared/protocol';
 import { isGameId } from '../shared/gamePath';
@@ -84,14 +84,12 @@ function secure(response: Response, request: Request, env: Env, privateResponse 
   const result = response.status === 101
     ? new Response(null, { status: 101, headers: response.headers, webSocket: response.webSocket })
     : new Response(response.body, response);
-  let policy = csp(chessHeaders);
-  if (isLocalRequest(request, env)) {
-    const local = directives(chessHeaders);
-    delete local['upgrade-insecure-requests'];
-    local['connect-src'].push(canonicalOrigin(env).replace(/^http/, 'ws'));
-    policy = Object.entries(local).map(([name, sources]) => [name, ...sources].join(' ')).join('; ');
-  }
-  result.headers.set('Content-Security-Policy', policy);
+  // Sockets connect to the configured origin, so staging and local hosts get their own source.
+  const policy = directives(chessHeaders);
+  const socket = canonicalOrigin(env).replace(/^http/, 'ws');
+  if (!policy['connect-src'].includes(socket)) policy['connect-src'].push(socket);
+  if (isLocalRequest(request, env)) delete policy['upgrade-insecure-requests'];
+  result.headers.set('Content-Security-Policy', Object.entries(policy).map(([name, sources]) => [name, ...sources].join(' ')).join('; '));
   result.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   result.headers.set('Referrer-Policy', 'no-referrer');
   result.headers.set('X-Content-Type-Options', 'nosniff');

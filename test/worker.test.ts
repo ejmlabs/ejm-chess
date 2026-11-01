@@ -159,6 +159,17 @@ describe('Worker admission and private read contracts', () => {
     await response.body?.cancel();
   });
 
+  it('serves staging on its own origin with its own socket source', async () => {
+    const staging = 'https://staging.chess.ejmlabs.com';
+    const response = await worker.fetch(new Request(`${staging}/api/config`), { ...env, AUTH_BASE_URL: staging, LOCAL_DEV: 'false' });
+    expect(response.status).toBe(200);
+    const connect = response.headers.get('Content-Security-Policy')!.split('; ').find(value => value.startsWith('connect-src '))!.split(' ');
+    expect(connect).toContain('wss://staging.chess.ejmlabs.com');
+    expect(response.headers.get('Content-Security-Policy')).toContain('upgrade-insecure-requests');
+    const redirect = await worker.fetch(new Request('https://chess.ejmlabs.com/play/'), { ...env, AUTH_BASE_URL: staging, LOCAL_DEV: 'false' });
+    expect(redirect.headers.get('Location')).toBe(`${staging}/play/`);
+  });
+
   it('uses the browser-engine practice gate and rejects disabled or forged computer admission before taking a seat', async () => {
     const config = await worker.fetch(request('/api/config'), { ...env, AI_ENABLED: 'true' });
     expect(await config.json()).toMatchObject({ ai: true, ranked: false });

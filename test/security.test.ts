@@ -10,6 +10,11 @@ describe('browser trust boundaries', () => {
     await expect(verifyTurnstile(new Request('http://localhost:8787/api/auth/sign-up/email', { headers }), local, 'sign-up')).resolves.toBeUndefined();
     await expect(verifyTurnstile(new Request('https://chess.ejmlabs.com/api/auth/sign-up/email', { headers }), local, 'sign-up')).rejects.toMatchObject({ code: 'CHALLENGE_UNAVAILABLE' });
     expect(() => canonicalOrigin({ AUTH_BASE_URL: 'https://untrusted.example', LOCAL_DEV: 'true' })).toThrow();
+    expect(canonicalOrigin({ AUTH_BASE_URL: 'https://chess.ejmlabs.com' })).toBe('https://chess.ejmlabs.com');
+    expect(canonicalOrigin({ AUTH_BASE_URL: 'https://staging.chess.ejmlabs.com' })).toBe('https://staging.chess.ejmlabs.com');
+    for (const other of ['https://evil.chess.ejmlabs.com', 'http://staging.chess.ejmlabs.com', 'https://staging.chess.ejmlabs.com.evil.example']) {
+      expect(() => canonicalOrigin({ AUTH_BASE_URL: other })).toThrow();
+    }
     expect(() => requireSameOrigin(new Request('http://localhost:8787/api/report', { headers: { Origin: 'https://attacker.example' } }), local)).toThrow();
   });
 

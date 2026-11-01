@@ -65,7 +65,7 @@ origin in each.
 | `DB` | D1 auth, active-seat, and fair play records |
 | `GAME` | Per-game SQLite Durable Object namespace |
 | `COMPETITION` | Serialized queue and rating owner |
-| `AUTH_BASE_URL` | Exact canonical origin; only explicit loopback mode permits another host |
+| `AUTH_BASE_URL` | `https://chess.ejmlabs.com`, or `https://staging.chess.ejmlabs.com` for staging; only explicit loopback mode permits another host |
 | `AUTH_SECRET` | Better Auth secret, at least 32 characters |
 | `LOCAL_DEV` | Explicit loopback development only; never enable on the public host |
 | `OPERATION_MODE` | `unattended` by default; only exact `reviewed` enables new human case decisions |

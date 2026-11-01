@@ -109,16 +109,23 @@ approved secret store and out of files delivered with the site.
 
 ## Prepare the private canonical host
 
-The only production `AUTH_BASE_URL` is `https://chess.ejmlabs.com`. The
-`canonicalOrigin` guard rejects other production origin configurations.
-Noncanonical API requests and writes fail; noncanonical page GET/HEAD requests
-redirect to the canonical host. A different preview hostname is not a working
-private deployment environment for this product.
+The production `AUTH_BASE_URL` is `https://chess.ejmlabs.com`. The
+`canonicalOrigin` guard accepts only that origin and the shared pipeline's
+staging origin, `https://staging.chess.ejmlabs.com`. Each deployment serves
+exactly one of them: noncanonical API requests and writes fail, and
+noncanonical page GET/HEAD requests redirect to the configured host. The
+Content-Security-Policy socket source follows the configured origin. Any other
+preview hostname is not a working deployment environment for this product.
+
+A staging deployment needs its own `AUTH_BASE_URL`, D1 database, secrets and
+Access protection, and a Turnstile widget whose hostnames include the staging
+host, because sign-up rejects a token issued for another hostname.
 
 Before attaching the domain, configure and read back Access protection for the
 **entire canonical host**, including static pages, auth callbacks, HTTP APIs,
 and WebSocket upgrades. Permit only the approved canary identities. Verify the
-edge policy before making the first canonical route reachable. Keep:
+edge policy before making the first canonical route reachable. Protect a staging
+host the same way. Keep:
 
 ```jsonc
 "workers_dev": false,
