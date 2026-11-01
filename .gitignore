@@ -23,3 +23,5 @@ coverage/
 /wrangler.recovery-drill.jsonc
 # Local deploy records from scripts/deploy-canary.mjs stay private.
 /.deploy-records/
+# Worker bundle written by the shared deploy pipeline.
+/worker-dist/
