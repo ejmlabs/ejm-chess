@@ -71,14 +71,14 @@ export default function Admin() {
     <SectionHead purpose="application" as="h1" kicker="Private fair-play review" title="Review the evidence.">
       <Text as="p" variant="muted">Owner access and a verified account are required. Accuracy, shared networks, focus changes, and report counts cannot establish outside assistance.</Text>
     </SectionHead>
-    {error && <StateBlock kind="error" message={error} density="compact" />}{message && <div role="status"><Status status="info" label={message} /></div>}
+    {error && <StateBlock kind="error" message={error} />}{message && <div role="status"><Status status="info" label={message} /></div>}
     <AppFlow>
       <AppFlow as="section" aria-label="Cases">
         <AppGroup>
           <AppHeading as="h2">Cases</AppHeading>
-          {!cases.length && !error && <StateBlock kind="empty" message="No cases on this page." density="compact" />}
+          {!cases.length && !error && <StateBlock kind="empty" message="No cases on this page." />}
           {cases.length > 0 && <AppFlow as="ul">{cases.map(item => <AppGroup as="li" key={item.id}>
-            <Button variant="link" density="compact" disabled={busy} onClick={() => void open(item.id)}>{item.status.replaceAll('_', ' ')} · {item.gameId.slice(0, 8)}</Button>
+            <Button variant="link" disabled={busy} onClick={() => void open(item.id)}>{item.status.replaceAll('_', ' ')} · {item.gameId.slice(0, 8)}</Button>
             <Text variant="muted">{new Date(item.updatedAt).toLocaleDateString()}</Text><Rule />
           </AppGroup>)}</AppFlow>}
         </AppGroup>
@@ -96,7 +96,7 @@ export default function Admin() {
         <AppFlow as="section">
           <AppHeading as="h3">Evidence</AppHeading>
           <AppFlow>
-            {!review.evidence.length && <StateBlock kind="empty" message="No retained evidence is available; a restriction needs corroborated server evidence across more than one game." density="compact" />}
+            {!review.evidence.length && <StateBlock kind="empty" message="No retained evidence is available; a restriction needs corroborated server evidence across more than one game." />}
             {review.evidence.map(item => <AppGroup key={item.id}><Rule /><Checkbox checked={evidenceIds.includes(item.id)} onCheckedChange={checked => { setEvidenceIds(select(evidenceIds, item.id, checked === true)); changed(); }} label={<Text>{item.kind.replaceAll('_', ' ')} · {item.game_id}</Text>} /><Text as="p" variant="muted">{item.source_ref} · {item.source_version}</Text><AppPre>{JSON.stringify(JSON.parse(item.summary_json), null, 2)}</AppPre><Text variant="muted">Retained through {new Date(Math.max(item.expires_at, item.hold_until)).toLocaleDateString()}</Text></AppGroup>)}
             <AppForm onSubmit={event => { event.preventDefault(); if (busy) return; setBusy(true); setError(''); void api(`/api/admin/cases/${encodeURIComponent(review.case.id)}/evidence`, { gameId: relatedGame }).then(async () => { setReview(await api<Review>(`/api/admin/cases/${encodeURIComponent(review.case.id)}`)); setRelatedGame(''); changed(); setMessage('Server game evidence attached.'); }).catch(reason => setError(reason.message)).finally(() => setBusy(false)); }}>
               <AppField><label htmlFor="related-game">Add a completed game involving this player</label><Input id="related-game" required maxLength={100} value={relatedGame} onChange={event => setRelatedGame(event.target.value.trim())} /></AppField>
@@ -107,17 +107,17 @@ export default function Admin() {
         <AppFlow as="section">
           <AppHeading as="h3">Recorded games</AppHeading>
           <AppFlow>
-            {review.games.length === 0 && <StateBlock kind="empty" message="No retained game references." density="compact" />}
-            {review.games.map(game => <Disclosure key={game.id} summary={<>{game.whiteName} vs {game.blackName ?? 'No opponent'} · {game.id.slice(0, 8)}</>}><AppGroup><Text as="p" variant="muted">{game.plies} plies · {game.reason.replaceAll('-', ' ')} · result version {game.resultVersion} · {game.rulesVersion}</Text><Suspense fallback={<StateBlock kind="loading" message="Loading replay." density="compact" skeleton={false} />}><GameReplay pgn={game.pgn} /></Suspense></AppGroup></Disclosure>)}
+            {review.games.length === 0 && <StateBlock kind="empty" message="No retained game references." />}
+            {review.games.map(game => <Disclosure key={game.id} summary={<>{game.whiteName} vs {game.blackName ?? 'No opponent'} · {game.id.slice(0, 8)}</>}><AppGroup><Text as="p" variant="muted">{game.plies} plies · {game.reason.replaceAll('-', ' ')} · result version {game.resultVersion} · {game.rulesVersion}</Text><Suspense fallback={<StateBlock kind="loading" message="Loading replay." skeleton={false} />}><GameReplay pgn={game.pgn} /></Suspense></AppGroup></Disclosure>)}
           </AppFlow>
         </AppFlow>
         <AppFlow as="section">
           <AppHeading as="h3">Appeals</AppHeading>
-          <AppFlow>{!review.appeals.length && <StateBlock kind="empty" message="No appeals." density="compact" />}{review.appeals.map(item => <AppGroup as="blockquote" key={item.id}><Text as="strong" variant="strong">{item.status}</Text><Text as="p">{item.reason}</Text></AppGroup>)}</AppFlow>
+          <AppFlow>{!review.appeals.length && <StateBlock kind="empty" message="No appeals." />}{review.appeals.map(item => <AppGroup as="blockquote" key={item.id}><Text as="strong" variant="strong">{item.status}</Text><Text as="p">{item.reason}</Text></AppGroup>)}</AppFlow>
         </AppFlow>
         <AppFlow as="section">
           <AppHeading as="h3">Previous decisions</AppHeading>
-          {!review.decisions.length && <StateBlock kind="empty" message="No decision recorded." density="compact" />}
+          {!review.decisions.length && <StateBlock kind="empty" message="No decision recorded." />}
           {review.decisions.map(item => <Text as="p" key={item.id}>{item.outcome}: {item.reason}</Text>)}
         </AppFlow>
         <AppFlow as="section">

@@ -55,29 +55,29 @@ export default function Leaderboard() {
     <Rule />
     <AppActions role="group" aria-label="Leaderboard time control">
       {(['blitz', 'rapid'] as const).map(format => <Button key={format}
-        variant={pool === format ? 'primary' : 'ghost'} density="compact"
+        variant={pool === format ? 'primary' : 'ghost'}
         aria-pressed={pool === format} onClick={() => choosePool(format)}>
         {format === 'blitz' ? 'Blitz' : 'Rapid'} {FORMATS[format].label}
       </Button>)}
     </AppActions>
     <Rule />
     <AppFlow aria-live="polite" aria-busy={state.status === 'loading'}>
-      {state.status === 'loading' && <StateBlock kind="loading" message="Loading the leaderboard." density="compact" />}
-      {state.status === 'error' && <StateBlock kind="error" message="The leaderboard could not be loaded." action={{ label: 'Retry' }} onAction={() => setAttempt(value => value + 1)} density="compact" />}
+      {state.status === 'loading' && <StateBlock kind="loading" message="Loading the leaderboard." />}
+      {state.status === 'error' && <StateBlock kind="error" message="The leaderboard could not be loaded." action={{ label: 'Retry' }} onAction={() => setAttempt(value => value + 1)} />}
       {state.status === 'ready' && <>
         {!state.ranked && <Status status="info" label="Ranked play is closed." />}
         {state.page.entries.length === 0
-          ? <AppFlow><StateBlock kind="empty" message="No players qualify for this view yet." density="compact" /><AppActions>{state.ranked && <Button asChild><Link href={`/play/?mode=ranked&format=${pool}`}>Play ranked</Link></Button>}<Link href="/rules/">How to qualify</Link></AppActions></AppFlow>
+          ? <AppFlow><StateBlock kind="empty" message="No players qualify for this view yet." /><AppActions>{state.ranked && <Button asChild><Link href={`/play/?mode=ranked&format=${pool}`}>Play ranked</Link></Button>}<Link href="/rules/">How to qualify</Link></AppActions></AppFlow>
           : <Table label="Leaderboard ratings" caption={`${pool === 'blitz' ? 'Blitz' : 'Rapid'} ratings`}
             columns={[{ key: 'player', label: 'Player' }, { key: 'rating', label: 'Rating', align: 'right' }, { key: 'games', label: 'Games', align: 'right' }]}
             rows={state.page.entries.map(player => ({ id: player.id, player: <Link href={`/player/?id=${encodeURIComponent(player.id)}`}>{player.name}</Link>, rating: Math.round(player.rating), games: player.games }))}
-            rowHeader="player" rowKey="id" truncate={false} density="compact" />}
+            rowHeader="player" rowKey="id" truncate={false} />}
         {state.page.updatedAt !== null && <Text as="p" variant="muted">
           Updated <time dateTime={new Date(state.page.updatedAt).toISOString()}>{dateFormat.format(state.page.updatedAt)}</time>.
         </Text>}
         {(cursor || state.page.nextCursor) && <AppActions>
-          {cursor && <Button variant="ghost" density="compact" onClick={() => setCursor(null)}>First page</Button>}
-          {state.page.nextCursor && <Button variant="ghost" density="compact"
+          {cursor && <Button variant="ghost" onClick={() => setCursor(null)}>First page</Button>}
+          {state.page.nextCursor && <Button variant="ghost"
             onClick={() => setCursor(state.page.nextCursor)}>Next page</Button>}
         </AppActions>}
       </>}

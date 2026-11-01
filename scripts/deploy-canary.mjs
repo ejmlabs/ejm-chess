@@ -4,7 +4,7 @@
 //   node scripts/deploy-canary.mjs [--yes]   full run; --yes skips the typed confirmation
 // Wrangler reads its credential from the inherited environment, which is never printed.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
@@ -13,7 +13,8 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const uiRoot = join(root, '..', 'ejm-ui');
 const wrangler = join(root, 'node_modules', '.bin', 'wrangler');
 const ORIGIN = 'https://chess.ejmlabs.com';
-const UI_COMMIT = '5a88e6a';
+// The ejm-ui commit this product builds against, the same pin CI reads.
+const UI_COMMIT = JSON.parse(readFileSync(new URL('../.github/ui-source.json', import.meta.url), 'utf8')).revision;
 const PENDING = ['0016_cron_heartbeats.sql']; // the one migration this release applies
 const CRONS = ['* * * * *', '15 3 * * *'];
 const DURABLE = { GAME: 'Game', COMPETITION: 'Competition' };
@@ -98,8 +99,8 @@ async function preflight() {
   if (git(root, 'merge-base', '--is-ancestor', 'HEAD', '@{u}').status !== 0) fail('HEAD is not on its upstream branch (as of the last fetch).', 'Push the branch to its upstream, then re-run.');
   ok('HEAD is pushed to its upstream');
   checkRepo(uiRoot, 'ejm-ui');
-  if (git(uiRoot, 'merge-base', '--is-ancestor', UI_COMMIT, 'HEAD').status !== 0) fail(`ejm-ui does not contain ${UI_COMMIT}.`, 'In ../ejm-ui: git fetch origin && git switch main && git pull --ff-only.');
-  ok(`ejm-ui contains ${UI_COMMIT}`);
+  if (git(uiRoot, 'rev-parse', 'HEAD').stdout.trim() !== UI_COMMIT) fail(`ejm-ui is not at the pinned ${UI_COMMIT.slice(0, 7)} (.github/ui-source.json).`, `In ../ejm-ui: git fetch origin && git checkout ${UI_COMMIT}.`);
+  ok(`ejm-ui is at the pinned ${UI_COMMIT.slice(0, 7)}`);
   const config = await loadConfig();
   const problems = validateConfig(config);
   if (problems.length) fail(`wrangler.jsonc does not match the production values:\n    ${problems.join('\n    ')}`, 'Edit the private wrangler.jsonc (docs/live-ready-prep.md#production-values).');

@@ -193,7 +193,7 @@ const guides: Record<string, GuideContent> = server ? {
       <p>Decisions, public decision reasons, minimal case audit, completed PGNs, game/player IDs, historical names, tournament records and immutable rating/correction history remain stored. Proved eligible unrated game payloads can retire after one hour. Retirement preserves history and private replay access; it does not promise unlimited storage or close an account.</p>
       <p>In <Link href="/account/">Account</Link>, confirm your password to download your profile, own reports, appeals, notices and game metadata. Each JSON page contains at most 50 records and 256 KiB. Pages can reflect different moments. Passwords, session/reset tokens, other reporters' identities, reviewer notes and investigation evidence are excluded. Keep downloads private and download wanted PGNs before closure.</p>
       <p>To close an account, finish active games, leave events, confirm your password and type CLOSE. Closure removes credentials, sessions, recovery email and current profile details in one database transaction. A neutral account label, opaque player ID and minimal closure receipt remain. Old sign-in and reset requests cannot recreate access. Historical competition records remain, so closure is not full anonymization. Recovery email is not required.</p>
-      <p>Sessions last seven days; expired sessions receive bounded daily cleanup. Reset/verification secrets last 15 minutes and become eligible for cleanup after expiry plus one day. Request windows become eligible after one day, released seats after 30 days, and email budget receipts after 62 days. Native recovery history rolls over 30 days on the verified Paid D1 and SQLite Durable Object backends. It is not an independent downloaded backup.</p>
+      <p>Sessions last seven days; expired sessions are removed by bounded cleanup every minute. Reset/verification secrets last 15 minutes and become eligible for cleanup after expiry plus one day. Request windows become eligible after one day, released seats after 30 days, and email budget receipts after 62 days. Native recovery history rolls over 30 days on the verified Paid D1 and SQLite Durable Object backends. It is not an independent downloaded backup.</p>
       <p>Before an approved restore, preserve later closure receipts outside its targets and reapply closures before authentication or admission reopens. If that set is uncertain, keep access closed. A private SQL export needs its own approval, destination, access and expiry. This policy requires no production account/session export. Raw synthetic drill files are deleted after acceptance within 30 days; sanitized reports and hashes remain.</p>
     </>,
   },
@@ -232,8 +232,8 @@ const guides: Record<string, GuideContent> = server ? {
       <AppHeading as="h2">Local development</AppHeading>
       <p>Use Node 24, install the sibling public ejm-ui packages, then install this product’s dependencies.
         The repository README and operations guide give the local commands, bindings, migration steps, and launch gates.</p>
-      <AppPre><code>{'npm ci\nnpm run typecheck\nnpm test\nnpm run build\nnpm run worker:check\nnpm run budget'}</code></AppPre>
-      <p>Run the type check, focused server tests, static build, Worker dry run, and bundle budget checks before review.
+      <AppPre><code>{'npm ci\nnpm run typecheck\nnpm test\nnpm run build\nnpm run worker:check'}</code></AppPre>
+      <p>Run the type check, focused server tests, static build and Worker dry run before review.
         Tests must protect a real rule or failure risk.</p>
       <AppHeading as="h2">Automatic operation</AppHeading>
       <p>Competition schedules bounded hourly, daily, and weekly tournaments. Durable game identities and result receipts prevent duplicate pairings or event points. Cron recovers scheduled work and retries outboxes. Timeouts end with a win or a draw under the material rule.</p>

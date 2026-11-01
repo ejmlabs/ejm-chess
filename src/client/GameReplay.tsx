@@ -30,7 +30,7 @@ export default function GameReplay({ pgn, heading }: { pgn: string; heading?: Re
   const moves = parsed.record?.moves ?? [];
   const cursor = sameSource ? Math.min(navigation.ply, moves.length) : 0;
   const color = sameSource ? navigation.color : 'w';
-  if (!parsed.record) return <StateBlock kind="error" density="compact" message={parsed.error ?? 'This recorded game could not be replayed.'} />;
+  if (!parsed.record) return <StateBlock kind="error" message={parsed.error ?? 'This recorded game could not be replayed.'} />;
   const record = parsed.record;
   const move = moves[cursor - 1];
   function choose(ply: number) {
@@ -48,18 +48,18 @@ export default function GameReplay({ pgn, heading }: { pgn: string; heading?: Re
   return <GameWorkspace label="Recorded game" detailsLabel="Recorded players and moves" aria-describedby={helpId}
     tabIndex={0} onKeyDown={keyboard} aria-keyshortcuts="ArrowLeft ArrowRight Home End"
     board={<AppGroup>
-      <Suspense fallback={<BoardPlaceholder><StateBlock kind="loading" density="compact" skeleton={false} message="Opening the recorded board…" /></BoardPlaceholder>}>
+      <Suspense fallback={<BoardPlaceholder><StateBlock kind="loading" skeleton={false} message="Opening the recorded board…" /></BoardPlaceholder>}>
         <Board fen={move?.after ?? record.initialFen} color={color} enabled={false} readOnly onMove={() => { }} lastMove={move} premove={null} />
       </Suspense>
       <Text as="p" variant="code" role="status" aria-live="polite" aria-atomic="true">
         {move ? `${move.number}${move.color === 'w' ? '.' : '…'} ${move.san}` : 'Starting position'} · {cursor} of {moves.length} half-moves
       </Text>
       <AppActions role="group" aria-label="Replay navigation">
-        <Button variant="ghost" density="compact" disabled={!cursor} onClick={() => choose(0)}>Start</Button>
-        <Button variant="secondary" density="compact" disabled={!cursor} onClick={() => choose(cursor - 1)}>Previous</Button>
-        <Button variant="secondary" density="compact" disabled={cursor === moves.length} onClick={() => choose(cursor + 1)}>Next</Button>
-        <Button variant="ghost" density="compact" disabled={cursor === moves.length} onClick={() => choose(moves.length)}>End</Button>
-        <Button variant="ghost" density="compact" aria-pressed={color === 'b'} onClick={() => setNavigation({ source: pgn, ply: cursor, color: color === 'w' ? 'b' : 'w' })}>Flip board</Button>
+        <Button variant="ghost" disabled={!cursor} onClick={() => choose(0)}>Start</Button>
+        <Button variant="secondary" disabled={!cursor} onClick={() => choose(cursor - 1)}>Previous</Button>
+        <Button variant="secondary" disabled={cursor === moves.length} onClick={() => choose(cursor + 1)}>Next</Button>
+        <Button variant="ghost" disabled={cursor === moves.length} onClick={() => choose(moves.length)}>End</Button>
+        <Button variant="ghost" aria-pressed={color === 'b'} onClick={() => setNavigation({ source: pgn, ply: cursor, color: color === 'w' ? 'b' : 'w' })}>Flip board</Button>
       </AppActions>
     </AppGroup>}
     after={<Disclosure summary="Recorded PGN"><AppPre>{pgn}</AppPre></Disclosure>}>
@@ -69,7 +69,7 @@ export default function GameReplay({ pgn, heading }: { pgn: string; heading?: Re
     {record.ai && <Text as="p" variant="muted">{record.ai.model === STOCKFISH_BUILD ? 'Stockfish practice · Unrated' : <>AI game · Unrated{(record.ai.actualModel || record.ai.model) && <> · {record.ai.actualModel || record.ai.model}</>}</>}</Text>}
     {moves.length ? <MoveHistory items={moves.map((item, index) => ({ id: index + 1, number: item.number, color: item.color, san: item.san }))}
       label="Recorded moves" selectedId={cursor} onSelect={choose} />
-      : <StateBlock kind="empty" density="compact" message="No moves were played in this game." />}
+      : <StateBlock kind="empty" message="No moves were played in this game." />}
     <Text as="p" variant="muted" id={helpId}>Keyboard: Left and Right step through moves. Home and End jump to the start and the end.</Text>
   </GameWorkspace>;
 }

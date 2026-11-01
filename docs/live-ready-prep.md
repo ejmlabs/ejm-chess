@@ -43,7 +43,7 @@ configuration is in [config examples](../config-examples/README.md).
 
 | Area | OpenSpec | Still needs live |
 | --- | --- | --- |
-| Shared UI contracts | **1.3**, **1.5** checked; on `ejm-ui` `main` at `5a88e6a` (PRs #55, #58) | Pin that commit (step 1) |
+| Shared UI contracts | **1.3**, **1.5** checked; on `ejm-ui` `main`, pinned in `.github/ui-source.json` | Check out the pin (step 1) |
 | Ranked, privacy and ops docs | **4.5**, **6.2**, **6.3** checked | Two-session verify (step 4); mail, alert, cron, stop readback (step 5) |
 | ejm-ui discovery draft | **7.3a** checked (`discoverable: false`) | Enable and Studio publish (step 8) |
 | Player checklist, ranked, arena and tournament open | **3.6**, **7.1** open; **7.2** waits on them and on step 5 | Steps 3 to 7 |
@@ -112,20 +112,20 @@ sequence. Keep its receipts.
 
 ### 1. Pin the published ejm-ui chess contracts (1.5)
 
-Every chess contract is on `ejm-ui` `main` at `5a88e6a`: `useSearch` from
-`@ejm/ssg`, the centred `GameWorkspace`, the themed board (PR #55) and the
-shared accessibility fixes (PR #58: board names, coordinate and danger-button
-contrast, `GameClock` timer role and low-time glyph).
+Every chess contract is on `ejm-ui` `main`: `useSearch` from `@ejm/ssg`, the
+centred `GameWorkspace`, the themed board (PR #55), the shared accessibility
+fixes (PR #58) and the systemic kit (PR #59). `.github/ui-source.json` pins the
+exact revision chess builds against, the same pin CI reads.
 
 ```sh
 cd ../ejm-ui
-git fetch origin && git switch main && git pull --ff-only
-git merge-base --is-ancestor 5a88e6a HEAD && git status --short && git rev-parse HEAD
-npm ci && npm run build
+git fetch origin && git checkout "$(node -p "require('../ejm-chess/.github/ui-source.json').revision")"
+git status --short && git rev-parse HEAD
+npm ci --ignore-scripts
 ```
 
-**Pass:** ejm-ui is clean at `5a88e6a` or a later `main` commit; its SHA is
-recorded. **Stop:** a dirty or unpushed shared source. Nothing is deployed yet.
+**Pass:** ejm-ui is clean at the pinned revision. **Stop:** a dirty shared
+source. Nothing is deployed yet.
 
 ### 2. Build
 
@@ -136,7 +136,7 @@ node scripts/deploy-canary.mjs --check
 
 `--check` is read-only and uses no network. It stops at the first failure with
 the fix. It checks Node 24, a clean tree pushed to its upstream, `../ejm-ui`
-clean and containing `5a88e6a`, and the private `wrangler.jsonc` against the
+clean at the pinned revision, and the private `wrangler.jsonc` against the
 [production values](#production-values) and retired keys. Then it runs
 `npm ci`, `typecheck`, `test`, `build` (with the shared design guard) and
 `worker:check`. The manual commands are in the

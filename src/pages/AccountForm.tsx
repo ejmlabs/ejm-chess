@@ -56,8 +56,8 @@ export default function AccountForm({ view, title, config, returnTo, busy, usern
       <Challenge key={`${action}-${challengeKey}`} config={config} action={action} onToken={onToken} />
       <div><Button type="submit" disabled={busy || !token || (view === 'reset' && !resetToken)}>{busy ? 'Please wait…' : view === 'forgot' ? 'Send reset link' : view === 'reset' ? 'Save new password' : title}</Button></div>
     </AppForm>
-    {view === 'sign-in' && <div><Button variant="link" density="compact" disabled={busy} onClick={() => changeView('forgot')}>Forgot password?</Button></div>}
-    {view === 'reset' && <div><Button variant="link" density="compact" disabled={busy} onClick={() => changeView('forgot')}>Request a new reset link</Button></div>}
+    {view === 'sign-in' && <div><Button variant="link" disabled={busy} onClick={() => changeView('forgot')}>Forgot password?</Button></div>}
+    {view === 'reset' && <div><Button variant="link" disabled={busy} onClick={() => changeView('forgot')}>Request a new reset link</Button></div>}
     {(view === 'forgot' || view === 'reset') && config.local && <Text as="p" variant="muted">Email delivery is unavailable in this local preview.</Text>}
   </>;
 }

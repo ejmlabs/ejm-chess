@@ -136,13 +136,13 @@ export default function Account() {
 
   return <Page variant="application"><AppSection aria-labelledby="account-heading">
     <SectionHead purpose="application" as="h1" id="account-heading" title={accountView ? 'Your account' : titles[view]} />
-    {!loaded && <StateBlock kind="loading" density="compact" skeleton={false} message="Loading your account." />}
-    {error && <div id="account-error" ref={errorElement} tabIndex={-1}><StateBlock kind="error" density="compact" message={error} /></div>}
+    {!loaded && <StateBlock kind="loading" skeleton={false} message="Loading your account." />}
+    {error && <div id="account-error" ref={errorElement} tabIndex={-1}><StateBlock kind="error" message={error} /></div>}
     {message && <Text as="p" role="status">{message}</Text>}
     {loaded && config && <>
-      {accountView && me ? <Suspense fallback={<StateBlock kind="loading" density="compact" skeleton={false} message="Loading account settings." />}>
+      {accountView && me ? <Suspense fallback={<StateBlock kind="loading" skeleton={false} message="Loading account settings." />}>
         <AccountSession me={me} config={config} returnTo={returnTo} busy={busy} username={username} password={password} token={token} challengeKey={challengeKey} describedBy={describedBy} onUsername={setUsername} onPassword={setPassword} onToken={setToken} run={run} refreshIdentity={refreshIdentity} onMessage={setMessage} onSignedOut={() => { setMe(null); setView('sign-in'); setUsername(''); setEmail(''); }} />
-      </Suspense> : <Suspense fallback={<StateBlock kind="loading" density="compact" skeleton={false} message="Loading account controls." />}>
+      </Suspense> : <Suspense fallback={<StateBlock kind="loading" skeleton={false} message="Loading account controls." />}>
         <AccountForm view={view} title={titles[view]} config={config} returnTo={returnTo} busy={busy} username={username} email={email} password={password} token={token} resetToken={resetToken} challengeKey={challengeKey} describedBy={describedBy} hasError={Boolean(error)} changeView={changeView} onUsername={setUsername} onEmail={setEmail} onPassword={setPassword} onToken={setToken} onSubmit={submit} />
       </Suspense>}
     </>}

@@ -154,7 +154,8 @@ closed to the public:
 
 ### Configuration and shared UI notes
 
-- Matching `ejm-ui` source for chess contracts is `main` at `5a88e6a` (PRs #55
+- Matching `ejm-ui` source for chess contracts is the `main` revision pinned in
+  `.github/ui-source.json` (PRs #55
   and #58, 2026-10-31). Publish discovery and Studio listing only after public
   opening is approved.
 - Local production `wrangler.jsonc` (gitignored) is reconstructed with

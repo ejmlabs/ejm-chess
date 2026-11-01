@@ -48,32 +48,32 @@ export default function Replay() {
   return <Page variant="application"><AppFlow as="section" aria-labelledby="replay-heading">
     {state.status !== 'ready' && heading}
     <AppFlow aria-busy={state.status === 'loading'}>
-      {state.status === 'loading' && <StateBlock kind="loading" density="compact" skeleton={false} message="Loading your recorded game…" />}
+      {state.status === 'loading' && <StateBlock kind="loading" skeleton={false} message="Loading your recorded game…" />}
       {state.status === 'invalid-link' && <>
-        <StateBlock kind="error" density="compact" message="This replay link is invalid." />
-        <Button asChild variant="link" density="compact"><Link href="/history/">Choose a game from your history</Link></Button>
+        <StateBlock kind="error" message="This replay link is invalid." />
+        <Button asChild variant="link"><Link href="/history/">Choose a game from your history</Link></Button>
       </>}
       {state.status === 'signed-out' && <AppFlow>
-        <StateBlock kind="empty" density="compact" message="Sign in with the account that played this game." />
+        <StateBlock kind="empty" message="Sign in with the account that played this game." />
         <Text as="p">Legacy guest games need the original browser session.</Text>
-        <Button asChild variant="link" density="compact"><Link href="/account/">Sign in</Link></Button>
+        <Button asChild variant="link"><Link href="/account/">Sign in</Link></Button>
       </AppFlow>}
-      {state.status === 'unavailable' && <StateBlock kind="error" density="compact"
+      {state.status === 'unavailable' && <StateBlock kind="error"
         message="This completed game is not available to this account yet; its result may still be recording."
         action={{ label: 'Retry replay' }} onAction={retry} />}
-      {state.status === 'error' && <StateBlock kind="error" density="compact"
+      {state.status === 'error' && <StateBlock kind="error"
         message="Your replay could not be loaded; check your connection and try again."
         action={{ label: 'Retry replay' }} onAction={retry} />}
-      {state.status === 'too-large' && <StateBlock kind="error" density="compact" message="This replay exceeds the 1 MiB record limit; you can still download the PGN." />}
-      {state.status === 'invalid-record' && <StateBlock kind="error" density="compact" message="This recorded PGN is invalid and cannot be replayed; you can still download the source." />}
-      {state.status === 'ready' && <Suspense fallback={<StateBlock kind="loading" density="compact" skeleton={false} message="Opening your replay…" />}>
+      {state.status === 'too-large' && <StateBlock kind="error" message="This replay exceeds the 1 MiB record limit; you can still download the PGN." />}
+      {state.status === 'invalid-record' && <StateBlock kind="error" message="This recorded PGN is invalid and cannot be replayed; you can still download the source." />}
+      {state.status === 'ready' && <Suspense fallback={<StateBlock kind="loading" skeleton={false} message="Opening your replay…" />}>
         <GameReplay key={state.id} pgn={state.pgn} heading={heading} />
       </Suspense>}
     </AppFlow>
     <AppActions>
-      {'id' in state && <Button asChild variant="secondary" density="compact"><a href={gamePath(state.id, 'pgn')} download>Download PGN</a></Button>}
-      <Button asChild variant="ghost" density="compact"><Link href="/history/">Your games</Link></Button>
-      <Button asChild variant="ghost" density="compact"><Link href="/play/">Play</Link></Button>
+      {'id' in state && <Button asChild variant="secondary"><a href={gamePath(state.id, 'pgn')} download>Download PGN</a></Button>}
+      <Button asChild variant="ghost"><Link href="/history/">Your games</Link></Button>
+      <Button asChild variant="ghost"><Link href="/play/">Play</Link></Button>
     </AppActions>
     <Text as="p" variant="muted">Only the players can open this replay.</Text>
   </AppFlow></Page>;

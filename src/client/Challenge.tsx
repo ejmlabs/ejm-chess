@@ -43,5 +43,5 @@ export default function Challenge({ config, action, onToken }: { config: PublicC
     return () => { cancelled = true; if (widget) window.turnstile?.remove(widget); };
   }, [config.local, config.turnstileSiteKey, action]);
   if (config.local) return null;
-  return <><div ref={element} />{error && <StateBlock kind="error" message={error} density="compact" />}</>;
+  return <><div ref={element} />{error && <StateBlock kind="error" message={error} />}</>;
 }

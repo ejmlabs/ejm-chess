@@ -38,19 +38,31 @@ workspace/
   ejm-chess/
 ```
 
-The matching retained `ejm-ui` source archive has SHA-256
-`544d5bd1fad6261600190c4b19a777a73b34906cbf9a4abc556a34fc178fa90c`
-and 1,085 files. Its recorded base HEAD is
-`7ac2b2d4e3540d0e216a5200b67770c5f6d30aeb`, with additional working-source
-changes. That commit or package version alone is not an exact source pin.
-The archive remains private pending its owner's source review and delivery.
-No shared implementation is vendored into this product.
+The shared source is the public `ejmlabs/ejm-ui` revision recorded in
+[`.github/ui-source.json`](../.github/ui-source.json), the pin file the other
+consumers use. It is `56301e39a8a78356851259fd50571f1551bc1cbf`, the ejm-ui
+`main` commit that merged [ejm-ui PR #59](https://github.com/ejmlabs/ejm-ui/pull/59)
+(the systemic kit), which includes the public `@ejm/ui/components/Chessboard`
+leaf and `useSearch` from `@ejm/ssg`. A pin selects
+source. It does not publish a package or prove compatibility; the install,
+typecheck and build below do. No shared implementation is vendored into this
+product.
 
-Restore that matching owner source beside this checkout, install its lockfile,
-and build required token outputs before installing or checking chess. Registry
-versions and integrity fields in the product lockfile are unchanged by the
-path rebinding. Fresh owner acceptance, installation, typecheck and build must
-establish compatibility before release; retention is not that evidence.
+Check out the pinned revision beside this checkout, install its lockfile, then
+install chess:
+
+```sh
+git -C ../ejm-ui checkout <revision from .github/ui-source.json>
+npm --prefix ../ejm-ui ci --ignore-scripts
+npm ci --ignore-scripts
+```
+
+The linked packages resolve their own dependencies from the `ejm-ui` install, so
+the chess build fails until that install exists. `@ejm/ui` carries Tailwind, the
+React plugin and the single React copy through `ejmlabs()` in `vite.config.ts`,
+so this product lists none of `@tailwindcss/vite`, `@vitejs/plugin-react` or
+`tailwindcss`. Its `tsconfig.json` extends `@ejm/ui/tsconfig.json`. The lockfile
+keeps the registry versions and integrity fields of every remaining package.
 
 ## Configuration gap
 
@@ -73,9 +85,9 @@ production bindings plus `env.local` for Worker tests and the protected canary
 deploy. The specialty config remains absent as a private copy in this
 checkout. Non-secret templates live under [`config-examples/`](../config-examples/README.md);
 copy an example to the matching gitignored filename, then fill IDs from private
-records before recovery-drill commands. Matching shared UI source for chess contracts is the
-`ejm-ui` `main` at `5a88e6a` or later (PRs #55 and #58, 2026-10-31); keep
-discovery publication behind an approved public opening. See [live-ready prep](live-ready-prep.md).
+records before recovery-drill commands. Shared UI source is the pinned `ejm-ui`
+revision above; keep discovery publication behind an approved public opening.
+See [live-ready prep](live-ready-prep.md).
 
 Worker tests read `wrangler.jsonc` in the local environment. Recovery tests also
 read `wrangler.recovery-drill.jsonc`. Worker dry-run packaging and preview need

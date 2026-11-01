@@ -10,12 +10,13 @@ shared ejm-ui design, including account, replay and private review workflows.
 > `996acf4`. Public play, ranked, tournaments and arenas remain closed. Owner decision, 2026-10-31: ranked, arenas and tournaments open
 > at launch with no product caps and the material timeout rule only; the order
 > is in [live-ready prep](docs/live-ready-prep.md). A clean checkout still needs
-> the matching shared UI source and reviewed private configuration:
+> the pinned shared UI source and reviewed private configuration:
 >
-> - The shared UI source, checked out as `../ejm-ui` (`@ejm/*` packages are
->   `file:` dependencies), on `main` at `5a88e6a` or later. That commit provides
->   `@ejm/ui/components/Chessboard`, the `useSearch` export from `@ejm/ssg` that
->   `src/pages/Play.tsx` needs, and the shared accessibility fixes.
+> - The shared UI source, checked out as `../ejm-ui` at the revision in
+>   `.github/ui-source.json` (`@ejm/*` packages are `file:` dependencies). That
+>   revision provides `@ejm/ui/components/Chessboard`, the `useSearch` export
+>   from `@ejm/ssg` and the shared accessibility fixes; an older checkout fails
+>   typecheck and the build.
 > - The private Worker configurations (`wrangler.jsonc`,
 >   `wrangler.recovery-drill.jsonc`), which are git-ignored. Worker tests, the
 >   Worker dry run and recovery tests cannot run without them. They also supply `PRODUCTION_RESOURCE_IDS`, the
@@ -72,10 +73,10 @@ Known limits:
 
 Use Node 24. The repository declares public `@ejm/*` packages through portable
 sibling `file:../ejm-ui/packages/<package>` dependencies in the manifest and
-lockfile. Check out `ejm-ui` `main` at `5a88e6a` or later beside this
-repository; see the
+lockfile. The shared source is the public `ejmlabs/ejm-ui` revision pinned in
+[`.github/ui-source.json`](.github/ui-source.json); see the
 [source handoff](docs/source-handoff.md#shared-ui-dependency). A package version
-alone does not identify that commit:
+alone does not identify the source this product consumes:
 
 ```text
 workspace/
@@ -83,17 +84,17 @@ workspace/
   ejm-chess/
 ```
 
-Install the sibling workspace with its lockfile, then this product:
+Check out the pinned `ejm-ui` revision, install its lockfile, then this product.
+Keep dependency lifecycle scripts off:
 
 ```sh
 cd ../ejm-ui
-npm ci
+npm ci --ignore-scripts
 cd ../ejm-chess
-npm ci
+npm ci --ignore-scripts
 ```
 
-If the shared token outputs are absent, run the token build in `ejm-ui` before
-building the product. Do not import private sibling source or copy shared components.
+Do not import private sibling source or copy shared components.
 
 The private Wrangler configurations are excluded from this source handoff.
 Restore reviewed local bindings as described in the
@@ -133,8 +134,7 @@ Worker tests and the Worker dry run require the omitted Wrangler configuration;
 recovery tests also require the recovery-drill configuration. These commands
 are documented entry points, not new passing results for this restored source.
 The Worker check is a dry run. It does not prove bindings, email, Access,
-Turnstile, DNS, or production behavior. Budget checks enforce the configured
-compressed build limits. Do not claim a performance improvement from a budget pass.
+Turnstile, DNS, or production behavior.
 
 `engine:check` checks the vendored browser runtime, source, network, and notices
 against their pins. `engine:probe` starts the real engine in Node and checks a
