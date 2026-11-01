@@ -41,8 +41,10 @@ reviewed local Wrangler configuration. The public checkout does not include
 [configuration gap](docs/source-handoff.md#configuration-gap) before creating it.
 
 ```sh
+git clone https://github.com/ejmlabs/ejm-chess.git
+cd ejm-chess
 git clone https://github.com/ejmlabs/ejm-ui.git ../ejm-ui
-git -C ../ejm-ui checkout 56301e39a8a78356851259fd50571f1551bc1cbf
+git -C ../ejm-ui checkout "$(node -p "require('./.github/ui-source.json').revision")"
 npm --prefix ../ejm-ui ci --ignore-scripts
 npm ci --ignore-scripts
 ```
