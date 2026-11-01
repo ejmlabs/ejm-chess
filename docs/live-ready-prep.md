@@ -131,12 +131,20 @@ recorded. **Stop:** a dirty or unpushed shared source. Nothing is deployed yet.
 
 ```sh
 cd ../ejm-chess
-npm ci && npm run typecheck && npm test && npm run build && npm run worker:check
+node scripts/deploy-canary.mjs --check
 ```
 
-**Pass:** every command passes, including the shared design guard in the
-build; the chess SHA is recorded. Load time is checked from `ejm-ui` with
-`node scripts/perf.mjs <dist>` if you want a measurement. **Stop:** any failure.
+`--check` is read-only and uses no network. It stops at the first failure with
+the fix. It checks Node 24, a clean tree pushed to its upstream, `../ejm-ui`
+clean and containing `5a88e6a`, and the private `wrangler.jsonc` against the
+[production values](#production-values) and retired keys. Then it runs
+`npm ci`, `typecheck`, `test`, `build` (with the shared design guard) and
+`worker:check`. The manual commands are in the
+[deployment guide](deployment.md#prepare-configuration-and-build).
+
+**Pass:** `Checks passed`; the chess SHA is recorded. Load time is checked from
+`ejm-ui` with `node scripts/perf.mjs <dist>` if you want a measurement.
+**Stop:** any failure.
 
 ### 3. Deploy to the protected canary (7.2)
 
@@ -146,17 +154,25 @@ analysis and monthly variables may change. Access still
 limits the host to canary identities and the games stop stays clear.
 
 ```sh
-npx wrangler d1 migrations list DB --remote --env ''
-npx wrangler deploy --env '' --strict --message "Launch values on the protected canary"
-npx wrangler versions view "$CHESS_DEPLOYED_VERSION" --env '' --json
+node scripts/deploy-canary.mjs
 ```
 
-Apply any pending migration first, as in the [deployment guide](deployment.md).
-This revision adds `0016_cron_heartbeats.sql`. Operations status reads its
-table and the minute run trims seats by its index, so apply it before this
-deploy; without it the scheduled handler only logs `heartbeat_failed`.
-Open `/api/config`, `/api/arenas`, `/api/tournaments` and
-`/api/admin/operations` in the owner browser.
+The script repeats `--check`, then reads back without changes: the credential,
+the live version (the rollback target) and the D1 migrations, which must show
+only `0016_cron_heartbeats.sql` pending. Type `deploy` to continue (`--yes`
+skips it). It then saves a D1 Time Travel bookmark, applies `0016`, runs
+`wrangler deploy --strict`, and reads back the new version, the empty migration
+list, and Access denial on `/`, `/api/config` and `/admin/`. A sanitized record
+goes to the gitignored `.deploy-records/`, with the lines for
+[verification](verification.md). If the deploy fails after the migration,
+`0016` is additive and stays applied; the script prints the rollback command
+and never runs it. Manual fallback:
+[update the running canary](deployment.md#update-the-running-canary).
+
+`0016` goes first: Operations status reads its table and the minute run trims
+seats by its index; without it the scheduled handler only logs
+`heartbeat_failed`. Then open `/api/config`, `/api/arenas`, `/api/tournaments`
+and `/api/admin/operations` in the owner browser.
 
 **Pass:** `/api/config` shows `ranked`, `ai` and `tournaments` true; arenas and
 tournaments `enabled` true; `authority.rankedOpen` true; `retirement.mode`

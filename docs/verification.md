@@ -924,3 +924,75 @@ behavior from the prior canary build is retained. Focused timeout-related
 Worker tests (81) passed before merge; full canary checklist steps 8+ remain
 paused. This is a protected canary deploy, not a public launch or ranked
 enablement.
+
+## Local load measurement, 2026-11-01
+
+`ejm-ui` removed the route size budget, so load time is the performance bar.
+This records the first measurement of the product build at `d413120` (clean
+source, ejm-ui `5a88e6a`). It is local, headless and simulated: it is not field
+data, not regional latency and not a capacity claim.
+
+**Method.** `npm run build`, then `scripts/perf.mjs` from ejm-ui serves `dist/`
+with gzip and loads every prerendered page in Lighthouse 13.5.0 (desktop profile:
+simulated 10 Mbps, 40 ms round trip, no CPU slowdown, cold cache). It reports
+first contentful paint (FCP) only. The FCP column is the median of 3 loads; the
+recheck column is one later load. Sizes are what each page's HTML references (module
+script, modulepreload, stylesheet), gzip level 9, in KiB (1,024 bytes). The old
+budget's exact accounting is not in the repository, so sizes compare to its
+limits but are not identical; the developer guide was 85.9 KB on 2026-10-21 and
+is 86.5 KiB now.
+
+| Route | FCP ms | Recheck ms | JS KiB raw | JS KiB gzip |
+| --- | ---: | ---: | ---: | ---: |
+| `/` | 428 | 420 | 284.4 | 91.6 |
+| `/play/` | 508 | 506 | 368.8 | 123.1 |
+| `/history/` | 463 | 456 | 302.8 | 99.7 |
+| `/leaderboard/` | 418 | 416 | 295.0 | 96.5 |
+| `/tournaments/` | 443 | 448 | 315.2 | 102.7 |
+| `/account/` | 414 | 415 | 285.7 | 93.2 |
+| `/player/` | 420 | 426 | 294.3 | 96.2 |
+| `/replay/` | 406 | 405 | 283.1 | 91.7 |
+| `/admin/` | 459 | 467 | 323.9 | 106.8 |
+| `/rules/` | 373 | 378 | 270.2 | 86.5 |
+| `/help/` | 402 | 373 | 270.2 | 86.5 |
+| `/credits/` | 373 | 371 | 270.2 | 86.5 |
+| `/privacy/` | 376 | 375 | 270.2 | 86.5 |
+| `/fair-play/` | 373 | 374 | 270.2 | 86.5 |
+| `/docs/developer-guide/` | 372 | 375 | 270.2 | 86.5 |
+| `/404.html` | 372 | 373 | 270.0 | 86.3 |
+
+CSS is one shared file on every route: 64.7 KiB raw, 13.1 KiB gzip. All routes
+sit inside the old limits (play 180 KB JS; guides 95 KB JS and 14 KB CSS).
+`/play/` is the heaviest and slowest page; `/admin/`, `/tournaments/` and
+`/history/` follow. The two board routes (`/play/`, `/replay/`) also fetch the
+chessboard surface after first paint (62.0 KiB raw / 14.8 KiB gzip JS, 11.1 / 1.6
+KiB CSS), which neither table column includes, and Stockfish loads only on demand;
+FCP does not see either. Reruns agree within about 30 ms (`/help/` is the one
+baseline outlier, 29 ms high), and the recheck exited 0 against the baseline.
+
+**Caveats.** One Linux container (4 vCPU) running Google Chrome for Testing
+153.0.8010.12 as root through a wrapper that adds `--no-sandbox`. The server is
+ejm-ui's local static server, not Cloudflare: no edge compression, `_headers`
+caching, HTTP/2, Access or Worker. Only prerendered HTML is measured, so API,
+session and WebSocket work after first paint are outside FCP. The table's FCP column
+is committed as `scripts/perf-baseline.json`. Update it with the `--update`
+command below, and commit it with the change that makes a new number intended.
+
+**Repeat.** From the product, then ejm-ui (a sibling directory). As root in a
+container, `CHROME` must be a wrapper such as
+`exec /opt/pw-browsers/chromium --no-sandbox --disable-dev-shm-usage "$@"`.
+
+```sh
+npm run build
+cd ../ejm-ui
+CHROME=/path/to/chrome node scripts/perf.mjs ../ejm-chess/dist --runs 3 --baseline ../ejm-chess/scripts/perf-baseline.json --update
+CHROME=/path/to/chrome node scripts/perf.mjs ../ejm-chess/dist --runs 3 --baseline ../ejm-chess/scripts/perf-baseline.json
+```
+
+The first perf command records the baseline; the second checks against it and
+exits 1 when a route is a second or more slower. Median of 3 across 16 routes
+takes about 5 minutes. Route sizes, from the product root after the build:
+
+```sh
+node scripts/route-bytes.mjs dist
+```

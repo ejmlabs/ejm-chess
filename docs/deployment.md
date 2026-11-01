@@ -390,6 +390,26 @@ launch sequence. Remove the full-host canary restriction only under the approved
 release scope, retaining the owner protection on admin page/API paths. The order and checks are in
 [live-ready prep](live-ready-prep.md#sequence).
 
+## Update the running canary
+
+Use `node scripts/deploy-canary.mjs --check`, then `node scripts/deploy-canary.mjs`
+([live-ready prep](live-ready-prep.md#sequence), steps 2 and 3). Manual fallback,
+stopping at the first failure; record the current version as the rollback
+target before changing anything:
+
+```sh
+npx wrangler deployments list --env '' --json
+npx wrangler d1 migrations list DB --remote --env ''
+npx wrangler d1 time-travel info DB --env '' --json
+npx wrangler d1 migrations apply DB --remote --env ''
+npx wrangler deploy --env '' --strict --message "<git sha> canary"
+npx wrangler versions view "$CHESS_DEPLOYED_VERSION" --env '' --json
+npx wrangler d1 migrations list DB --remote --env ''
+```
+
+Expect only `0016_cron_heartbeats.sql` pending before and nothing after. A failed
+deploy leaves the additive `0016` applied. Roll back as below.
+
 ## Rollback and recovery
 
 ### Stop before changing a running service

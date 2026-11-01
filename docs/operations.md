@@ -109,6 +109,11 @@ npm run build
 npm run worker:check
 ```
 
+Load time is checked from the sibling `ejm-ui` repository after the build:
+`node scripts/perf.mjs ../ejm-chess/dist --baseline ../ejm-chess/scripts/perf-baseline.json`
+([PERF.md](https://github.com/ejmlabs/ejm-ui/blob/main/scripts/PERF.md);
+[recorded run and full command](verification.md#local-load-measurement-2026-11-01)).
+
 Inspect the generated public guides, navigation, metadata, piece credits, and
 asset links. Check desktop and narrow screens, light and dark themes, keyboard
 move controls, focus, promotion, touch interaction, and reduced motion. Record

@@ -21,3 +21,5 @@ coverage/
 /wrangler.proof-qualification.jsonc
 /wrangler.proof-service.jsonc
 /wrangler.recovery-drill.jsonc
+# Local deploy records from scripts/deploy-canary.mjs stay private.
+/.deploy-records/
