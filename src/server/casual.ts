@@ -5,6 +5,8 @@ import { isGameId } from '../shared/gamePath';
 import { acquireSeatGuard, getActorBySessionId, knownGame } from './auth';
 import { newWorkAllowed } from './budget';
 import { aiEnabled, type Env } from './env';
+import { assertNotClosing, gamePhase, nextReconcileAt } from './events';
+import { retryDelayMs } from './retry';
 import { ApiError } from './security';
 
 export type CasualGameInput = Pick<InitGame, 'id' | 'format' | 'ai'>;
@@ -34,6 +36,11 @@ export class CasualControl {
     ctx.storage.sql.exec('CREATE INDEX IF NOT EXISTS casual_intent_work ON casual_intents(state,next_at,game_id)');
   }
 
+  private game(id: string) {
+    const { GAME } = this.getEnv();
+    return GAME.get(GAME.idFromName(id));
+  }
+
   private intent(id: string): Intent | null {
     return this.ctx.storage.sql.exec<Intent>('SELECT * FROM casual_intents WHERE game_id=?', id).toArray()[0] ?? null;
   }
@@ -59,23 +66,22 @@ export class CasualControl {
         throw new ApiError(404, 'GAME_NOT_FOUND', 'This game was not found for your session.');
       }
       if (admitted?.storage_state === 'archived') throw new ApiError(410, 'GAME_ARCHIVED', 'Open this game from your completed history.');
-      // Legacy games remain accessible through new-work stops or changed limits.
-      if (admitted) {
-        const found = await env.GAME.get(env.GAME.idFromName(input.id)).lookup(actor);
-        if (found) return { ok: true, snapshot: found, created: false };
-      }
       const existing = this.intent(input.id);
-      if (!existing && !admitted && !current.accountReady) throw new ApiError(403, 'ACCOUNT_REQUIRED', 'Create or complete your account to play a new game.');
-      await this.bridge.refresh();
-      if (existing?.state === 'finished') {
-        const found = await env.GAME.get(env.GAME.idFromName(input.id)).lookup(actor);
+      // Admitted games remain accessible through new-work stops or changed limits.
+      if (admitted || existing?.state === 'finished') {
+        const found = await this.game(input.id).lookup(actor);
         if (found) return { ok: true, snapshot: found, created: false };
-        throw new ApiError(410, 'GAME_ARCHIVED', 'Open this game from your completed history.');
+        if (existing?.state === 'finished') throw new ApiError(410, 'GAME_ARCHIVED', 'Open this game from your completed history.');
       }
-      if (!existing && !admitted && !await newWorkAllowed(env, 'games')) throw new ApiError(409, 'SEAT_UNAVAILABLE', 'New games are paused at the monthly safety limit.');
-      if (!existing && !admitted && input.ai && !aiEnabled(env)) throw new ApiError(503, 'AI_UNAVAILABLE', 'Computer practice is unavailable. Try a casual invitation.');
+      if (!existing && !admitted && !current.accountReady) throw new ApiError(403, 'ACCOUNT_REQUIRED', 'Create or complete your account to play a new game.');
+      // Only a new admission consults capacity. A saved or admitted request just resumes.
+      if (!existing && !admitted) {
+        await this.bridge.refresh();
+        if (!await newWorkAllowed(env, 'games')) throw new ApiError(409, 'SEAT_UNAVAILABLE', 'New games are paused. Existing games will finish.');
+        if (input.ai && !aiEnabled(env)) throw new ApiError(503, 'AI_UNAVAILABLE', 'Computer practice is unavailable. Try a casual invitation.');
+      }
       this.ctx.storage.transactionSync(() => {
-        if (this.bridge.closing(actor.id)) throw new ApiError(409, 'ACCOUNT_CLOSING', 'Account closure is pending. Try again shortly.');
+        assertNotClosing(this.bridge, actor.id);
         const before = this.intent(input.id);
         if (before) {
           const previous = JSON.parse(before.payload) as InitGame;
@@ -94,7 +100,7 @@ export class CasualControl {
       await this.ctx.storage.sync();
       const initialized = await this.reconcile(input.id);
       const after = this.intent(input.id);
-      const snapshot = initialized ?? (after && after.state !== 'admitting' ? await env.GAME.get(env.GAME.idFromName(input.id)).lookup(actor) : null);
+      const snapshot = initialized ?? (after && after.state !== 'admitting' ? await this.game(input.id).lookup(actor) : null);
       if (!snapshot) throw new ApiError(503, 'GAME_INITIALIZATION_PENDING', 'Your game request is saved. Reopen it shortly.');
       return { ok: true, snapshot, created: !admitted };
     } catch (error) {
@@ -128,7 +134,7 @@ export class CasualControl {
             // No init was issued and its required D1 fence was never accepted.
             this.ctx.storage.sql.exec("DELETE FROM casual_intents WHERE game_id=? AND reservation_id=? AND state='admitting'", id, intent.reservation_id);
             await this.ctx.storage.sync();
-            throw new ApiError(409, 'SEAT_UNAVAILABLE', 'New game admission is at its safety limit, or this session cannot take another seat.');
+            throw new ApiError(409, 'SEAT_UNAVAILABLE', 'This account cannot take another game now. Finish your unfinished game or reservation, or sign in again.');
           }
           throw new Error('casual_admission_fence');
         }
@@ -137,7 +143,7 @@ export class CasualControl {
         intent = this.intent(id)!;
       }
       // A Game binding is used only after permanent D1 admission has committed.
-      const game = env.GAME.get(env.GAME.idFromName(id));
+      const game = this.game(id);
       let actual = await game.status();
       let initialized: GameSnapshot | null = null;
       if (!actual && intent.state !== 'finished') {
@@ -146,15 +152,14 @@ export class CasualControl {
         actual = await game.status();
       }
       if (actual?.result) await this.bridge.settle(actual.result);
-      const observed = actual?.status ?? initialized?.status;
       this.ctx.storage.sql.exec(`UPDATE casual_intents SET state=?,next_at=?,attempts=0,error=NULL
-        WHERE game_id=? AND state<>'finished'`, observed === 'pending-adjudication' || observed === 'finished' ? 'settling' : observed ? 'live' : 'creating', Date.now() + 30_000, id);
+        WHERE game_id=? AND state<>'finished'`, gamePhase(actual?.status ?? initialized?.status), nextReconcileAt(Date.now(), actual?.dueAt), id);
       await this.ctx.storage.sync();
       if (actual) return game.lookup((JSON.parse(intent.payload) as InitGame).white);
       return initialized;
     } catch (error) {
       this.ctx.storage.sql.exec(`UPDATE casual_intents SET attempts=MIN(attempts+1,1000000),next_at=?,error='Recovery is pending.'
-        WHERE game_id=? AND state<>'finished'`, Date.now() + 1_000, id);
+        WHERE game_id=? AND state<>'finished'`, Date.now() + retryDelayMs(intent.attempts), id);
       await this.ctx.storage.sync();
       if (error instanceof ApiError) throw error;
       return null;

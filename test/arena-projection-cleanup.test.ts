@@ -2,22 +2,10 @@ import { env } from 'cloudflare:workers';
 import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ARENA_POLICY } from '../src/server/arena-policy';
-import type { ArenaProjection } from '../src/server/arena-projection';
-import type { Competition } from '../src/server/competition';
+import { heldCompetition, privates } from './authority-helpers';
 
-type Authority = DurableObjectStub<Competition>;
-type Internals = { arenas: { projection: ArenaProjection; nextDue(): number | null }; schedule(): Promise<void> };
 const batch = ARENA_POLICY.workBatch;
 const publicEvents: string[] = [];
-
-async function authority(existing?: Authority): Promise<Authority> {
-  const stub = existing ?? env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
-  await runInDurableObject(stub, async (instance, state) => {
-    (instance as unknown as Internals).schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
-  return stub;
-}
 
 function pages(id: string, generation: number, count: number) {
   return env.DB.prepare(`WITH RECURSIVE pages(n) AS (SELECT 0 UNION ALL SELECT n+1 FROM pages WHERE n+1<?)
@@ -48,7 +36,7 @@ afterEach(async () => {
 
 describe('bounded arena projection cleanup', () => {
   it('advances beyond protected local rows across eviction without discarding a build snapshot', async () => {
-    const original = await authority();
+    const original = await heldCompetition();
     const first = await runInDurableObject(original, (instance, state) => {
       const sql = state.storage.sql;
       sql.exec(`INSERT INTO arena_projection_builds(event_id,generation,revision,watermark,generated_at,summary,phase)
@@ -65,7 +53,7 @@ describe('bounded arena projection cleanup', () => {
       }
       for (let revision = 1; revision <= batch * 2 + 1; revision++) sql.exec(`INSERT INTO arena_entry_versions
         (event_id,user_id,revision,name,points_half,games,visible) VALUES('z-old','player',?,'Player',0,0,1)`, revision);
-      (instance as unknown as Internals).arenas.projection.cleanup();
+      privates(instance).arenas.projection.cleanup();
       return {
         snapshots: sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM arena_snapshot_rows').one().count,
         versions: sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM arena_entry_versions').one().count,
@@ -75,9 +63,9 @@ describe('bounded arena projection cleanup', () => {
     // than scanning past them to find a full batch of deletions.
     expect(first).toEqual({ snapshots: batch * 4, versions: batch * 4 + 1 });
     await evictDurableObject(original);
-    const resumed = await authority(original);
+    const resumed = await heldCompetition({}, original);
     const remaining = await runInDurableObject(resumed, (instance, state) => {
-      const projection = (instance as unknown as Internals).arenas.projection;
+      const projection = privates(instance).arenas.projection;
       const sql = state.storage.sql;
       for (let pass = 0; pass < 3; pass++) projection.cleanup();
       const protectedRows = {
@@ -97,7 +85,7 @@ describe('bounded arena projection cleanup', () => {
   });
 
   it('drains pages behind retained and building generations after all local events end', async () => {
-    const original = await authority();
+    const original = await heldCompetition();
     const suffix = crypto.randomUUID();
     const retained = `a-pages-${suffix}`;
     const building = `b-pages-${suffix}`;
@@ -108,7 +96,7 @@ describe('bounded arena projection cleanup', () => {
       pages(building, 1, batch), head(ended, 4, 3, now), pages(ended, 1, batch), pages(ended, 2, batch),
       pages(ended, 3, 1), pages(ended, 4, 1)]);
     const due = await runInDurableObject(original, async instance => {
-      const arenas = (instance as unknown as Internals).arenas;
+      const arenas = privates(instance).arenas;
       await arenas.projection.cleanupPublic(now);
       return arenas.nextDue();
     });
@@ -116,9 +104,9 @@ describe('bounded arena projection cleanup', () => {
     expect(await countPages(ended, 2)).toBe(batch);
     expect(due).toBe(now + 1_000);
     await evictDurableObject(original);
-    const resumed = await authority(original);
+    const resumed = await heldCompetition({}, original);
     await runInDurableObject(resumed, async instance => {
-      const projection = (instance as unknown as Internals).arenas.projection;
+      const projection = privates(instance).arenas.projection;
       for (let pass = 1; pass <= 5; pass++) {
         projection.cleanup();
         await projection.cleanupPublic(now + pass * 1_000);
@@ -129,16 +117,16 @@ describe('bounded arena projection cleanup', () => {
     expect(await countPages(retained)).toBe(batch * 2);
     expect(await countPages(building)).toBe(batch);
     expect(await countPages(ended)).toBe(2);
-    expect(await runInDurableObject(resumed, instance => (instance as unknown as Internals).arenas.nextDue())).toBeNull();
+    expect(await runInDurableObject(resumed, instance => privates(instance).arenas.nextDue())).toBeNull();
   });
 
   it('revisits protected local and public keys after publication changes their eligibility', async () => {
-    const competition = await authority();
+    const competition = await heldCompetition();
     const id = `arena-hourly-${Date.now()}`;
     const now = Date.now();
     await env.DB.batch([head(id, 4, 3, now), pages(id, 3, batch), pages(id, 4, batch)]);
     await runInDurableObject(competition, async (instance, state) => {
-      const projection = (instance as unknown as Internals).arenas.projection;
+      const projection = privates(instance).arenas.projection;
       const sql = state.storage.sql;
       sql.exec(`INSERT INTO arena_events(id,cadence,pool,starts_at,closes_at,status,finished_at,generation,entrants)
         VALUES(?,'hourly','blitz',?,?,'finished',?,4,?)`, id, now - 3_600_000, now, now, batch * 2);

@@ -10,20 +10,25 @@ listed below. Provider measurements and activation belong to the selected
 release record. This design document alone establishes no public capacity,
 deployed API or release.
 
+Owner decision, 2026-10-31: arenas open at launch with `ARENAS_ENABLED=true`
+and no product caps. The 2,000-player capacity harness is deleted (owner
+decision, 2026-10-31); the workload below is a reference target for a future
+staging script, not planned work. See [live-ready prep](live-ready-prep.md).
+
 ## Status and scope
 
 | Area | Status |
 | --- | --- |
 | Three- or four-player round robin | Implemented for the local preview; see its guide for existing local checks and limits |
 | `arena-v1` rules and owner design | Selected; described below |
-| Arena implementation and API | Written locally, with focused native tests and local capacity workloads |
-| First capacity tier | Fixed workload described below; provider results belong to the selected release record |
+| Arena implementation and API | Written locally, with focused native tests and local qualification workloads |
+| Reference workload | Not planned work; targets are described below |
 | Public deployment and worldwide play | Activation and measured client egress recorded per release |
 
 The first tier targets 2,000 entrants per event, 1,000 live games across modes,
-and 20 unique results per second. These are acceptance workloads, not supported
-limits. Keep the existing preview limits until signup, play, settlement,
-retention, recovery, regional behavior, and cost have passed together.
+and 20 unique results per second. These are reference targets, not supported
+limits or caps. Arenas have no product entrant or game cap. Behavior
+under heavy load is still being measured.
 
 The later 10,000-entry and 5,000-live-game tier needs separate qualification.
 Passing the first tier cannot establish the later tier. The total chess budget
@@ -31,11 +36,12 @@ is $100 per month. A configured ceiling or a local test does not prove that the
 workload fits this budget. The Cloudflare budget stop is separate from a
 guaranteed dollar total.
 
-## Configuration and conservative defaults
+## Configuration
 
-The private `wrangler.jsonc` keeps `ARENAS_ENABLED=false`. Only the exact
-value `true` admits new arena work. New entry and pairing close when it is off;
-accepted games, scores, and reservation release continue to drain.
+Only the exact value `true` of `ARENAS_ENABLED` admits new arena work; the
+launch release sets it (see [live-ready prep](live-ready-prep.md#production-values)).
+New entry and pairing close when it is off; accepted games, scores, and
+reservation release continue to drain.
 
 | Setting | Default | Accepted maximum | Meaning |
 | --- | --- | --- | --- |
@@ -44,16 +50,14 @@ accepted games, scores, and reservation release continue to drain.
 | `ARENA_RETAINED_GAME_LIMIT` | No cap | No cap | Retained rows in the shared preview and arena tournament game ledger |
 | `ARENA_GAME_ID_LIMIT` | No cap | No cap | All permanent IDs in that shared ledger, including archived games |
 | `ARENA_AUTHORITY_BYTE_LIMIT` | 4,294,967,296 bytes, or 4 GiB | 4,294,967,296 bytes, or 4 GiB | Competition SQLite platform byte stop plus space reserved for accepted games |
-| `MONTHLY_GAME_LIMIT` | Usage counter only | Usage counter only | No admission cap; the Cloudflare budget stop governs |
 
 Numeric arena settings accept unsigned decimal integers, including zero.
 Missing values use the defaults. Malformed values or values above the maximum
-become zero and close the affected admission path. Increasing a value selects
-a local qualification input; it does not establish supported public capacity.
+become zero and close the affected admission path. A positive value is an
+optional owner cap; it does not establish supported public capacity.
 
-The byte stop currently reserves 1,310,720 bytes per accepted game, 32 KiB per
-retained arena entrant, and 16 KiB for each of the 256 allowed event records.
-Registration checks this headroom before adding an entrant. These reserves
+The byte stop currently reserves 1,310,720 bytes per accepted game and 32 KiB
+per retained arena entrant. Registration checks this headroom before adding an entrant. These reserves
 still need a proof against bounded terminal results, journals, and projections.
 Treat them as unverified safety allowances, not proof that accepted results
 always fit. Actual row and byte growth remain part of qualification.
@@ -63,20 +67,17 @@ update it in the same transaction as the entry, including cleanup and rollback.
 The first schema upgrade counts existing entries once. Later admission guards
 read one counter row; a missing or invalid row closes new admission. Existing
 games and accepted results can still drain. This local change still needs
-capacity qualification with the complete workload.
+measurement under real demand.
 
-The preview retains its fixed round-robin ceilings even though both formats
-share D1 tournament admission rows. Raising an arena setting does not enlarge
-the round-robin preview. Casual payloads and permanent casual IDs retain their
-separate admission limits alongside the shared game and authority byte caps.
+The round-robin preview and arenas share D1 tournament admission rows and have
+no product cap. Casual payloads and permanent casual IDs keep their separate
+optional limits alongside the shared game and authority byte guards.
 
 The full 20-new-game-results-per-second target for 15 minutes needs 18,000 games.
-It cannot run within one current month under the implemented 10,000-game hard
-maximum. The full production admission target therefore remains blocked
-pending a changed, authorized qualification scope. A separate synthetic
-pre-admitted settlement fixture measures coordinator throughput without
-creating new game admissions or monthly receipts. It cannot qualify that
-admission target. Never reset counters, delete receipts, recycle IDs, or
+No provider run is planned and it gates no production opening. A separate
+synthetic pre-admitted settlement fixture measures coordinator throughput
+without creating new game admissions or monthly receipts. It cannot qualify
+that admission target. Never reset counters, delete receipts, recycle IDs, or
 refund uncertain work to make a load run fit.
 
 ### Shared game admission
@@ -123,6 +124,9 @@ two participants, and lower the legacy live count when its last seat releases.
 This count joins the Competition-owned intents in the shared game and byte
 guards. Missing counter rows close new admission. Apply the migration before
 running this source; do not zero counters to reopen a stopped service.
+The arena stage of a maintenance pass reuses the count Competition read at the
+start of that pass. A casual request reads it only for a new admission, not
+when resuming a saved or admitted one.
 
 ## Schedule and finish rules
 
@@ -152,8 +156,7 @@ Persist each game's identity, reservation, and wall deadline before external
 initialization. Retries and restarts must use those same values. The game wall
 limit includes readiness and play. An earlier chess clock, readiness, or proven
 terminal result keeps precedence. The common online rules and the material
-timeout rule still apply; see the
-[adjudication policy](adjudication-feasibility.md).
+timeout rule still apply.
 
 A game still unresolved at its published wall limit receives the defined
 technical void. Never infer a winner from a scheduling failure. Service or
@@ -165,9 +168,45 @@ reservations to drain. Automatic cadence work must remain bounded after an
 outage rather than creating every missed event.
 
 Due running and draining events are processed before scheduled starts, within
-the existing six-row lifecycle pass. This lets an empty expired hourly event
+the existing bounded lifecycle pass. This lets an empty expired hourly event
 release its slot before the next hourly and daily events start while weekly
-games drain. The three-open-event cap still applies to unresolved older events.
+games drain. No cap limits open events.
+
+The Competition alarm is armed for the next real due time only. A running
+event nobody waits in sleeps until its close. While a player is queued, pairing
+retries once a second, so pairing latency is unchanged. A failing dependency is
+not waiting. A claim, release, game allocation, game read, standings publication
+or public page cleanup that fails retries after one second, then after 2, 4, 8
+and so on up to 60 seconds, and a success starts over at one second. A game past
+its deadline with no accepted result waits the same way. A maintenance pass in
+which any stage fails, such as the pairing read or an event cleanup proof read,
+also arms the next alarm no earlier than that wait counted in failed passes, since
+a failed stage leaves its work due and skips the stages after it. The first pass
+without a failure starts over, and a restart begins at one second. A draining
+event waits for its last settlement. A live game is read when its Game next
+reports work (its readiness end, clock deadline or cutoff) and never more than
+five minutes later, and publication, cleanup and release batches arm their own
+due times. The minute trigger still runs a full pass, so switching
+`ARENAS_ENABLED` off drains running events at the next pass.
+
+Implemented and tested locally with a mocked clock, not staged or released.
+An idle running hourly arena woke 3,665 times from start through close before
+this change and 7 times after. In the first two minutes after a start, an arena
+with one player left waiting woke 123 times before and after, and an arena
+whose queued players all had games woke 7 times, down from 123, and 4 times
+after Games reported their own due times, which moved their reads from every 30
+seconds to the end of the two-minute readiness wait. One entry whose D1 claim
+failed for ten minutes took 600 attempts and 604 wakeups at the fixed second and
+takes 15 and 19 now. A failing release went from 597 attempts and 596 wakeups
+to 15 and 17, and a failing game allocation from 600 and 603 to 15 and 18. A
+publication or page cleanup that failed with a cleanup marker already due woke
+the alarm every millisecond, and now takes 15 attempts and 14 or 15 wakeups.
+With every D1 call failing for ten minutes in the same kind of run, an arena with
+a waiting player and a game read that came due woke every second and then every
+millisecond (1,500 wakeups in the first 113 seconds, where the run stopped) and
+takes 15 now. An event cleanup whose proof read failed took 1,500 wakeups in 1.5
+seconds and takes 15 now. A ranked match waiting to be created took 1,500 in 3.5
+seconds and takes 15 now.
 
 ## Points and opponents
 
@@ -213,7 +252,6 @@ reviewed protocol that preserves the existing atomic reservation contract.
 
 | Local work bound | Maximum |
 | --- | --- |
-| Open arenas | 3 |
 | Candidates inspected for one oldest waiter | 64 |
 | Pairings accepted in one pass | 8 |
 | Game intents initialized in one pass | 8 |
@@ -293,8 +331,12 @@ advance step and needs retained-state CPU and row accounting before deployment.
 
 Publish the new generation head only after every page exists. Retain two
 complete generations and allow only one build per event at a time. Public
-responses declare `Cache-Control: public, max-age=10, s-maxage=10` and use the
-Cloudflare Cache API. A warm cache read skips D1 and session lookup. Public
+responses are stored in the Cloudflare Cache API for 10 seconds
+(`public, max-age=10, s-maxage=10`) and sent to browsers as `public, no-cache`,
+so a refresh revalidates against that edge copy instead of reusing a stale local
+one. Each event's public summary is rebuilt at most once every 10 seconds
+(`snapshotIntervalMs`), so a new registration can take up to about 20 seconds to
+appear in the public count. The registering player sees their own entry at once. A warm cache read skips D1 and session lookup. Public
 cache keys include only the path and documented standings cursor; cookies,
 authorization headers, and other query parameters do not create variants.
 Failed reads stay uncached. Deployed cache behavior and hit rate remain
@@ -422,19 +464,16 @@ storage or cost. See [operations](operations.md) and
 [verification](verification.md#limits-and-remaining-release-work) for release
 evidence and limits.
 
-## Qualification gates
+## Reference workload targets
 
-The [bounded follow-up scopes](capacity-follow-up.md) prepare the separate
-full-hour retention, real calendar, ranked-proof and later-tier measurements.
-They are unarmed proposals and authorize no provider work.
-
-The following are first-tier acceptance targets. The table does not declare
-them passed; see [the local report](local-qualification.md) for measured parts
-and their limits.
+The following first-tier targets are kept as a reference for a future small
+staging load script, written only if demand needs checking (owner decision,
+2026-10-31). No run is planned and they gate no opening. The table does not
+declare them passed; see [the local report](local-qualification.md) for measured
+parts and their limits.
 Account creation and email delivery need their own evidence; the signup load
 below uses accounts that already have username/password credentials. Recovery
-email and its verification are optional. The implemented monthly guard
-currently blocks the full production admission run, as described above.
+email and its verification are optional.
 
 | Area | Acceptance target |
 | --- | --- |
@@ -459,9 +498,9 @@ storage growth, and recovery outcome.
 
 Report cost per 1,000 games and per 10,000 spectator-hours. Include auth,
 projections, retained payloads, permanent records, retries, and active-object
-duration. Select enabled ceilings from the passing results, with the tested
-limits published together. Do not infer worldwide latency or budget compliance
-from local correctness checks.
+duration. Publish the tested workload with its results; it is a measurement,
+not a cap. Do not infer worldwide latency or budget compliance from local
+correctness checks.
 
 ## Package boundary and verification limits
 
@@ -496,7 +535,7 @@ duplicate results, real outbox acknowledgements and finalization. The exact
 workloads, source fingerprints and storage limits are in the
 [local qualification report](local-qualification.md).
 
-Public registration, regional latency, screening accuracy, deployed archive
-throughput and monthly cost remain unverified. Keep public capacity and ranked
-launch claims closed until the owning release gates pass. Deployment evidence
-is tracked separately in the [runbook](deployment.md).
+Public registration, regional latency, deployed archive
+throughput and monthly cost remain unverified and are measured after opening.
+Make no public capacity claim from local checks. Deployment evidence is tracked
+separately in the [runbook](deployment.md).

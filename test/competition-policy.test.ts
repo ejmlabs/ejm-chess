@@ -3,66 +3,25 @@ import { createExecutionContext, evictDurableObject, runInDurableObject, waitOnE
 import { Glicko2 } from 'glicko2';
 import { describe, expect, it } from 'vitest';
 import handler from '../src/server/index';
-import { initialRating, rateMatch } from '../src/server/competition';
-import type { Competition } from '../src/server/competition';
-import type { Env } from '../src/server/env';
-import type { Actor, InitGame } from '../src/shared/protocol';
-import { enableRanked, player } from './authority-helpers';
+import { CREATION_LIFETIME_MS, type Competition } from '../src/server/competition';
+import { publicProfile } from '../src/server/profile';
+import { initialRating, rateMatch } from '../src/server/rating';
+import { RULES_VERSION, type Actor, type GameResult, type InitGame } from '../src/shared/protocol';
+import { enableRanked, gamesAnswering, heldCompetition, patchBindings, player, privates, rankedPair, settlesWith, swapBindings } from './authority-helpers';
 
 const DAY = 86_400_000;
 type Authority = DurableObjectStub<Competition>;
 
 async function authority(existing?: Authority): Promise<Authority> {
   const competition = existing ?? env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
-  const authorityId = competition.id.toString();
   await enableRanked(competition);
-  await runInDurableObject(competition, async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-    const original = internal.env;
-    internal.env = { ...original, GAME: {
-      idFromName: (name: string) => original.GAME.idFromName(name),
-      get: (id: DurableObjectId) => {
-        const game = original.GAME.get(id);
-        return { status: () => game.status(), init: async (input: InitGame) => {
-          // The isolated fixture must answer Game's normal proof-reservation check.
-          await runInDurableObject(game, gameInstance => {
-            const fixture = gameInstance as unknown as { env: Env };
-            const binding = fixture.env.COMPETITION;
-            fixture.env = { ...fixture.env, COMPETITION: {
-              idFromName: (name: string) => binding.idFromName(name),
-              get: () => binding.get(binding.idFromString(authorityId)),
-            } as unknown as Env['COMPETITION'] };
-          });
-          return game.init(input);
-        } };
-      },
-    } as unknown as Env['GAME'] };
-    internal.schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
-  return competition;
+  // The isolated fixture must answer Game's normal ranked-reservation check.
+  return heldCompetition(gamesAnswering(game => ({
+    init: async (input: InitGame) => { await patchBindings(game, settlesWith(competition)); return game.init(input); },
+  })), competition);
 }
 
-async function pair(competition: Authority, actors: readonly [Actor, Actor]) {
-  const [a, b] = actors;
-  await competition.joinQueue(a, 'blitz', 'test');
-  let state = await competition.joinQueue(b, 'blitz', 'test');
-  if (state.status === 'queued') {
-    await runInDurableObject(competition, (_instance, storage) => {
-      storage.storage.sql.exec('UPDATE queue SET joined_at=? WHERE user_id IN (?,?)', Date.now() - 120_000, a.id, b.id);
-    });
-    state = await competition.queueStatus(b);
-  }
-  if (state.status !== 'reserved' && state.status !== 'live') throw new Error('Expected a reserved ranked game.');
-  const game = env.GAME.get(env.GAME.idFromName(state.gameId));
-  await enableRanked(game);
-  await runInDurableObject(game, async (instance, storage) => {
-    (instance as unknown as { schedule(): Promise<void> }).schedule = async () => {};
-    await storage.storage.deleteAlarm();
-  });
-  const initial = await game.snapshot(a);
-  return { game, initial, white: initial.white.id === a.id ? a : b, black: initial.white.id === a.id ? b : a };
-}
+const pair = (competition: Authority, actors: readonly [Actor, Actor]) => rankedPair(competition, actors, { region: 'test', holdAlarms: true });
 
 async function finish(competition: Authority, actors: readonly [Actor, Actor]) {
   const match = await pair(competition, actors);
@@ -111,20 +70,14 @@ describe('ranked queue and rating policy', () => {
     const [a, b] = await Promise.all([player(false, { recoveryEmail: false }), player(false, { recoveryEmail: false })]);
     await competition.joinQueue(a, 'blitz');
     const outcome = await runInDurableObject(competition, async instance => {
-      const local = instance as unknown as Competition;
-      const internal = instance as unknown as { env: Env };
-      const original = internal.env;
+      const local = instance as Competition;
       let release!: () => void;
       let observed!: () => void;
       const reachedStatus = new Promise<void>(resolve => { observed = resolve; });
       const statusReply = new Promise<void>(resolve => { release = resolve; });
-      internal.env = { ...original, GAME: {
-        idFromName: (name: string) => original.GAME.idFromName(name),
-        get: (id: DurableObjectId) => {
-          const game = original.GAME.get(id);
-          return { status: async () => { observed(); await statusReply; return game.status(); }, init: (input: InitGame) => game.init(input) };
-        },
-      } as unknown as Env['GAME'] };
+      const restore = swapBindings(instance, gamesAnswering(game => ({
+        status: async () => { observed(); await statusReply; return game.status(); },
+      })));
       try {
         const joining = local.joinQueue(b, 'blitz');
         await reachedStatus;
@@ -132,7 +85,7 @@ describe('ranked queue and rating policy', () => {
         expect(canceled.status).toBe('reserved');
         release();
         return { canceled, joined: await joining };
-      } finally { release(); internal.env = original; }
+      } finally { release(); restore(); }
     });
     expect(outcome.joined).toEqual(outcome.canceled);
     if (outcome.joined.status !== 'reserved') throw new Error('The committed reservation must survive cancellation.');
@@ -194,6 +147,117 @@ describe('ranked queue and rating policy', () => {
   });
 });
 
+describe('ranked matchmaking policy', () => {
+  async function waited(competition: Authority, seconds: number, ...actors: Actor[]): Promise<void> {
+    await runInDurableObject(competition, (_instance, state) => {
+      for (const actor of actors) state.storage.sql.exec('UPDATE queue SET joined_at=? WHERE user_id=?', Date.now() - seconds * 1_000, actor.id);
+    });
+  }
+
+  it('widens the rating window by five points each second of the shorter wait', async () => {
+    const competition = await authority();
+    const [low, high] = await Promise.all([player(), player()]);
+    await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec(
+      "INSERT INTO ratings(pool,user_id,value) VALUES('blitz',?,?)", high.id, JSON.stringify({ ...initialRating(Date.now()), rating: 1900 })));
+    await competition.joinQueue(low, 'blitz', 'EU');
+    expect((await competition.joinQueue(high, 'blitz', 'EU')).status).toBe('queued');
+    await waited(competition, 59, low, high);
+    expect((await competition.queueStatus(low)).status).toBe('queued');
+    await waited(competition, 60, low, high);
+    expect((await competition.queueStatus(low)).status).toBe('reserved');
+  });
+
+  it('matches across regions only after thirty seconds', async () => {
+    const competition = await authority();
+    const [east, west] = await Promise.all([player(), player()]);
+    await competition.joinQueue(east, 'blitz', 'EU');
+    expect((await competition.joinQueue(west, 'blitz', 'AS')).status).toBe('queued');
+    await waited(competition, 29, east, west);
+    expect((await competition.queueStatus(east)).status).toBe('queued');
+    await waited(competition, 30, east, west);
+    expect((await competition.queueStatus(east)).status).toBe('reserved');
+  });
+
+  it('gives White to the player with fewer White games, whichever joined first', async () => {
+    const competition = await authority();
+    const [moreFirst, fewerSecond, fewerFirst, moreSecond] = await Promise.all([player(), player(), player(), player()]);
+    await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec(
+      'INSERT INTO colors(user_id,balance) VALUES(?,3),(?,-3),(?,-3),(?,3)', moreFirst.id, fewerSecond.id, fewerFirst.id, moreSecond.id));
+    for (const actor of [moreFirst, fewerSecond, fewerFirst, moreSecond]) await competition.joinQueue(actor, 'blitz', 'EU');
+    const whites = await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec<{ white_id: string }>('SELECT white_id FROM matches').toArray().map(row => row.white_id));
+    expect(whites.sort()).toEqual([fewerSecond.id, fewerFirst.id].sort());
+  });
+});
+
+describe('ranked match creation', () => {
+  /** Replaces what the Competition's Game binding answers, keeping the isolated fixture's other behavior. Returns a restore. */
+  const overrideGame = (competition: Authority, calls: Record<string, unknown>) => patchBindings(competition, gamesAnswering(() => calls));
+
+  async function reservedPair(competition: Authority, actors: readonly [Actor, Actor]): Promise<string> {
+    await competition.joinQueue(actors[0], 'blitz');
+    const queued = await competition.joinQueue(actors[1], 'blitz');
+    if (queued.status !== 'reserved') throw new Error('Expected a reserved pairing.');
+    return queued.gameId;
+  }
+
+  /** Runs the next creation attempt, optionally pretending the match started `age` ms ago. */
+  async function retry(competition: Authority, gameId: string, age?: number): Promise<{ status: string; attempts: number }> {
+    await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec(
+      'UPDATE matches SET next_attempt_at=0,created_at=COALESCE(?,created_at) WHERE id=?', age === undefined ? null : Date.now() - age, gameId));
+    expect((await competition.maintenance()).errors).toEqual([]);
+    return runInDurableObject(competition, (_instance, state) => state.storage.sql.exec<{ status: string; attempts: number }>(
+      'SELECT status,attempts FROM matches WHERE id=?', gameId).one());
+  }
+
+  const openSeats = (gameId: string) => env.DB.prepare('SELECT COUNT(*) AS count FROM active_game_seats WHERE game_id=? AND released_at IS NULL').bind(gameId).first('count');
+  const capSeats = (actor: Actor) => env.DB.batch(Array.from({ length: 4 }, () => env.DB.prepare(
+    'INSERT INTO active_game_seats(user_id,game_id,acquired_at) VALUES(?,?,?)').bind(actor.id, crypto.randomUUID(), Date.now())));
+
+  it.each([
+    ['a seat cannot be acquired', async (competition: Authority, actors: readonly [Actor, Actor]) => { await capSeats(actors[1]); return async () => {}; }, 0],
+    ['Game initialization keeps failing after both seats are held', async (competition: Authority) => overrideGame(competition, { init: async () => { throw new Error('init_unavailable'); } }), 2],
+  ])('cancels a match stuck creating when %s, frees both players and lets them queue again', async (_name, stick, seatsHeld) => {
+    const competition = await authority();
+    const actors = await Promise.all([player(), player()]) as [Actor, Actor];
+    await stick(competition, actors);
+    const gameId = await reservedPair(competition, actors);
+    expect(await retry(competition, gameId)).toMatchObject({ status: 'creating' });
+    expect(await retry(competition, gameId, CREATION_LIFETIME_MS - 60_000)).toMatchObject({ status: 'creating' });
+    if (seatsHeld) expect(await openSeats(gameId)).toBe(seatsHeld);
+    expect(await retry(competition, gameId, CREATION_LIFETIME_MS)).toMatchObject({ status: 'cancelled' });
+    expect(await openSeats(gameId)).toBe(0);
+    expect(await env.GAME.get(env.GAME.idFromName(gameId)).status()).toBeNull();
+    for (const actor of actors) expect(await competition.queueStatus(actor)).toEqual({ status: 'idle' });
+    expect(await competition.joinQueue(actors[0], 'blitz')).toMatchObject({ status: 'queued' });
+  });
+
+  it('recovers a match before its lifetime ends and never cancels it once its Game exists', async () => {
+    const competition = await authority();
+    const [free, capped] = await Promise.all([player(), player()]);
+    await capSeats(capped);
+    const gameId = await reservedPair(competition, [free, capped]);
+    expect(await retry(competition, gameId)).toMatchObject({ status: 'creating' });
+    await env.DB.prepare('UPDATE active_game_seats SET released_at=? WHERE user_id=? AND released_at IS NULL AND game_id<>?').bind(Date.now(), capped.id, gameId).run();
+    expect(await retry(competition, gameId, CREATION_LIFETIME_MS - 60_000)).toMatchObject({ status: 'reserved' });
+    expect(await env.GAME.get(env.GAME.idFromName(gameId)).status()).toMatchObject({ id: gameId, status: 'ready' });
+    // A lost reply leaves the match creating although its Game exists. An expired age must not cancel it.
+    await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec("UPDATE matches SET status='creating' WHERE id=?", gameId));
+    expect(await retry(competition, gameId, 2 * CREATION_LIFETIME_MS)).toMatchObject({ status: 'reserved' });
+    expect(await openSeats(gameId)).toBe(2);
+    for (const actor of [free, capped]) expect(await competition.queueStatus(actor)).toMatchObject({ status: 'reserved', gameId });
+  });
+
+  it('does not cancel an expired match while its Game cannot be asked', async () => {
+    const competition = await authority();
+    const actors = await Promise.all([player(), player()]) as [Actor, Actor];
+    const restore = await overrideGame(competition, { status: async () => { throw new Error('game_unreachable'); } });
+    const gameId = await reservedPair(competition, actors);
+    expect(await retry(competition, gameId, 2 * CREATION_LIFETIME_MS)).toMatchObject({ status: 'creating' });
+    await restore();
+    expect(await retry(competition, gameId, 2 * CREATION_LIFETIME_MS)).toMatchObject({ status: 'cancelled' });
+  });
+});
+
 describe('public leaderboard policy', () => {
   it('paginates tied players once in stable order and excludes private or ineligible account state', async () => {
     const now = Date.now();
@@ -241,5 +305,39 @@ describe('public leaderboard policy', () => {
     expect(first.updatedAt).toBe(now);
     expect(JSON.stringify([first, second])).not.toContain('placeholder.invalid');
     expect(await env.DB.prepare('SELECT SUM(emailVerified) AS verified FROM user WHERE id IN (?,?)').bind(ranked[0].id, ranked[1].id).first('verified')).toBe(0);
+  });
+
+  it('stores rating standing only, so account age, a restriction or a closed ranking never strands an established player', async () => {
+    const now = Date.now();
+    const [young, restricted, closed, opponent] = await Promise.all([player(), player(), player(), player()]);
+    const caseId = crypto.randomUUID();
+    const decisionId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare('UPDATE user SET createdAt=? WHERE id=?').bind(new Date(now - DAY).toISOString(), young.id),
+      env.DB.prepare('INSERT INTO fairplay_cases(id,subject_id,game_id,status,created_at,updated_at) VALUES(?,?,?,\'decided\',?,?)').bind(caseId, restricted.id, crypto.randomUUID(), now, now),
+      env.DB.prepare(`INSERT INTO fairplay_decisions(id,case_id,subject_id,reviewer_id,outcome,reason,review_note,corroboration,evidence_ids,request_hash,created_at,appeal_until)
+        VALUES(?,?,?,?,'restrict','Policy fixture.','Policy notes.','Policy proof.','[]','fixture',?,?)`).bind(decisionId, caseId, restricted.id, opponent.id, now, now + DAY),
+      env.DB.prepare('INSERT INTO restrictions(id,user_id,case_id,decision_id,reason,starts_at,expires_at) VALUES(?,?,?,?,?,?,?)').bind(decisionId, restricted.id, caseId, decisionId, 'Policy fixture.', now, now + DAY),
+    ]);
+    const established = { ...initialRating(now), rating: 1650, rd: 80, games: 25, lastPlayedAt: now };
+    const open = await authority();
+    const shut = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
+    async function project(competition: Authority, actor: Actor): Promise<void> {
+      const id = crypto.randomUUID();
+      const result: GameResult = {
+        id, eventId: `${id}:3`, reservationId: crypto.randomUUID(), format: 'blitz', rated: true,
+        white: { id: actor.id, name: actor.name, ready: true, isAnonymous: false }, black: { id: opponent.id, name: opponent.name, ready: true, isAnonymous: false },
+        status: 'finished', version: 3, rulesVersion: RULES_VERSION, terminalDigest: `fixture-${id}`,
+        outcome: { winner: 'w', score: 1, reason: 'resignation' }, startedAt: now - 30_000, endedAt: now, createdAt: now - 40_000, pgn: '[Result "1-0"]\n\n1-0', plies: 20,
+      };
+      await runInDurableObject(competition, instance => privates(instance)
+        .project({ result, epoch: 1, version: 1, ratings: [{ userId: actor.id, state: established, distinctOpponents: 10 }] }));
+    }
+    await Promise.all([project(open, young), project(open, restricted), project(shut, closed)]);
+    const later = now + 8 * DAY;
+    for (const actor of [young, restricted, closed]) {
+      expect(await env.DB.prepare('SELECT eligible FROM leaderboard_entries WHERE user_id=?').bind(actor.id).first('eligible')).toBe(1);
+      expect((await publicProfile(env, actor.id, later))?.pools[0]).toMatchObject({ status: 'established', eligible: true });
+    }
   });
 });

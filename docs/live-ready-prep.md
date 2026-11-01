@@ -1,31 +1,52 @@
-# Live-ready prep (canary checklist paused)
+# Live-ready prep and go-live
 
-Recorded 2026-10-30. Protected canary player checklist steps 8+ stay paused.
-This note tracks offline prep for the ranked-inclusive critical path. It does
-not mark OpenSpec tasks complete and does not authorize live tests or ranked
-enablement.
+Updated 2026-10-31. This file orders the work to open public ranked play,
+arenas and tournaments (OpenSpec **7.2**). It authorizes nothing and checks no
+task. The owner runs every provider step on their own machine with private
+configs. Record each result, the deployed revision and every unrun check in
+[verification](verification.md).
 
-## Critical path reminder
+## Owner decision, 2026-10-31
 
-1. Canary player proof (**7.1** / **3.6**) — **paused**
-2. Ops / privacy readiness (**6.2** / **6.3**)
-3. Timeout proofs (**3.8**) then ranked gate (**7.2**)
-4. Ranked docs verify (**4.5**) and discovery (**7.3**)
+- No arbitrary product caps. Cloudflare budget alerts and the existing `$85`
+  stop webhook are the economic limit, not a hard invoice cap; alerts can lag.
+  Security and abuse limits, input bounds, bounded work per request and alarm,
+  fair-play rules (including 2 ranked games per pair per 24 hours), platform
+  safety bounds, ID non-recycling and the explicit stops stay.
+- The 2,000-player capacity harness is deleted, so no load run gates ranked
+  play or arenas. Measure demand after opening; if it ever needs checking, write
+  a small staging load script then.
+- Server-side Stockfish analysis is deleted. Reports stay informational with no
+  engine screening. Browser Stockfish practice stays.
+- The restore-and-replay provider drill is follow-up only, not a gate. Its code
+  stays.
+- Ranked uses the material timeout rule, the same as casual. The private
+  timeout-proof path is retired: no proof Container, qualification, proof
+  limits or `PROVER` binding. Ranked opens with `RANKED_ENABLED=true`.
 
-Follow-up load tasks **6.4**, **10.4**, **18.3–18.5** stay off this spine except
-where **7.2** needs a first-tier run result.
+## Critical path
+
+1. Publish the shared UI contracts (**1.5**)
+2. Build
+3. Deploy to the protected canary with ranked, arenas and tournaments on
+4. Canary player checklist (**3.6**, **7.1**)
+5. Live mail, alert, cron and stop readbacks (**6.2**, **6.3**)
+6. Remove full-host Access, keep admin protection (**7.2**)
+7. Public verification (**7.2**, **4.5**)
+8. Discovery (**7.3**)
+
+Not on the path, report as unrun: the restore-and-replay provider drill, the
+regional and endurance measurements (**6.4**, **10.4**). The drill's
+configuration is in [config examples](../config-examples/README.md).
 
 ## Prep status
 
 | Area | OpenSpec | Still needs live |
 | --- | --- | --- |
-| Specialty Wrangler templates | `config-examples/*.example.jsonc` (supports **3.8**) | Private ID fill-in → **3.9** |
-| Timeout-proof source + status JSON | **3.8** checked; default-off | Provider corpus, tier pin, proof-acceptance → **3.9** |
-| Ranked player/ops docs | **4.5** checked (publish + offline constant check) | Two-session verify → **7.1** |
-| Provisioning checklist | **6.2** checked | Mail/alert/analysis readback → **7.1** / **7.2** |
-| Privacy / stops / closure | **6.3** checked (controls + publish) | Outage/stop/restore drills → **7.1** / **7.2** |
-| ejm-ui discovery draft | **7.3a** checked (`discoverable: false`) | Enable + Studio publish → **7.3** |
-| Player checklist / ranked open | Paused **3.6** / **7.1**; **7.2** waits on **3.9** + **7.1** | Unpause when ready to deploy live |
+| Shared UI contracts | **1.3**, **1.5** checked; on `ejm-ui` `main`, pinned in `.github/ui-source.json` | Check out the pin (step 1) |
+| Ranked, privacy and ops docs | **4.5**, **6.2**, **6.3** checked | Two-session verify (step 4); mail, alert, cron, stop readback (step 5) |
+| ejm-ui discovery draft | **7.3a** checked (`discoverable: false`) | Enable and Studio publish (step 8) |
+| Player checklist, ranked, arena and tournament open | **3.6**, **7.1** open; **7.2** waits on them and on step 5 | Steps 3 to 7 |
 
 ## Provisioning checklist (6.2)
 
@@ -35,42 +56,267 @@ where **7.2** needs a first-tier run result.
 | Email Sending + DNS for `chess@ejmlabs.com` | Documented in deployment guide; approved-recipient test 2026-10-21 | Re-check DNS/signing/bounce and a live verification mail |
 | Turnstile on `chess.ejmlabs.com` | Bound in production `wrangler.jsonc` | Challenge success on canary session |
 | Access full-host + admin policy | Canary remains Access-protected | Owner session still required |
-| Budget alerts + `$85` stop webhook | Policy docs; application monthly caps off | Inbox delivery of an alert still unverified |
-| Canary deploy scope | Worker `6aa3ef0c…` includes Join + material timeout | Checklist 8+ and release readback |
-| Analysis cold-start costs | Analysis stays disabled | Measure only if analysis is approved |
-| Cost estimate vs $100 target | See [cost estimate](cost-estimate.md) and [budget](cloudflare-budget.md) | Update from current invoice/alerts before ranked open |
+| Budget alerts + `$85` stop webhook | Policy docs; application monthly caps off | Inbox delivery of an alert still unverified; not a hard cap |
+| Canary deploy scope | Worker `6aa3ef0c…` includes Join + material timeout | Release readback (step 3) |
+| Cost estimate vs $100 target | See [cost estimate](cost-estimate.md) and [budget](cloudflare-budget.md) | Update from current invoice and alerts (step 5) |
 
-## Specialty config reconstruction order
+## Production values
 
-1. Copy examples from `config-examples/` (see that README).
-2. `wrangler.recovery-drill.jsonc` — enables local recovery Vitest config path.
-3. `wrangler.proof-acceptance.jsonc` — unarmed until reviewed seal; needed before proof-acceptance re-run.
-4. `wrangler.proof-qualification.jsonc` — isolated corpus harness; fresh non-production resources only.
-5. `wrangler.proof-service.jsonc` — private production prover; Container only after tier qualification.
-6. `wrangler.capacity.jsonc` — keep exact unsealed example until a seal review rewrites private IDs.
+Names and values only. They live in the private production `wrangler.jsonc`
+`vars`; unset means the code default. All other variables stay as deployed.
 
-## Discovery draft inventory (7.3, unpublished)
+| Variable | Value | Set at |
+| --- | --- | --- |
+| `RANKED_ENABLED` | `true` | step 3 |
+| `ARENAS_ENABLED` | `true` | step 3 |
+| `TOURNAMENTS_ENABLED` | `true` | step 3 |
+| `AI_ENABLED` | `true` | canary build |
+| `NEW_WORK_STOPPED` | `false` | canary build |
+| `OPERATION_MODE` | `unattended` | canary build |
+| `GAME_RETIREMENT_MODE` | `scaled` | canary build |
+| `ARENA_*`, `CASUAL_*`, `RANKED_*` limits | unset (no product caps) | none |
 
-Keep `PROJECTS.chess.discoverable === false` until public open is approved.
-Intended chess guide destinations once the host is public:
+- `RANKED_ENABLED` alone opens ranked, and `/api/config` reports `ranked` from
+  it. No proof setting or `PROVER` binding exists. Delete `TIMEOUT_PROOF_PROFILE`,
+  `MONTHLY_PROOF_LIMIT`, any `ANALYSIS_*` or `ANALYZER` setting, and any
+  `MONTHLY_*` or `SIGNUP_ATTEMPT_LIMIT` setting from the private config if still
+  present.
+- `TOURNAMENTS_ENABLED` can open now. The fixed round-robin limits (3 active
+  events, 256 event records, 128 retained payloads, 10,000 game IDs) are
+  removed, so shared arena games no longer close the preview.
+- Leave every product limit variable unset. A `0` or malformed value can close
+  a mode; see [operations](operations.md#configuration-contract).
+  `NEW_WORK_STOPPED` stops new work for any value except unset or exact `false`.
+- `wrangler deploy` replaces dashboard vars with the config's vars, so the
+  private config must hold the full set.
+- The assets block needs `"not_found_handling": "404-page"` with
+  `run_worker_first: true`, so unknown pages get the built not-found page; see
+  [deployment](deployment.md#prepare-configuration-and-build).
 
-| Label | Path on `chess.ejmlabs.com` |
+## Stop levers
+
+| Need | Lever |
 | --- | --- |
-| Help | `/help/` |
-| Rules | `/rules/` |
-| Fair play | `/fair-play/` |
-| Privacy | `/privacy/` |
-| Developer guide | `/docs/developer-guide/` |
-| Timeout-proof status | `/qualification/timeout-proofs.json` |
+| All new work now | Operations stop form, `gamesStopped` (also blocks signup). With D1 or Access down, deploy `NEW_WORK_STOPPED=true`. |
+| Ranked only | Deploy `RANKED_ENABLED=false`. Queueing and pairing close, a queued player is dropped, a match still being created is cancelled and its seats released, and a created game not yet started voids at its first Ready (`eligibility-revoked`: no winner, no rating change). Started games finish and settle. Leaderboard projections are unchanged: the stored flag holds only the rating standard, and readers check account age, activity and restrictions at read time. |
+| Arenas only | Deploy `ARENAS_ENABLED=false`. Unstarted events cancel; running events drain. |
+| Tournaments only | Deploy `TOURNAMENTS_ENABLED=false`. Unstarted events cancel; running events finish. |
+| The host | Recreate the full-host Access application from its saved settings (after step 6). |
+| Code | `npx wrangler rollback "$CHESS_ROLLBACK_VERSION" --env ''` to a version compatible with the saved rules versions and settlement. See [rollback](deployment.md#rollback-and-recovery). |
 
-Studio / `ejmlabs` Projects row, Play action, marks and shared-registry adoption
-stay drafted offline on the sibling UI/Studio owners. Do not merge discovery
-enablement for the protected canary alone.
+## Sequence
 
-## When unpausing live work
+Run from the product root with Node 24. `--env ''` selects the production
+config. Read-only commands come first in each block. A failed step stops the
+sequence. Keep its receipts.
 
-1. Finish canary checklist + record in `verification.md`.
-2. Reconstruct specialty configs from private inventory.
-3. Run proof qualification / acceptance against material-timeout expectations.
-4. Complete **6.2** / **6.3** live rows above.
-5. Open ranked only through **7.2**; then verify **4.5** and publish **7.3**.
+### 1. Pin the published ejm-ui chess contracts (1.5)
+
+Every chess contract is on `ejm-ui` `main`: `useSearch` from `@ejm/ssg`, the
+centred `GameWorkspace`, the themed board (PR #55), the shared accessibility
+fixes (PR #58) and the systemic kit (PR #59). `.github/ui-source.json` pins the
+exact revision chess builds against, the same pin CI reads.
+
+```sh
+cd ../ejm-ui
+git fetch origin && git checkout "$(node -p "require('../ejm-chess/.github/ui-source.json').revision")"
+git status --short && git rev-parse HEAD
+npm ci --ignore-scripts
+```
+
+**Pass:** ejm-ui is clean at the pinned revision. **Stop:** a dirty shared
+source. Nothing is deployed yet.
+
+### 2. Build
+
+```sh
+cd ../ejm-chess
+node scripts/deploy-canary.mjs --check
+```
+
+`--check` is read-only and uses no network. It stops at the first failure with
+the fix. It checks Node 24, a clean tree pushed to its upstream, `../ejm-ui`
+clean at the pinned revision, and the private `wrangler.jsonc` against the
+[production values](#production-values) and retired keys. Then it runs
+`npm ci`, `typecheck`, `test`, `build` (with the shared design guard) and
+`worker:check`. The manual commands are in the
+[deployment guide](deployment.md#prepare-configuration-and-build).
+
+**Pass:** `Checks passed`; the chess SHA is recorded. Load time is checked from
+`ejm-ui` with `node scripts/perf.mjs <dist>` if you want a measurement.
+**Stop:** any failure.
+
+### 3. Deploy to the protected canary (7.2)
+
+Set the production values table in the private `wrangler.jsonc`. Diff it
+against the last deployed copy; only the three flags and the removed proof,
+analysis and monthly variables may change. Access still
+limits the host to canary identities and the games stop stays clear.
+
+```sh
+node scripts/deploy-canary.mjs
+```
+
+The script repeats `--check`, then reads back without changes: the credential,
+the live version (the rollback target) and the D1 migrations, which must show
+only `0016_cron_heartbeats.sql` pending. Type `deploy` to continue (`--yes`
+skips it). It then saves a D1 Time Travel bookmark, applies `0016`, runs
+`wrangler deploy --strict`, and reads back the new version, the empty migration
+list, and Access denial on `/`, `/api/config` and `/admin/`. A sanitized record
+goes to the gitignored `.deploy-records/`, with the lines for
+[verification](verification.md). If the deploy fails after the migration,
+`0016` is additive and stays applied; the script prints the rollback command
+and never runs it. Manual fallback:
+[update the running canary](deployment.md#update-the-running-canary).
+
+`0016` goes first: Operations status reads its table and the minute run trims
+seats by its index; without it the scheduled handler only logs
+`heartbeat_failed`. Then open `/api/config`, `/api/arenas`, `/api/tournaments`
+and `/api/admin/operations` in the owner browser.
+
+**Pass:** `/api/config` shows `ranked`, `ai` and `tournaments` true; arenas and
+tournaments `enabled` true; `authority.rankedOpen` true; `retirement.mode`
+`scaled`; each unset product limit reads `9007199254740991` and
+`authorityBytes` `4294967296`; `budget.stoppedByEnv` false; provider readback confirms `workers_dev` and `preview_urls` false and
+both cron triggers. **Stop:** any other value. Fix and redeploy, or roll back.
+
+### 4. Canary player checklist (3.6, 7.1)
+
+Use two distinct people on separate browsers and at least three
+credential-backed accounts. A pair may start only two ranked games per rolling
+24 hours (`pairAllowed`), so plan about six ranked games. Record each row as
+pass, fail or unrun with the deployed version.
+
+- Accounts: signup with and without recovery email, signin, invitation, legacy
+  guest reconnect. Reuse the 2026-10-21 mail evidence unless mail code changed.
+- Board (**3.6**): touch, drag, click, keyboard, promotion and underpromotion,
+  cancellable premove, focus, phone layout, muted sound, reduced motion.
+- Ranked: a mate or resignation; a flag with mating material (loss for the
+  player who ran out, at the flag); an insufficient-material flag (draw); a flag
+  with both browsers closed for 60 seconds, then reopened. Then reconnect,
+  history, replay, PGN, report receipt.
+- Profile and leaderboard (**4.5**): a provisional rating shows. The leaderboard
+  stays truthfully empty: a row needs 20 games, 8 opponents, a 7-day account and
+  RD at most 100.
+- Arena: register, queue, play, pause, resume, standings, result. Entry opens 15
+  minutes before an event (hourly blitz, daily and weekly rapid).
+- Round-robin: three accounts register for one event; read rounds, points and
+  standings.
+- Browser Stockfish game; unattended recovery (close both browsers through a
+  flag, reopen); canonical HTTPS, static and API headers, same-origin cookies,
+  WebSocket admission.
+
+```sh
+npx wrangler d1 execute DB --remote --env '' --command "SELECT id,status,settlement,reason,ended_at FROM games WHERE rated=1 ORDER BY ended_at DESC LIMIT 10"
+```
+
+**Pass:** every row recorded; every rated game is `finished` and `settled` with
+the expected reason; Operations export kinds `results` and `ratings` hold one
+result and one rating event per game; `authority.unsettled`, `outbox` and
+`pendingResults` are 0 and `lastMaintenanceError` is null. **Stop:** a failed board, settlement, arena
+or round-robin row, or a repeated rating event. Use the matching lever, fix,
+retest.
+
+### 5. Live mail, alert, cron and stop readbacks (6.2, 6.3)
+
+```sh
+npx wrangler secret list --env ''
+npx wrangler d1 time-travel info DB --env '' --json
+```
+
+- Secrets: `secret list` shows the four canary secret names. Add none.
+- Mail: a real-email account receives verification and recovery mail in the
+  approved inbox; the sending domain's DNS, signing and bounce records still
+  read back as verified; Operations shows the email stop clear.
+- Alerts: send Test from each saved usage policy to the approved inbox. Send the
+  webhook Save/Test: it sets every stop. Clear them in the owner form
+  with the latest `expectedVersion`. Compare account usage with the $100
+  envelope and update the [cost estimate](cost-estimate.md). Alerts and the
+  webhook are the economic limit; they are not a hard invoice cap.
+- Cron: read the stored heartbeat in `/api/admin/operations` (`cron.minute` and
+  `cron.daily`, from D1 `cron_heartbeats`, migration `0016`). The minute
+  schedule passes when `finishedAt` is within the last three minutes, is not
+  older than `startedAt`, and `lastErrorAt` is null or older than `startedAt`.
+  Read it twice a few minutes apart: `startedAt` must advance. The daily
+  schedule needs a wait past 03:15 UTC and then the same check. A `lastError`
+  names the failed stage; see [operations](operations.md#cron-heartbeat).
+- Stops: set `gamesStopped`; a new signup and a new queue join are refused and a
+  running game still moves; clear it. Read `outboxLagMs`, `outboxFailures`,
+  `correctionLagMs` and `lastMaintenanceError`. The `NEW_WORK_STOPPED` deploy
+  path stays unexercised; record it.
+- Recovery without restore: `POST /api/admin/operations/recovery/competition`
+  with `{}` returns a bookmark and Time Travel info reads. A response with
+  `"complete": false` is one page of a larger Competition: repeat with its
+  `cursor` until the response has a `bookmark`. Export and close one throwaway
+  account with its password. Production restore stays unrun.
+- Public read protection: create the zone rate-limiting rule for `/api/players/`,
+  `/api/leaderboard`, `/api/tournaments` and `/api/arenas` described in
+  [operations](operations.md#public-read-cache), with a threshold you choose.
+  The 10-second edge cache covers repeat reads only. Record the rule, or record
+  that it was skipped, before step 6 removes full-host Access.
+
+**Pass:** each bullet recorded. **Stop:** an alert, webhook or cron failure.
+Do not remove Access until it is fixed and reread.
+
+### 6. Remove full-host Access, keep owner protection (7.2)
+
+Proceed only after steps 1 to 5 pass and the owner says go.
+
+```sh
+curl -sS -H "Authorization: Bearer $CF_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/access/apps" | jq '.result[] | {name, domain, destinations}'
+curl -sS -H "Authorization: Bearer $CF_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/access/apps/$CHESS_CANARY_ACCESS_APP_ID" > "$CHESS_PRIVATE_DIR/canary-access-app.json"
+# change: delete only the full-host application
+curl -sS -X DELETE -H "Authorization: Bearer $CF_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/access/apps/$CHESS_CANARY_ACCESS_APP_ID"
+curl -sS -o /dev/null -w '%{http_code}\n' https://chess.ejmlabs.com/
+curl -sS -o /dev/null -w '%{http_code}\n' https://chess.ejmlabs.com/admin/
+curl -sS -o /dev/null -w '%{http_code}\n' https://chess.ejmlabs.com/api/admin/operations
+```
+
+The separate owner application keeps `/admin`, `/admin/*`, `/api/admin` and
+`/api/admin/*`, and its audience must equal `CF_ACCESS_AUD`. Save its settings
+and policies privately too. Keep the budget-stop path exception and its
+bot-filter skip.
+
+**Pass:** `/` returns 200; `/admin/` and `/api/admin/operations` are denied by
+Cloudflare Access (a login redirect or 403, not an application JSON body); the
+owner browser still opens Operations. **Stop:** if `/admin/` or the admin API
+answers without Access, close new work with the stop levers, then restore the
+full-host application from its saved settings.
+
+### 7. Public host and guide verification (7.2, 4.5)
+
+```sh
+for p in / /help/ /rules/ /fair-play/ /privacy/ /docs/developer-guide/ /credits/ /leaderboard/ /tournaments/; do curl -sS -o /dev/null -w "%{http_code} $p\n" "https://chess.ejmlabs.com$p"; done
+curl -sS https://chess.ejmlabs.com/api/config
+curl -sS https://chess.ejmlabs.com/api/arenas
+curl -sSI https://chess.ejmlabs.com/ | grep -iE 'content-security|strict-transport|x-content-type|x-frame|referrer|permissions'
+curl -sS -X POST -o /dev/null -w '%{http_code}\n' https://chess.ejmlabs.com/api/operations/budget-stop
+curl -sS -w '\n%{http_code}\n' https://chess.ejmlabs.com/no-such-page/ | grep -E 'Page not found|^404$'
+```
+
+From a non-canary network, sign up a fresh account, sign in and start a game.
+Guides must state that ranked, arenas and tournaments are open, the material
+timeout rule, no product limits beyond fair-play rules, and that behavior
+under heavy load is still being measured. Watch the first hour:
+`retirement.pending` and `oldestDue`, `outboxLagMs`, arena `unresolvedGames`,
+and spend against the alerts.
+
+**Pass:** every route 200; `/api/config` matches step 3; the budget-stop POST
+returns 403 (404 means its secret is missing or malformed); an unknown page
+returns 404 with the "Page not found" page; headers present;
+Turnstile, signup, signin and a game work publicly; guides match. **Stop:** use
+the stop levers, then fix.
+
+### 8. Discovery (7.3)
+
+After step 7 passes. In ejm-ui set `PROJECTS.chess.discoverable` true in
+`packages/site/src/projects.mjs`, replace its tagline (it says ranked and public
+release are not available), update `projects.test.ts`, run `npm run check` and
+release through its `RELEASING.md`. Its guide links are `/help/` and
+`/docs/developer-guide/`. In `ejmlabs`, update the Projects row, Play action,
+shared-registry adoption and guide links, run its build, type, budget and link
+checks, and publish through its owner process. Verify current products, guide
+links, marks and downloads.
+
+**Pass:** the shared lists and Studio show chess with working links and other
+products unchanged. **Stop:** revert the registry change; chess stays open.

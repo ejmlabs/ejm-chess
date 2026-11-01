@@ -2,27 +2,16 @@ import { env } from 'cloudflare:workers';
 import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readArenaStandings } from '../src/server/arena-projection';
-import type { ArenaProjection } from '../src/server/arena-projection';
 import type { Competition } from '../src/server/competition';
-import type { Env } from '../src/server/env';
 import type { ArenaStanding } from '../src/shared/arenas';
+import { heldCompetition, intercept, privates, swapBindings } from './authority-helpers';
 
 type Authority = DurableObjectStub<Competition>;
-type Internals = { env: Env; arenas: { projection: ArenaProjection }; schedule(): Promise<void> };
 const events: string[] = [];
 const user = (index: number) => `player-${String(index).padStart(3, '0')}`;
 
-async function authority(existing?: Authority) {
-  const stub = existing ?? env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
-  await runInDurableObject(stub, async (instance, state) => {
-    (instance as unknown as Internals).schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
-  return stub;
-}
-
 async function fixture(count: number, finished = false) {
-  const stub = await authority();
+  const stub = await heldCompetition();
   const id = `arena-stream-${crypto.randomUUID()}`;
   const now = Date.now();
   events.push(id);
@@ -39,7 +28,7 @@ async function fixture(count: number, finished = false) {
 
 async function advance(stub: Authority, now: number, count = 1) {
   await runInDurableObject(stub, async instance => {
-    for (let pass = 0; pass < count; pass++) await (instance as unknown as Internals).arenas.projection.advance(now);
+    for (let pass = 0; pass < count; pass++) await privates(instance).arenas.projection.advance(now);
   });
 }
 
@@ -78,7 +67,7 @@ describe('streamed frozen arena standings', () => {
     });
     await advance(stub, now);
     await evictDurableObject(stub);
-    const resumed = await authority(stub);
+    const resumed = await heldCompetition({}, stub);
     await advance(resumed, now, 8);
     const published = await standings(id);
     expect(published.sizes).toEqual([32, 1]);
@@ -105,7 +94,7 @@ describe('streamed frozen arena standings', () => {
     });
     await advance(stub, now);
     await evictDurableObject(stub);
-    const resumed = await authority(stub);
+    const resumed = await heldCompetition({}, stub);
     await runInDurableObject(resumed, (instance, state) => {
       const sql = state.storage.sql;
       sql.exec(`INSERT INTO arena_entry_versions(event_id,user_id,revision,name,points_half,games,visible)
@@ -113,7 +102,7 @@ describe('streamed frozen arena standings', () => {
       id, user(1), id, user(64), id, user(67));
       sql.exec('UPDATE arena_events SET revision=4,watermark=8 WHERE id=?', id);
       // Cleanup must retain the frozen anchor even when a later version exists.
-      for (let pass = 0; pass < 8; pass++) (instance as unknown as Internals).arenas.projection.cleanup();
+      for (let pass = 0; pass < 8; pass++) privates(instance).arenas.projection.cleanup();
     });
     await advance(resumed, now, 12);
     const first = await standings(id);
@@ -135,27 +124,23 @@ describe('streamed frozen arena standings', () => {
     const { stub, id, now } = await fixture(65, true);
     await advance(stub, now);
     const staged = await runInDurableObject(stub, async (instance, state) => {
-      const internal = instance as unknown as Internals;
-      const original = internal.env;
       let loseReply = true;
-      internal.env = { ...original, DB: new Proxy(original.DB, { get(target, property) {
-        if (property === 'batch') return async (...args: Parameters<D1Database['batch']>) => {
-          const reply = await target.batch(...args);
+      const restore = swapBindings(instance, ({ DB }) => ({ DB: intercept(DB, {
+        batch: async (...args: Parameters<D1Database['batch']>) => {
+          const reply = await DB.batch(...args);
           if (loseReply) { loseReply = false; throw new Error('lost_page_reply'); }
           return reply;
-        };
-        const value = Reflect.get(target, property);
-        return typeof value === 'function' ? value.bind(target) : value;
-      } }) };
-      try { await expect(internal.arenas.projection.advance(now)).rejects.toThrow('lost_page_reply'); }
-      finally { internal.env = original; }
+        },
+      }) }));
+      try { await expect(privates(instance).arenas.projection.advance(now)).rejects.toThrow('lost_page_reply'); }
+      finally { restore(); }
       return state.storage.sql.exec<{ page_payload: string }>('SELECT page_payload FROM arena_projection_builds WHERE event_id=?', id).one().page_payload;
     });
     expect(await env.DB.prepare('SELECT payload FROM arena_public_pages WHERE event_id=? AND generation=1 AND page_number=0')
       .bind(id).first('payload')).toBe(staged);
     expect(await readArenaStandings(env.DB, id)).toBeNull();
     await evictDurableObject(stub);
-    const resumed = await authority(stub);
+    const resumed = await heldCompetition({}, stub);
     await advance(resumed, now, 8);
     expect((await standings(id)).sizes).toEqual([32, 32, 1]);
     expect(await env.DB.prepare('SELECT payload FROM arena_public_pages WHERE event_id=? AND generation=1 AND page_number=0')
@@ -167,7 +152,7 @@ describe('streamed frozen arena standings', () => {
     const { stub, id, now } = await fixture(1, true);
     await env.DB.prepare(`INSERT INTO arena_final_pages(event_id,generation,page_number,payload) VALUES(?,1,0,'{}')`).bind(id).run();
     await runInDurableObject(stub, async instance => {
-      await expect((instance as unknown as Internals).arenas.projection.advance(now)).rejects.toThrow('arena_final_projection_conflict');
+      await expect(privates(instance).arenas.projection.advance(now)).rejects.toThrow('arena_final_projection_conflict');
     });
     expect(await readArenaStandings(env.DB, id)).toBeNull();
     expect(await env.DB.prepare('SELECT 1 FROM arena_final_archives WHERE event_id=?').bind(id).first()).toBeNull();

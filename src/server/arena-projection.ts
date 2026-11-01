@@ -28,7 +28,7 @@ export async function readArenaList(env: Pick<Env, 'DB' | 'ARENAS_ENABLED' | 'AR
     WHERE finished_at IS NULL OR finished_at>=? ORDER BY starts_at DESC,event_id LIMIT 21`).bind(visible(now)).all<{ summary: string }>();
   return { enabled: env.ARENAS_ENABLED === 'true', serverNow: now,
     events: result.results.map(row => JSON.parse(row.summary) as ArenaSummary),
-    limits: { maxEntrants: arenaLimits(env).maxEntrants, maxOpen: ARENA_POLICY.maxOpen, measuredCapacity: null } };
+    limits: { maxEntrants: arenaLimits(env).maxEntrants } };
 }
 
 export async function readArenaSummary(db: D1Database, id: string): Promise<ArenaSummary | null> {
@@ -312,14 +312,14 @@ export class ArenaProjection {
         this.finishCleanup('version', cursor, versions.length === ARENA_POLICY.workBatch && last
           ? [last.event_id, last.user_id, last.revision] : null);
       }
-      this.wakeCleanup(Date.now() + 1_000, true);
+      this.wakeCleanup(Date.now() + ARENA_POLICY.retryMs, true);
     });
   }
 
   async cleanupPublic(now: number): Promise<void> {
     const sql = this.ctx.storage.sql;
     const epochs = this.cleanupEpochs();
-    if (epochs.requested <= epochs.completed.public) { this.wakeCleanup(now + 1_000); return; }
+    if (epochs.requested <= epochs.completed.public) { this.wakeCleanup(now + ARENA_POLICY.retryMs); return; }
     const due = sql.exec<{ value: string }>("SELECT value FROM arena_meta WHERE key='public-cleanup-at'").toArray()[0];
     if (due && Number(due.value) > now) return;
     const cursor = this.cleanupCursor<CleanupCursor<[string, number, number]>>('public-cleanup-cursor')
@@ -340,7 +340,7 @@ export class ArenaProjection {
         ? [last.event_id, last.generation, last.page_number] : null);
       // A publication during the sweep changes the epoch. Revisit earlier keys
       // in another sweep without repeatedly restarting at a protected prefix.
-      this.wakeCleanup(now + 1_000);
+      this.wakeCleanup(now + ARENA_POLICY.retryMs);
     });
   }
 }

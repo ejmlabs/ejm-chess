@@ -5,12 +5,11 @@ import { readArenaStandings, readArenaSummary } from '../src/server/arena-projec
 import type { Competition } from '../src/server/competition';
 import { GAME_HOT_RETENTION_MS } from '../src/server/game';
 import { nextRetirementAt } from '../src/server/maintenance';
-import type { Env } from '../src/server/env';
 import type { Actor, GameResult, GameSnapshot } from '../src/shared/protocol';
 import type { ArenaActionResult } from '../src/shared/arenas';
-import { player } from '../test/authority-helpers';
+import { holdAlarms, patchBindings, player, swapBindings } from '../test/authority-helpers';
+import { authorityBindings } from './isolation';
 
-declare const __QUALIFICATION_ENTRANTS__: number;
 type Authority = DurableObjectStub<Competition>;
 type Intent = { game_id: string; white_actor: string; black_actor: string };
 
@@ -37,18 +36,10 @@ function accepted(reply: ArenaActionResult) {
   return reply.value;
 }
 
-async function configure(competition: Authority) {
-  await runInDurableObject(competition, async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-    internal.env = { ...internal.env, ARENAS_ENABLED: 'true', TOURNAMENTS_ENABLED: 'false', RANKED_ENABLED: 'false',
-      ARENA_ENTRANT_LIMIT: '2000', ARENA_GAME_LIMIT: '1000', ARENA_RETAINED_GAME_LIMIT: '2000',
-      ARENA_AUTHORITY_BYTE_LIMIT: '2147483648' };
-    // The harness controls lifecycle and failure boundaries explicitly. This
-    // does not qualify provider alarm delivery or wall-clock scheduling.
-    internal.schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
-}
+// The harness controls lifecycle and failure boundaries explicitly. This
+// does not qualify provider alarm delivery or wall-clock scheduling.
+const configure = (competition: Authority) => holdAlarms(competition, { ARENAS_ENABLED: 'true', TOURNAMENTS_ENABLED: 'false', RANKED_ENABLED: 'false',
+  ARENA_ENTRANT_LIMIT: '2000', ARENA_GAME_LIMIT: '1000', ARENA_RETAINED_GAME_LIMIT: '2000', ARENA_AUTHORITY_BYTE_LIMIT: '2147483648' });
 
 async function intents(competition: Authority, id: string): Promise<Intent[]> {
   return runInDurableObject(competition, (_instance, state) => state.storage.sql.exec<Intent>(
@@ -142,16 +133,8 @@ it('qualifies bounded native arena admission, game authority, sockets, scoring, 
       const white = JSON.parse(intent.white_actor) as Actor;
       const black = JSON.parse(intent.black_actor) as Actor;
       const game = env.GAME.get(env.GAME.idFromName(intent.game_id));
-      await runInDurableObject(game, async (instance, state) => {
-        const internal = instance as unknown as { schedule(): Promise<void>; env: Env };
-        internal.schedule = async () => {};
-        // A unique local authority isolates this scenario. Production always
-        // uses the global Competition, including result acknowledgement.
-        internal.env = { ...internal.env, COMPETITION: { idFromName: env.COMPETITION.idFromName.bind(env.COMPETITION),
-          get: () => env.COMPETITION.get(env.COMPETITION.idFromName(authorityName)) } as unknown as Env['COMPETITION'] };
-        await state.storage.deleteAlarm();
-      });
-      let snapshot = await game.snapshot(white);
+      await holdAlarms(game, authorityBindings(authorityName));
+      let snapshot: GameSnapshot = await game.snapshot(white);
       for (const actor of [white, black]) {
         const reply = await game.command(actor, { type: 'ready', id: crypto.randomUUID(), expectedVersion: snapshot.version });
         expect(reply.ok).toBe(true); snapshot = reply.snapshot;
@@ -216,9 +199,7 @@ it('qualifies bounded native arena admission, game authority, sockets, scoring, 
       latency: timing(settlements), duplicates: results.length * 5, duplicateElapsedMs: performance.now() - duplicatesStart,
       accounting, scope: 'Native terminal Game verification plus atomic authority acceptance. D1 projection/release measured separately. Not the 15-minute sustained admission workload.' };
     await parallel(snapshots, 16, context => runInDurableObject(context.game, async (instance, state) => {
-      const internal = instance as unknown as { env: Env };
-      internal.env = { ...internal.env, COMPETITION: { idFromName: env.COMPETITION.idFromName.bind(env.COMPETITION),
-        get: () => env.COMPETITION.get(env.COMPETITION.idFromName(authorityName)) } as unknown as Env['COMPETITION'] };
+      swapBindings(instance, authorityBindings(authorityName));
       await instance.flush();
       expect(state.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM result_delivery').one().count).toBe(0);
     }));
@@ -269,10 +250,7 @@ it('qualifies bounded native arena admission, game authority, sockets, scoring, 
     }));
     const retirementAt = Math.max(...results.map(result => result.endedAt)) + GAME_HOT_RETENTION_MS;
     clock.mockReturnValue(retirementAt);
-    await runInDurableObject(competition, instance => {
-      const internal = instance as unknown as { env: Env };
-      internal.env = { ...internal.env, GAME_RETIREMENT_MODE: 'scaled' };
-    });
+    await patchBindings(competition, { GAME_RETIREMENT_MODE: 'scaled' });
     const retirementStart = performance.now();
     let retired = 0;
     let warmupAt: number | null = null;

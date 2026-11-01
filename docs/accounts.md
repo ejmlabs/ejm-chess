@@ -94,7 +94,7 @@ to exercise verification expiry and idempotence, single-use password resets,
 and session revocation. That is
 not evidence of inbox delivery. Missing mail configuration or an exhausted
 email allowance closes email operations without disabling existing password
-signin. All provider send attempts count toward the existing email cap.
+signin. All provider send attempts count as email usage; there is no email cap.
 
 ## Account data and closure
 
@@ -171,12 +171,12 @@ session does not bypass credential-backed new-game or competition checks.
 Signup passes server Turnstile and basic form validation before one atomic D1
 reservation, then enters Better Auth's rate limits and password hashing. Each
 attempt reserves one unit, including a duplicate username, provider failure,
-uncertain reply or new HTTP retry. No unit is refunded. The default allowance
-is 1,000 attempts per UTC month and 10,000 lifetime attempts. The additive
-`0015_signup_budget.sql` migration counts existing identities against the
-lifetime allowance and stores only one aggregate row. Signup returns
-`503 SIGNUP_UNAVAILABLE` when stopped or exhausted, or `BUDGET_UNAVAILABLE`
-when quota storage fails. These paths do not invoke password hashing.
+uncertain reply or new HTTP retry. No unit is refunded. Attempts are counted
+for Operations only; there is no signup cap. The additive
+`0015_signup_budget.sql` migration counts existing identities in the lifetime
+counter and stores only one aggregate row. Signup returns
+`503 SIGNUP_UNAVAILABLE` when stopped, or `BUDGET_UNAVAILABLE` when counter
+storage fails. These paths do not invoke password hashing.
 
 ## Release and recovery checks
 
@@ -192,8 +192,9 @@ check the Worker with the existing byte limits.
 
 Local password timings measure wall time, not billed Worker CPU. They do not
 prove that production hashing fits the checked-in 50 ms CPU limit. Qualify
-signup, signin and reset under the deployed cap before publication, or review
-and measure a cap change within the approved budget. Do not weaken password
+signup, signin and reset under the deployed Worker CPU limit before
+publication, or review and measure a limit change within the approved budget.
+Do not weaken password
 hashing to meet an unverified performance target.
 
 Before publication, verify real recovery and verification inbox delivery on

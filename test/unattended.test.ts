@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ADJUDICATION_WAIT_MS, GAME_HOT_RETENTION_MS } from '../src/server/game';
 import { maintainUnattendedGames, retireGamePayloads } from '../src/server/maintenance';
 import { recordEvidence } from '../src/server/fairplay';
-import { activeGame, player } from './authority-helpers';
+import { activeGame, holdAlarms, pendingAdjudicationGame, player } from './authority-helpers';
 import type { Env } from '../src/server/env';
 import type { GameResult } from '../src/shared/protocol';
 
@@ -27,23 +27,14 @@ async function archiveError(game: Awaited<ReturnType<typeof completedGame>>['gam
   });
 }
 
-async function stopFixtureAlarms(game: Awaited<ReturnType<typeof activeGame>>['game']) {
-  // These fixtures isolate the Game cutoff contract; tournament authority integration owns registration and delivery tests.
-  await runInDurableObject(game, async (instance, state) => {
-    (instance as unknown as { schedule(): Promise<void> }).schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
-}
-
 describe('unattended recovery and payload retirement', () => {
   it('repairs a lost alarm by ending a casual flag at its deadline with a loss for the flagging player and settling it once', async () => {
     const { game, white, black, snapshot } = await activeGame();
     await env.DB.batch([white, black].map(actor => env.DB.prepare('INSERT INTO active_game_seats(user_id,game_id,acquired_at) VALUES(?,?,?)')
       .bind(actor.id, snapshot.id, Date.now())));
     const deadline = snapshot.clocks.deadline!;
-    const clock = vi.spyOn(Date, 'now').mockReturnValue(deadline);
+    vi.spyOn(Date, 'now').mockReturnValue(deadline);
     await evictDurableObject(game);
-    clock.mockReturnValue(deadline + ADJUDICATION_WAIT_MS);
     const maintained = await maintainUnattendedGames(env);
     expect(maintained.recovery).toEqual({ attempted: 1, completed: 1, failed: 0 });
     const terminal = await game.status();
@@ -71,7 +62,7 @@ describe('unattended recovery and payload retirement', () => {
       state.storage.sql.exec('UPDATE game_state SET value=?', JSON.stringify(stored));
     });
     const deadline = snapshot.clocks.deadline!;
-    const clock = vi.spyOn(Date, 'now').mockReturnValue(deadline);
+    vi.spyOn(Date, 'now').mockReturnValue(deadline);
     const flagged = (await game.status())!.result!;
     expect(flagged.rulesVersion).toBe('online-2026-10-v1');
     expect(flagged.pgn).not.toContain('[Termination ');
@@ -82,7 +73,6 @@ describe('unattended recovery and payload retirement', () => {
     await competition.flush();
     expect(await env.DB.prepare('SELECT status,rules_version FROM games WHERE id=?').bind(snapshot.id).first())
       .toEqual({ status: 'finished', rules_version: 'online-2026-10-v1' });
-    clock.mockReturnValue(deadline + ADJUDICATION_WAIT_MS);
     await maintainUnattendedGames(env);
     await competition.flush();
     const result = (await game.status())!.result!;
@@ -99,18 +89,38 @@ describe('unattended recovery and payload retirement', () => {
     expect(unknown).toBe('invalid_result');
   });
 
+  it('leaves a saved pending adjudication until its wait ends, then recovers it under the material rule', async () => {
+    const { game, snapshot, flaggedAt } = await pendingAdjudicationGame();
+    const competition = env.COMPETITION.get(env.COMPETITION.idFromName('global'));
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(flaggedAt);
+    await game.flush();
+    await competition.flush();
+    expect(await env.DB.prepare('SELECT status FROM games WHERE id=?').bind(snapshot.id).first('status')).toBe('pending-adjudication');
+    clock.mockReturnValue(flaggedAt + ADJUDICATION_WAIT_MS - 1);
+    expect((await maintainUnattendedGames(env)).recovery).toEqual({ attempted: 0, completed: 0, failed: 0 });
+    expect((await game.status())?.status).toBe('pending-adjudication');
+    clock.mockReturnValue(flaggedAt + ADJUDICATION_WAIT_MS);
+    expect((await maintainUnattendedGames(env)).recovery).toEqual({ attempted: 1, completed: 1, failed: 0 });
+    await competition.flush();
+    expect(await game.status()).toMatchObject({ status: 'finished', result: { endedAt: flaggedAt + ADJUDICATION_WAIT_MS,
+      outcome: { winner: 'b', score: 0, reason: 'timeout-win', decisionId: expect.stringContaining(snapshot.id) } } });
+    expect(await env.DB.prepare('SELECT status,reason,score FROM games WHERE id=?').bind(snapshot.id).first())
+      .toEqual({ status: 'finished', reason: 'timeout-win', score: 0 });
+    expect(await env.DB.prepare('SELECT COUNT(*) FROM active_game_seats WHERE game_id=? AND released_at IS NULL').bind(snapshot.id).first('COUNT(*)')).toBe(0);
+  });
+
   it('records revoked tournament eligibility before a new ready state can escape', async () => {
     const [white, black] = await Promise.all([player(), player()]);
     await env.DB.prepare("UPDATE account SET password=NULL WHERE userId=? AND providerId='credential'").bind(black.id).run();
     const id = crypto.randomUUID();
     const game = env.GAME.get(env.GAME.idFromName(id));
-    await stopFixtureAlarms(game);
+    await holdAlarms(game);
     const result = await game.init({ id, white, black, format: 'blitz', rated: false, reservationId: `event:${id}`,
       tournament: { id: 'hourly:blitz:revoked', round: 2, deadlineAt: Date.now() + 1_080_000 } });
     expect(result).toMatchObject({ status: 'finished', version: 1, startedAt: null,
       outcome: { reason: 'eligibility-revoked', score: null, winner: null } });
     await evictDurableObject(game);
-    await stopFixtureAlarms(game);
+    await holdAlarms(game);
     expect(await game.snapshot(white)).toMatchObject({ status: 'finished', version: 1, outcome: result.outcome });
   });
 
@@ -120,7 +130,7 @@ describe('unattended recovery and payload retirement', () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
     const id = crypto.randomUUID();
     const game = env.GAME.get(env.GAME.idFromName(id));
-    await stopFixtureAlarms(game);
+    await holdAlarms(game);
     const tournament = { id: 'hourly:blitz:fixture', round: 1, deadlineAt: now + 60_000 };
     await game.init({ id, white, black, rated: false, format: 'blitz', reservationId: `event:${id}`, tournament });
     await game.command(white, { type: 'ready', id: crypto.randomUUID(), expectedVersion: 0 });
@@ -131,11 +141,11 @@ describe('unattended recovery and payload retirement', () => {
     expect(ended).toMatchObject({ status: 'finished', endedAt: tournament.deadlineAt,
       outcome: { reason: 'technical-void', score: null, decisionId: `tournament:${tournament.id}:round:1:deadline` } });
     await evictDurableObject(game);
-    await stopFixtureAlarms(game);
+    await holdAlarms(game);
     expect(await game.enforceTournamentDeadline(tournament.id, 1)).toMatchObject({ version: ended!.version, outcome: ended!.outcome });
     const otherId = crypto.randomUUID();
     const other = env.GAME.get(env.GAME.idFromName(otherId));
-    await stopFixtureAlarms(other);
+    await holdAlarms(other);
     const waiting = await other.init({ id: otherId, white, black, rated: false, format: 'blitz', reservationId: `event:${otherId}`,
       tournament: { ...tournament, round: 2, deadlineAt: Date.now() + 600_000 } });
     clock.mockReturnValue(Date.now() + 600_000);

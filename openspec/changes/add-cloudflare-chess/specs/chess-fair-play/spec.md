@@ -8,7 +8,7 @@ Protect competitive chess with preventive controls, reproducible evidence, accou
 
 ### Requirement: AI mode remains separate from human fair play
 
-The optional computer opponent mode SHALL NOT weaken the ban on outside assistance in human games. Computer-opponent results SHALL be excluded from engine-use screening and player farming findings. The privacy guidance SHALL explain browser Stockfish execution, same-host asset delivery, private server game records, and the absence of external model inference. A selected browser engine label SHALL NOT be treated as audited execution provenance.
+The optional computer opponent mode SHALL NOT weaken the ban on outside assistance in human games. Computer-opponent results SHALL be excluded from human fair play cases and player farming findings. The privacy guidance SHALL explain browser Stockfish execution, same-host asset delivery, private server game records, and the absence of external model inference. A selected browser engine label SHALL NOT be treated as audited execution provenance.
 
 #### Scenario: AI game completes
 
@@ -31,26 +31,26 @@ The service SHALL enforce participant authorization, legal moves, deadlines, ran
 
 ### Requirement: Server recorded fair play evidence
 
-Fair play evidence SHALL come from recorded server moves, timing, results, and account history. Client engine evaluations SHALL NOT be trusted. Evidence SHALL identify its game version, analysis version, and source records so a reviewer can reproduce the relevant findings.
+Fair play evidence SHALL come from recorded server moves, timing, results, and account history. Client engine evaluations SHALL NOT be trusted. Evidence SHALL identify its game version and source records so a reviewer can reproduce the relevant findings.
 
 #### Scenario: Client submits a claimed engine score
 
 - **WHEN** a client submits a score or accuracy claim for an opponent
-- **THEN** it cannot alter the trusted analysis record or directly change ranked standing
+- **THEN** it cannot alter any trusted record or directly change ranked standing
 
-### Requirement: Bounded postgame engine screening
+### Requirement: No server engine screening
 
-Engine screening SHALL run after games and remain separate from live move handling. Screening SHALL prioritize reports, suspicious patterns, and leaderboard candidates, and include random sampling. Its findings SHALL consider meaningful decisions and multiple games, rather than engine agreement alone.
+The service SHALL NOT run server-side engine analysis or screening of finished games; this tooling was deleted on 2026-10-31. Reports and objective abuse checks SHALL be informational, and the service SHALL NOT describe any game or leaderboard candidate as engine-screened or reviewed. Browser Stockfish practice SHALL stay separate and unrated.
 
-#### Scenario: A short forced game has high accuracy
+#### Scenario: A report cites a high accuracy score
 
-- **WHEN** a game contains mostly forced or obvious moves
-- **THEN** a high agreement score alone does not establish engine assistance or trigger a sanction
+- **WHEN** a report or reviewer cites accuracy or engine agreement for a short or mostly forced game
+- **THEN** that score alone does not establish engine assistance or trigger a sanction
 
-#### Scenario: Analysis is backlogged
+#### Scenario: A player asks whether a game was screened
 
-- **WHEN** the analysis service reaches its concurrency or spending limit
-- **THEN** work remains pending or enters a visible retry state, live games continue, and the service does not describe unscreened leaderboard candidates as reviewed
+- **WHEN** a player or reviewer reads a report receipt or fair play guidance
+- **THEN** it states that no engine screening runs and that engine assistance cannot be fully prevented in unsupervised browser chess
 
 ### Requirement: Reports and private review
 
@@ -97,9 +97,9 @@ Affected account owners SHALL receive a decision notice and an appeal path. Auth
 ### Requirement: Fair play privacy and retention
 
 Before collection, the product SHALL publish data purposes, access and bounded
-cleanup ages for account, connection, report and analysis records. It SHALL
+cleanup ages for account, connection, report and evidence records. It SHALL
 preserve appeal-held evidence, permanent competition history and minimal audit,
-exclude secrets from evidence and private telemetry/analysis from live moves,
+exclude secrets from evidence and private telemetry from live moves,
 and require no cameras, screen recording or invasive fingerprinting.
 
 #### Scenario: Evidence retention expires
@@ -132,41 +132,32 @@ and require no cameras, screen recording or invasive fingerprinting.
 - **WHEN** native history is restored from before an accepted closure
 - **THEN** later closure receipts remain outside restore targets and their private-data removal is reapplied before access reopens, without deleting retained rating or correction history
 
-### Requirement: Bounded and recoverable analysis operations
-
-Analysis SHALL have enforced instance, concurrency, job, retry, storage, and spending controls. Failed work SHALL be visible to operators and safe to retry without duplicate cases or sanctions. Private analysis services SHALL NOT be publicly callable as unrestricted engine endpoints.
-
-#### Scenario: Analysis fails after processing
-
-- **WHEN** a job is retried after its result was saved but acknowledgement was lost
-- **THEN** the accepted analysis identity is reused without charging another investigation or applying any action twice
-
 ### Requirement: Honest fair play launch gate
 
-Public ranked launch SHALL require tested unattended adjudication, objective abuse controls, correction/recovery, and privacy limits. Optional reviewed sanctions SHALL still require human corroboration. Engine screening and reports SHALL be informational when no reviewer is active. The product SHALL state that engine assistance cannot be fully prevented in unsupervised browser chess.
+Public ranked launch SHALL require the tested material timeout rule, objective abuse controls, correction/recovery, and privacy limits. Optional reviewed sanctions SHALL still require human corroboration. Reports SHALL be informational when no reviewer is active. The product SHALL state that engine assistance cannot be fully prevented in unsupervised browser chess.
 
 #### Scenario: A readiness gate is unmet
 
-- **WHEN** adjudication, unattended abuse/recovery, privacy, or rating correction is not ready
+- **WHEN** the timeout rule, unattended abuse/recovery, privacy, or rating correction is not ready
 - **THEN** the product remains a clearly labelled beta with public competitive launch disabled, while verified casual play can remain available
 
 ### Requirement: Unattended runtime
 
-Ordinary play and tournaments SHALL not wait indefinitely for human review. A timeout SHALL be decided by the published material rule without human review; only a ranked proof game MAY wait up to 30 seconds for a private proof. Unattended mode SHALL disclose report review availability and disable new case-based sanctions and appeal decisions. Engine accuracy, IP, focus, report count, or other statistical screening alone SHALL never convict or restrict an account.
+Ordinary play and tournaments SHALL not wait indefinitely for human review. A timeout SHALL be decided at the flag by the published material rule without human review or any wait, in ranked games as in casual games. Unattended mode SHALL disclose report review availability and disable new case-based sanctions and appeal decisions. Engine accuracy, IP, focus, report count, or any other statistical signal alone SHALL never convict or restrict an account.
 
 #### Scenario: No reviewer is active
 
 - **WHEN** a participant reports suspected engine assistance
 - **THEN** the private receipt discloses review unavailability, promises no human action, and triggers no automatic sanction
 
-#### Scenario: Proof wait expires
+#### Scenario: A clock expires with no reviewer
 
-- **WHEN** no proved result exists after the bounded wait
+- **WHEN** a game's clock expires while no reviewer is active
 - **THEN** the material timeout rule decides the game once and normal durable settlement releases reservations
 
 ### Requirement: Bounded unreviewed report closure
 
-In unattended mode, an open case SHALL close as expired-unreviewed after seven days only without a human decision, unresolved appeal, or future evidence hold. An indexed pass SHALL close at most 500 cases and preserve the 1,000-open-case cap. Closure SHALL record automatic outcome/time and one version change without a human finding. Receipts and normal evidence retention SHALL remain. Duplicate reports and late analysis SHALL NOT reopen the case or extend retention.
+In unattended mode, an open case SHALL close as expired-unreviewed after seven days only without a human decision, unresolved appeal, or future evidence hold. An indexed pass SHALL close at most 500 cases and preserve the 1,000-open-case cap. Closure SHALL record automatic outcome/time and one version change without a human finding. Receipts and normal evidence retention SHALL remain. Duplicate reports SHALL NOT reopen the case or extend retention.
 
 #### Scenario: A report receives no review
 
@@ -175,7 +166,7 @@ In unattended mode, an open case SHALL close as expired-unreviewed after seven d
 
 #### Scenario: A closed report is retried
 
-- **WHEN** a participant resubmits an automatically expired report or its optional analysis arrives later
+- **WHEN** a participant resubmits an automatically expired report
 - **THEN** the original receipt and closure remain, no case is reopened, and evidence expiry is not extended
 
 ### Requirement: Safe automatic terminal retirement

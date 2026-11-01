@@ -16,12 +16,15 @@ export class ApiError extends Error {
   }
 }
 
+/** The only public origins the Worker serves. Staging is the shared pipeline's staging host; nothing else is accepted. */
+const CANONICAL_ORIGINS = new Set(['https://chess.ejmlabs.com', 'https://staging.chess.ejmlabs.com']);
+
 export function canonicalOrigin(env: SecurityEnv): string {
   let url: URL;
   try { url = new URL(env.AUTH_BASE_URL); }
   catch { throw new ApiError(503, 'CONFIGURATION_UNAVAILABLE', 'Service configuration is unavailable.'); }
   const local = env.LOCAL_DEV === 'true' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
-  if ((!local && url.origin !== 'https://chess.ejmlabs.com') || url.username || url.password || url.search || url.hash || url.pathname !== '/') {
+  if ((!local && !CANONICAL_ORIGINS.has(url.origin)) || url.username || url.password || url.search || url.hash || url.pathname !== '/') {
     throw new ApiError(503, 'CONFIGURATION_UNAVAILABLE', 'Service configuration is unavailable.');
   }
   if (local && !['http:', 'https:'].includes(url.protocol)) {
@@ -73,7 +76,7 @@ export async function readJson<T = Record<string, unknown>>(request: Pick<Reques
 }
 
 /** Siteverify consumes each valid token. A local bypass requires both explicit mode and an exact loopback origin. */
-export async function verifyTurnstile(request: Request, env: SecurityEnv, action: 'guest' | 'sign-up' | 'sign-in' | 'password-reset' | 'verify-email' | 'account-complete' | 'report', fetcher: typeof fetch = fetch): Promise<void> {
+export async function verifyTurnstile(request: Request, env: SecurityEnv, action: 'sign-up' | 'sign-in' | 'password-reset' | 'verify-email' | 'account-complete' | 'report', fetcher: typeof fetch = fetch): Promise<void> {
   if (isLocalRequest(request, env) && request.headers.get('X-Turnstile-Token') === 'local-development') return;
   const token = request.headers.get('X-Turnstile-Token');
   if (!env.TURNSTILE_SECRET_KEY) throw new ApiError(503, 'CHALLENGE_UNAVAILABLE', 'The security check is unavailable. Try again later.');
@@ -138,7 +141,15 @@ export function jsonResponse(value: unknown, status = 200): Response {
   return Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 }
 
-export function errorResponse(error: unknown): Response {
+/** An ApiError thrown inside a Durable Object reaches the Worker as a plain Error that keeps its fields. Restore it so the caller sees the real status and code. */
+function restoreApiError(error: unknown): unknown {
+  if (!(error instanceof Error) || error.name !== 'ApiError') return error;
+  const { status, code, retryAfterSeconds } = error as Error & Partial<ApiError>;
+  return Number.isInteger(status) && typeof code === 'string' ? new ApiError(status!, code, error.message, retryAfterSeconds) : error;
+}
+
+export function errorResponse(thrown: unknown): Response {
+  const error = restoreApiError(thrown);
   if (error instanceof ApiError) {
     const response = jsonResponse({ error: error.code, message: error.message }, error.status);
     if (error.retryAfterSeconds !== undefined) response.headers.set('Retry-After', String(error.retryAfterSeconds));

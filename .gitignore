@@ -13,13 +13,15 @@ coverage/
 .logs/
 .qualification/
 
-__pycache__/
-*.py[cod]
-
 # Private provider bindings and qualification configuration are restored locally.
 /wrangler.jsonc
+# Retired proof and capacity configs stay ignored so private copies are never committed.
 /wrangler.capacity.jsonc
 /wrangler.proof-acceptance.jsonc
 /wrangler.proof-qualification.jsonc
 /wrangler.proof-service.jsonc
 /wrangler.recovery-drill.jsonc
+# Local deploy records from scripts/deploy-canary.mjs stay private.
+/.deploy-records/
+# Worker bundle written by the shared deploy pipeline.
+/worker-dist/

@@ -2,7 +2,12 @@
 
 Source placement updated on 2026-10-26. Task counts move; the current
 [task file](tasks.md) is authoritative. This handoff preserves source and
-execution facts; it changes no launch scope, limits or approval.
+execution facts. Updated on 2026-10-31 for the owner's launch policy (see
+[proposal](proposal.md)): no arbitrary product caps, no first-tier load-test
+gate, and ranked uses the material timeout rule only. Later the same day the
+tooling decision deleted the capacity harness and server-side Stockfish analysis
+and made the restore drill follow-up only. Sections that predate these are dated
+history.
 
 ## Read before resuming
 
@@ -11,7 +16,7 @@ execution facts; it changes no launch scope, limits or approval.
 - [Implementation scope](implementation-scope.md) contains dated evidence and
   earlier boundaries. Read it with later approved decisions; do not treat an
   old local-only limit or financial allocation as current policy.
-- [Baseline verification](../reconcile-chess-planning-baseline/verification.md)
+- [Baseline verification](../archive/2026-10-30-reconcile-chess-planning-baseline/verification.md)
   records addition-only prerequisite and spec-merge checks. It proves neither
   runtime correctness nor release readiness.
 - The [repository handoff](../../HANDOFF.md) covers owner and publication
@@ -34,7 +39,7 @@ Consume public `@ejm/*` exports. Read [source handoff](../../../docs/source-hand
 for dependency bindings, configuration gaps and publication revisions.
 
 No current build or launch qualification is established by restoration. The
-unfinished diagnostic patch below remains part of the recovered source.
+capacity diagnostic patch it carried was deleted on 2026-10-31.
 
 ## Latest retained execution results
 
@@ -50,6 +55,9 @@ while preparing this handoff, so they are last-known state.
 | Capacity full22 | Failed at final registration confirmations with five HTTP 503 responses. It recorded 10,829 acknowledged registration replies, 1,225 distinct confirmed accounts, zero charged Game IDs and zero native Game objects. | No passing full workload, first-tier capacity or large-event release claim. |
 | Capacity cleanup | Saved owner stop was confirmed, temporary test exception was removed and the local driver exited. Resources and traces were retained. | Native shutdown was not confirmed. Do not claim full native retirement. |
 
+The proof rows above are history: the timeout-proof path was retired on
+2026-10-31, and the capacity harness behind the capacity rows was deleted the
+same day. They are dated history, not launch gates.
 The earlier release evidence map was written before these final outcomes.
 Use the stopped-run summaries when continuing. Root acceptance of a packet,
 source sealing, local readiness and a buffered trace header are not passing
@@ -60,59 +68,37 @@ job, reuse a prior run identity as a new attempt, reopen a stopped control,
 refund uncertainty, reuse an old PID or execute an expired schedule. Preserve
 all prior failures, permits, reservations, traces and charges.
 
-### Partial capacity diagnostic patch
+### Capacity diagnostic patch (deleted)
 
-The retained product source includes an unfinished failure-receipt patch in:
-
-- `src/shared/capacity-failure.ts`
-- `src/server/capacity-meter.ts`
-- `src/server/capacity-native.ts`
-- `src/server/capacity-protocol.ts`
-- `src/server/capacity-qualification.ts`
-- `scripts/capacity-driver.mjs`
-- `test/capacity-failure.test.ts`
-- `test/capacity-native.test.ts`
-
-It adds a fixed code allowlist, bounded sanitized RPC failure receipts and
-driver retention of matching audit headers. Real HTTP 503 responses remain
-failures or uncertainty. Lost transport can still leave the cause unknown.
-No audit storage or provider logging was added.
-
-The patch is **partial, unreviewed, untested and undeployed**. Focused tests and
-typecheck from earlier source do not verify it. Remaining work includes native
-throw-before-finish retention, driver receipt persistence and rejection checks,
-affected typecheck, guide updates and source review before sealing a candidate.
+The unfinished failure-receipt patch and every `capacity-*` source, script, test
+and config example were deleted on 2026-10-31 with the harness. The failed
+attempts stay recorded in [design](design.md) ("Superseded: isolated native
+capacity run").
 
 ## Unchecked tasks
 
-These labels are unchanged from [tasks.md](tasks.md):
+These are the open tasks in [tasks.md](tasks.md). Task 3.9 (proof path retired) is checked; 7.2 still needs the live 6.2 and 6.3 readbacks:
 
 | Labels | Remaining contract |
 | --- | --- |
 | 3.6 | Complete required two-browser board interaction and accessibility coverage. The completed friend flow above is partial evidence. |
-| 3.8 | Qualify the timeout-proof contract, ordinary flags, failures, finite attempts, recovery and stops. |
-| 4.5 | Finish policy guidance and verify game, history and leaderboard flows together. |
-| 6.2 | Complete provider, mail and deployed cost evidence. Reuse verified delivery and reset evidence while those contracts remain unchanged. |
-| 6.3 | Finish spending, storage, recovery, privacy and accepted-work controls and their readback. |
-| 6.4 | Complete the required measurements. Broader regional work remains unfinished beyond the initial opening gate. |
-| 7.1 | Finish critical-path protected-host player and integration checks against recorded deployed source. |
-| 7.2 | Open public ranked and first-tier arenas only after their approved critical-path gates pass; verify live limits and guides. |
+| 6.4 | Superseded 2026-10-31: no load run is planned. Measure real demand after opening. |
+| 7.1 | Finish protected-host player and integration checks, now including ranked and arena play, against recorded deployed source. |
+| 7.2 | Open ranked play and arenas after 3.9, the 3.6 and 7.1 player checks and the live 6.2 and 6.3 mail, alert, cron and stop readbacks. Then remove Access and verify the public host and guides. |
 | 7.3 | Publish verified shared discovery and Studio adoption after product and guide destinations pass. |
-| 10.4 | Finish and qualify the large-event design, standings, recovery and published limits. |
-| 18.3 | Resolve registration diagnostics while retaining prior failures and accounting. No passing registration-only diagnostic is recorded. |
-| 18.4 | Run the full approved native workload against a freshly reviewed repaired candidate. |
-| 18.5 | Reconcile all retained failures, usage, receipts, stops and documented measured limits. |
+| 10.4 | Superseded 2026-10-31: no large-event qualification run is planned. |
+| 18.3 | Superseded 2026-10-31: the harness is deleted. The six failed attempts stay recorded as history. |
+| 18.4 | Superseded 2026-10-31: the full native workload is no longer planned. |
+| 18.5 | Superseded 2026-10-31: nothing to reconcile. Any isolated capacity resources left in the provider account need an owner readback and decision. |
 
-The critical-path capacity target remains three 2,000-entry events, a combined
-1,000 unfinished-game cap, 19,000 required and 20,000 maximum native admissions,
-the full 900-second stream and the approved ten-second recovery lead. These are
-test requirements, not supported capacity. The shorter run does not complete
-the longer calendar, full-hour endurance, regional or later-tier qualification.
+The former capacity targets (three 2,000-entry events, 1,000 unfinished games,
+19,000 required native admissions, a 900-second stream) are reference targets
+only in `docs/arena-design.md`, not supported capacity and not planned work. If
+demand ever needs checking, write a small staging load script then.
 
 The current plan retains the single $100 monthly target and existing spending
-stops, including the combined $25 capacity-test ceiling. A target, quota or
-alert cannot guarantee a provider invoice cap. This handoff adds no allowance
-and changes no limit.
+stops. A target, quota or alert cannot guarantee a provider invoice cap. This
+handoff adds no allowance and changes no limit.
 
 ## Retained source
 
@@ -156,51 +142,44 @@ closed to the public:
   Archived `reconcile-chess-planning-baseline` (no delta specs).
 - Owner accepted and merged the material timeout rule (PR #3). Doc and UI gaps
   for the old automatic void were closed; `AGENTS.md` matches the rule. The
-  private proof-acceptance re-run against the new expectations remains
-  unexecuted and still gates ranked proof enablement.
+  private proof-acceptance re-run is no longer needed: the proof path was
+  retired on 2026-10-31 (task 3.9).
 - Protected canary player checklist steps 1–7 plus the explicit Join retest are
   done. **Steps 8+ are paused** by owner request; they are not abandoned.
 - Ranked-inclusive source/docs prep checked in tasks: **3.8**, **4.5**, **6.2**,
   **6.3**, **7.3a**. Specialty Wrangler examples, timeout-proof status JSON,
   color-balance guidance, and provisioning checklist are in tree. Still open:
-  paused **3.6**/**7.1**, provider **3.9**, ranked open **7.2**, discovery
-  publish **7.3**, follow-ups **6.4**/**10.4**/**18.x**.
+  paused **3.6**/**7.1**, ranked open **7.2** (**3.9** proof path retired and checked),
+  discovery publish **7.3**. Superseded **6.4**/**10.4**/**18.x** (2026-10-31).
 
 ### Configuration and shared UI notes
 
-- Matching `ejm-ui` source for chess contracts remains local branch
-  `wip/preserve-all-20261025` in the sibling `ejm-ui` checkout. Publish discovery
-  and Studio listing only after public opening is approved; do not merge that
-  branch to `ejm-ui` main solely for the protected canary.
+- Matching `ejm-ui` source for chess contracts is the `main` revision pinned in
+  `.github/ui-source.json` (PRs #55
+  and #58, 2026-10-31). Publish discovery and Studio listing only after public
+  opening is approved.
 - Local production `wrangler.jsonc` (gitignored) is reconstructed with
-  `env.local` for Worker tests and canary deploy. The five specialty configs
-  (`wrangler.capacity.jsonc`, `wrangler.proof-acceptance.jsonc`,
-  `wrangler.proof-qualification.jsonc`, `wrangler.proof-service.jsonc`,
-  `wrangler.recovery-drill.jsonc`) are still absent from this checkout and must
-  be rebuilt from private records before proof, capacity or recovery drills.
+  `env.local` for Worker tests and canary deploy. Only
+  `wrangler.recovery-drill.jsonc` is still needed and absent from this checkout;
+  rebuild it from private records before a recovery drill. The capacity and proof
+  configs are deleted or retired and need no rebuild.
   Do not commit secrets or provider IDs.
 
 ## Resume in this order
 
-1. When unpausing the canary checklist, finish protected-host player checks from
-   step 8 onward and record results in `docs/verification.md`.
-2. Refresh OpenSpec apply status for `add-cloudflare-chess`. Review the partial
-   capacity patch and finish only the affected failure, native and driver checks
-   plus typecheck. Retain old results as historical evidence.
-3. Diagnose the retained proof and registration failures. Reconcile prior work
-   and current provider state before preparing any fresh execution packet.
-   Preserve all held uncertainty and stop receipts. Re-run private
-   proof-acceptance only after specialty Wrangler configs are reconstructed.
-4. Prepare a new feasible schedule and immutable candidate within the existing
-   approved scope. Follow the review and finite-work requirements in the plan.
-   Never resume an expired packet or infer success from readiness.
-5. Finish ranked proof and recovery, then the full capacity workload and its
-   accounting and stop readback. Derive enabled limits from actual results.
-6. Update product guides with measured limits and unrun checks. Build and deploy
-   accepted source, verify canonical public access, then publish discovery in
-   `ejm-ui` and Studio through their owner processes.
-7. Update task checkboxes only from verified results. Sync and archive completed
-   scope after required checks pass; retain longer follow-up work explicitly.
+1. Finish the protected-host player checks from step 8 onward (3.6, 7.1), now
+   including ranked and arena play, and record results in
+   `docs/verification.md`.
+2. Read back live mail, budget alerts, cron and the stop webhook (6.2, 6.3).
+3. Remove Access, verify the public host and guides (7.2), then publish
+   discovery in `ejm-ui` and Studio through their owner processes (7.3). Measure
+   real demand after opening.
+4. Follow-up only, not gates: the restore-and-replay provider drill (its code
+   stays) and any small staging load script if demand needs checking. The
+   capacity harness and server-side analysis were deleted on 2026-10-31; retain
+   old results as history and never infer success from readiness.
+5. Update task checkboxes only from verified results. Sync and archive completed
+   scope after required checks pass; retain follow-up work explicitly.
 
 No public launch, provider mutation beyond the approved protected canary, or
 live discovery publication was performed while updating this handoff.

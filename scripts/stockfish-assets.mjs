@@ -39,10 +39,10 @@ for (const file of manifest.files) {
       await rm(temporary, { force: true });
     }
   }
-  const info = await stat(target);
+  const info = await stat(target).catch(() => null);
   const hash = createHash('sha256');
-  for await (const chunk of createReadStream(target)) hash.update(chunk);
-  if (!info.isFile() || info.size !== file.bytes || hash.digest('hex') !== file.sha256) {
+  if (info?.isFile()) for await (const chunk of createReadStream(target)) hash.update(chunk);
+  if (!info?.isFile() || info.size !== file.bytes || hash.digest('hex') !== file.sha256) {
     throw new Error(`Stockfish integrity mismatch: ${file.name}. Restore with npm run engine:fetch.`);
   }
 }

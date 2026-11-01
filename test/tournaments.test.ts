@@ -3,26 +3,16 @@ import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { acquireSeatGuard, acquireTournamentAccount, hasActiveSeat } from '../src/server/auth';
 import type { Competition } from '../src/server/competition';
-import type { Env } from '../src/server/env';
 import type { Actor, GameSnapshot, InitGame } from '../src/shared/protocol';
 import type { TournamentView } from '../src/shared/tournaments';
 import { TOURNAMENT_LIMITS } from '../src/server/tournaments';
-import { player } from './authority-helpers';
+import { gamesAnswering, heldCompetition, holdAlarms, intercept, patchBindings, player, settlesWith } from './authority-helpers';
 
 const HOUR = 3_600_000;
 type Authority = DurableObjectStub<Competition>;
 afterEach(() => { vi.restoreAllMocks(); });
 
-async function authority(existing?: Authority): Promise<Authority> {
-  const stub = existing ?? env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
-  await runInDurableObject(stub, async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-    internal.env = { ...internal.env, TOURNAMENTS_ENABLED: 'true', RANKED_ENABLED: 'true' };
-    internal.schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
-  return stub;
-}
+const authority = (existing?: Authority) => heldCompetition({ TOURNAMENTS_ENABLED: 'true', RANKED_ENABLED: 'true' }, existing);
 
 let clockIndex = 0;
 function startClock() {
@@ -46,17 +36,7 @@ async function event(competition: Authority, id: string, actor?: Actor): Promise
 
 async function gameFor(pairing: TournamentView['games'][number], competition: Authority) {
   const game = env.GAME.get(env.GAME.idFromName(pairing.id));
-  const authorityId = competition.id.toString();
-  await runInDurableObject(game, async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-    const original = internal.env.COMPETITION;
-    internal.env = { ...internal.env, COMPETITION: {
-      idFromName: (name: string) => original.idFromName(name),
-      get: () => original.get(original.idFromString(authorityId)),
-    } as unknown as Env['COMPETITION'] };
-    internal.schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
+  await holdAlarms(game, settlesWith(competition));
   return game;
 }
 
@@ -164,27 +144,40 @@ describe('scheduled tournament authority', () => {
     for (const actor of actors.slice(2)) expect(await competition.queueStatus(actor)).toEqual({ status: 'idle' });
   });
 
+  it('keeps the cancellation reason when releasing a finished event must be retried', async () => {
+    const { startsAt, clock } = startClock();
+    const competition = await authority();
+    const { id, actors } = await enter(competition, 3, startsAt);
+    await env.DB.prepare("UPDATE account SET password=NULL WHERE userId=? AND providerId='credential'").bind(actors[0].id).run();
+    let fail = true;
+    await patchBindings(competition, ({ DB }) => ({ DB: intercept(DB, { prepare: (sql: string) => {
+      if (!fail || !sql.includes('DELETE FROM tournament_account_locks WHERE tournament_id=?')) return DB.prepare(sql);
+      fail = false;
+      throw new Error('Simulated D1 failure while releasing the event');
+    } }) }));
+    clock.mockReturnValue(startsAt);
+    await competition.maintenance();
+    expect((await event(competition, id)).status).toBe('cancelled');
+    clock.mockReturnValue(startsAt + 31_000);
+    await competition.maintenance();
+    expect(await env.DB.prepare('SELECT COUNT(*) FROM tournament_account_locks WHERE tournament_id=?').bind(id).first('COUNT(*)')).toBe(0);
+    expect((await event(competition, id)).reason).toBe('Fewer than three eligible available players remained at the start.');
+  });
+
   it('recovers an account claim committed before a crash without treating its own reservation as busy', async () => {
     const { startsAt, clock } = startClock();
     let competition = await authority();
     const { id, actors } = await enter(competition, 3, startsAt);
-    await runInDurableObject(competition, instance => {
-      const internal = instance as unknown as { env: Env };
-      const original = internal.env.DB;
-      let fail = true;
-      internal.env = { ...internal.env, DB: new Proxy(original, { get(target, property) {
-        if (property !== 'prepare') { const value = Reflect.get(target, property); return typeof value === 'function' ? value.bind(target) : value; }
-        return (sql: string) => {
-          const statement = original.prepare(sql);
-          if (!fail || !sql.includes('INSERT INTO tournament_account_locks')) return statement;
-          return { bind: (...args: unknown[]) => ({ first: async () => {
-            const value = await statement.bind(...args).first();
-            fail = false;
-            throw new Error(`Simulated crash after D1 account claim ${Boolean(value)}`);
-          } }) } as unknown as D1PreparedStatement;
-        };
-      } }) };
-    });
+    let fail = true;
+    await patchBindings(competition, ({ DB }) => ({ DB: intercept(DB, { prepare: (sql: string) => {
+      const statement = DB.prepare(sql);
+      if (!fail || !sql.includes('INSERT INTO tournament_account_locks')) return statement;
+      return { bind: (...args: unknown[]) => ({ first: async () => {
+        const value = await statement.bind(...args).first();
+        fail = false;
+        throw new Error(`Simulated crash after D1 account claim ${Boolean(value)}`);
+      } }) } as unknown as D1PreparedStatement;
+    } }) }));
     clock.mockReturnValue(startsAt);
     await competition.maintenance();
     expect((await event(competition, id)).status).toBe('starting');
@@ -201,26 +194,29 @@ describe('scheduled tournament authority', () => {
     expect(await env.DB.prepare('SELECT COUNT(*) FROM tournament_game_admissions WHERE tournament_id=?').bind(id).first('COUNT(*)')).toBe(3);
   });
 
+  it('reads a running round when its games next need it, not every 30 seconds', async () => {
+    const { startsAt, clock } = startClock();
+    const competition = await authority();
+    const { id } = await enter(competition, 3, startsAt);
+    clock.mockReturnValue(startsAt);
+    await competition.maintenance();
+    expect((await event(competition, id)).status).toBe('running');
+    const due = await runInDurableObject(competition, (_instance, state) =>
+      state.storage.sql.exec<{ next_at: number }>('SELECT next_at FROM tournaments WHERE id=?', id).one().next_at);
+    // The game waits two minutes for both players to be ready, and nothing else is pending.
+    expect(due).toBe(startsAt + 120_000);
+  });
+
   it('resumes the same persisted game after an uncertain init and never resets its wall deadline', async () => {
     const { startsAt, clock } = startClock();
     let competition = await authority();
     const { id } = await enter(competition, 3, startsAt);
-    await runInDurableObject(competition, instance => {
-      const internal = instance as unknown as { env: Env };
-      const original = internal.env.GAME;
-      let fail = true;
-      internal.env = { ...internal.env, GAME: {
-        idFromName: (name: string) => original.idFromName(name),
-        get: (gameId: DurableObjectId) => {
-          const game = original.get(gameId);
-          return { status: () => game.status(), init: async (input: InitGame) => {
-            const value = await game.init(input);
-            if (fail) { fail = false; throw new Error('Simulated lost init response.'); }
-            return value;
-          } };
-        },
-      } as unknown as Env['GAME'] };
-    });
+    let fail = true;
+    await patchBindings(competition, gamesAnswering(game => ({ init: async (input: InitGame) => {
+      const value = await game.init(input);
+      if (fail) { fail = false; throw new Error('Simulated lost init response.'); }
+      return value;
+    } })));
     clock.mockReturnValue(startsAt);
     await competition.maintenance();
     const uncertain = await event(competition, id);
@@ -275,21 +271,14 @@ describe('scheduled tournament authority', () => {
     const { startsAt, clock } = startClock();
     let competition = await authority();
     const { id } = await enter(competition, 3, startsAt);
-    await runInDurableObject(competition, instance => {
-      const internal = instance as unknown as { env: Env };
-      const original = internal.env.DB;
-      internal.env = { ...internal.env, DB: new Proxy(original, { get(target, property) {
-        if (property !== 'prepare') { const value = Reflect.get(target, property); return typeof value === 'function' ? value.bind(target) : value; }
-        return (sql: string) => {
-          const statement = original.prepare(sql);
-          if (!sql.includes('INSERT INTO tournament_game_admissions')) return statement;
-          return { bind: (...args: unknown[]) => ({ run: async () => {
-            await statement.bind(...args).run();
-            throw new Error('Simulated lost D1 admission response.');
-          } }) } as unknown as D1PreparedStatement;
-        };
-      } }) };
-    });
+    await patchBindings(competition, ({ DB }) => ({ DB: intercept(DB, { prepare: (sql: string) => {
+      const statement = DB.prepare(sql);
+      if (!sql.includes('INSERT INTO tournament_game_admissions')) return statement;
+      return { bind: (...args: unknown[]) => ({ run: async () => {
+        await statement.bind(...args).run();
+        throw new Error('Simulated lost D1 admission response.');
+      } }) } as unknown as D1PreparedStatement;
+    } }) }));
     clock.mockReturnValue(startsAt);
     await competition.maintenance();
     expect((await event(competition, id)).status).toBe('starting');
@@ -466,46 +455,28 @@ describe('scheduled tournament authority', () => {
     expect((await competition.listTournaments()).events.length).toBeGreaterThan(0);
   });
 
-  it('closes admission at retained and permanent storage ceilings without booking accounts', async () => {
+  it('starts and admits games past the former event, retained and permanent ceilings', async () => {
     const { startsAt, clock } = startClock();
     const competition = await authority();
     const { id } = await enter(competition, 3, startsAt);
-    const alreadyRetained = await env.DB.prepare("SELECT COUNT(*) FROM tournament_game_admissions WHERE storage_state='retained'").first<number>('COUNT(*)');
-    await env.DB.prepare(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<?)
-      INSERT INTO tournament_game_admissions(game_id,tournament_id,created_at) SELECT 'cap-'||i,'fixture',? FROM n`)
-      .bind(TOURNAMENT_LIMITS.retainedGames - (alreadyRetained ?? 0), Date.now()).run();
+    // Fixtures exceed the removed limits: three other running events, 200 retained payloads and 10,200 permanent IDs.
+    await runInDurableObject(competition, (_instance, state) => {
+      for (const index of [1, 2, 3]) {
+        const filler = { id: `filler-${index}`, cadence: 'hourly', pool: 'blitz', startsAt: startsAt - HOUR, roundMs: HOUR, status: 'running', reason: null,
+          round: 1, roundDeadlineAt: null, nextRoundAt: null, finishedAt: null, nextAt: null, members: [], games: [], engine: null, admissionIds: [], firstRoundAt: null };
+        state.storage.sql.exec('INSERT INTO tournaments(id,starts_at,status,next_at,value) VALUES(?,?,?,NULL,?)', filler.id, filler.startsAt, filler.status, JSON.stringify(filler));
+      }
+    });
+    await env.DB.prepare(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<10200)
+      INSERT INTO tournament_game_admissions(game_id,tournament_id,created_at,storage_state,archived_at)
+      SELECT 'ceiling-'||i,'fixture',?,CASE WHEN i<=200 THEN 'retained' ELSE 'archived' END,CASE WHEN i<=200 THEN NULL ELSE ? END FROM n`)
+      .bind(Date.now(), Date.now()).run();
     clock.mockReturnValue(startsAt);
     await competition.maintenance();
-    expect((await event(competition, id)).status).toBe('cancelled');
-    expect(await env.DB.prepare('SELECT COUNT(*) FROM tournament_account_locks WHERE tournament_id=?').bind(id).first('COUNT(*)')).toBe(0);
-    expect(await env.DB.prepare('SELECT COUNT(*) FROM tournament_game_admissions WHERE tournament_id=?').bind(id).first('COUNT(*)')).toBe(0);
-    await env.DB.prepare("UPDATE tournament_game_admissions SET storage_state='archived',archived_at=?").bind(Date.now()).run();
-    clock.mockReturnValue(startsAt + HOUR - 10 * 60_000);
-    const next = await enter(competition, 3, startsAt + HOUR);
-    const total = await env.DB.prepare('SELECT COUNT(*) FROM tournament_game_admissions').first<number>('COUNT(*)');
-    await env.DB.prepare(`WITH RECURSIVE n(i) AS (SELECT ?+1 UNION ALL SELECT i+1 FROM n WHERE i<?)
-      INSERT INTO tournament_game_admissions(game_id,tournament_id,created_at,storage_state,archived_at)
-      SELECT 'cap-'||i,'fixture',?,'archived',? FROM n`)
-      .bind(total ?? 0, TOURNAMENT_LIMITS.permanentGameIds, Date.now(), Date.now()).run();
-    clock.mockReturnValue(startsAt + HOUR);
-    await competition.maintenance();
-    expect((await event(competition, next.id)).status).toBe('cancelled');
-    expect(await env.DB.prepare('SELECT COUNT(*) FROM tournament_game_admissions').first('COUNT(*)')).toBe(TOURNAMENT_LIMITS.permanentGameIds);
+    const started = await event(competition, id);
+    expect(started.status).toBe('running');
+    expect(started.games).toHaveLength(1);
+    expect(await env.DB.prepare('SELECT COUNT(*) FROM tournament_game_admissions WHERE tournament_id=?').bind(id).first('COUNT(*)')).toBe(3);
+    expect(await env.DB.prepare('SELECT COUNT(*) FROM tournament_account_locks WHERE tournament_id=?').bind(id).first('COUNT(*)')).toBe(3);
   });
-});
-
-it('reuses retired casual payload capacity while retaining a separate permanent game ID ceiling', async () => {
-  const actor = await player();
-  const counts = await env.DB.prepare(`SELECT COUNT(*) AS total,SUM(CASE WHEN storage_state='retained' THEN 1 ELSE 0 END) AS retained
-    FROM casual_game_admissions`).first<{ total: number; retained: number | null }>();
-  const limited = { ...env, CASUAL_GAME_LIMIT: String((counts?.retained ?? 0) + 1), CASUAL_GAME_ID_LIMIT: String((counts?.total ?? 0) + 2) };
-  const first = crypto.randomUUID();
-  const second = crypto.randomUUID();
-  expect(await acquireSeatGuard(limited, actor, first)).toBe(true);
-  expect(await acquireSeatGuard(limited, actor, second)).toBe(false);
-  await env.DB.prepare("UPDATE casual_game_admissions SET storage_state='archived',archived_at=? WHERE game_id=?").bind(Date.now(), first).run();
-  expect(await acquireSeatGuard(limited, actor, second)).toBe(true);
-  await env.DB.prepare("UPDATE casual_game_admissions SET storage_state='archived',archived_at=? WHERE game_id=?").bind(Date.now(), second).run();
-  expect(await acquireSeatGuard(limited, actor, crypto.randomUUID())).toBe(false);
-  expect(await acquireSeatGuard({ ...limited, CASUAL_GAME_ID_LIMIT: '-1' }, actor, crypto.randomUUID())).toBe(false);
 });

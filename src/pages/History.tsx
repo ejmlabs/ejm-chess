@@ -11,12 +11,14 @@ import { SectionHead } from '@ejm/ui/layout/SectionHead';
 import { Status } from '@ejm/ui/layout/Status';
 import { Text } from '@ejm/ui/layout/Text';
 import { api, type Me } from '../client/api';
-import { FORMATS, type Pool } from '../shared/protocol';
+import { historyResult } from '../client/gameText';
+import { FORMATS, type Color, type Pool } from '../shared/protocol';
 import { STOCKFISH_BUILD } from '../shared/engine';
 
 interface HistoryGame {
   id: string;
   format: Pool;
+  color: Color;
   rated: number;
   aiModel: string | null;
   actualModel: string | null;
@@ -45,13 +47,6 @@ const historyColumns = [
   { key: 'save', label: 'Save' },
 ];
 
-function resultLabel(result: string | null): string {
-  if (result === '1-0') return 'White won';
-  if (result === '0-1') return 'Black won';
-  if (result === '1/2-1/2' || result === '½-½') return 'Draw';
-  if (result === 'Void') return 'Void';
-  return 'Pending';
-}
 
 function decisionLabel(outcome: string): string {
   if (outcome === 'restrict') return 'Ranked restriction';
@@ -103,9 +98,7 @@ function FairPlayNotices() {
 
   return <AppFlow as="section" id="fair-play" aria-labelledby="fair-play-heading">
     <AppGroup as="header"><AppHeading as="h2" id="fair-play-heading"><Text variant="strong">Fair-play notices</Text></AppHeading>
-      <Text as="p">Private decisions and appeals for this account. Read the{' '}
-        <Link href="/fair-play/">review policy</Link>.
-      </Text></AppGroup>
+      <Text as="p">Private decisions and appeals for this account. <Link href="/fair-play/">Fair play policy</Link>.</Text></AppGroup>
     {message && <Text as="p" role="status"><Status status="ok" label={message} /></Text>}
     {error && <StateBlock kind="error" message={error} />}
     <div aria-live="polite" aria-busy={state.status === 'loading'}>
@@ -113,7 +106,7 @@ function FairPlayNotices() {
       {state.status === 'error' && <StateBlock kind="error" message="Your notices could not be loaded; try again."
         action={{ label: 'Retry notices' }} onAction={() => setAttempt(value => value + 1)} />}
       {state.status === 'ready' && <AppFlow>
-        {!state.data.reviewAvailable && <Text as="p" variant="muted">Human review is unavailable. Appeals are recorded and close without a decision after 14 days if unreviewed.</Text>}
+        {!state.data.reviewAvailable && state.data.notices.length > 0 && <Text as="p" variant="muted">Human review is unavailable. Appeals are recorded and close without a decision after 14 days if unreviewed.</Text>}
         {state.data.restrictions.map(item => <Text as="p" key={item.id}>
           <Status status="warn" label="Ranked play restricted" /> until <time dateTime={new Date(item.expiresAt).toISOString()}>{dateFormat.format(item.expiresAt)}</time>.
           {' '}{item.reason}
@@ -195,40 +188,32 @@ export default function History() {
   }, [attempt]);
 
   return <Page variant="application"><AppFlow as="section" aria-labelledby="history-heading">
-    <SectionHead purpose="application" as="h1" id="history-heading" title="Your games">
-      <Text as="p">Choose a completed game to replay its moves, or save the PGN file.</Text>
-    </SectionHead>
+    <SectionHead purpose="application" as="h1" id="history-heading" title="Your games" />
     <AppFlow aria-live="polite" aria-busy={state.status === 'loading'}>
       {state.status === 'loading' && <StateBlock kind="loading" skeleton={false} message="Loading your games…" />}
-      {state.status === 'signed-out' && <Text as="p"><Link href="/account/">Sign in</Link> to see your games.
-        Your games appear here for the current account.</Text>}
+      {state.status === 'signed-out' && <Text as="p"><Link href="/account/">Sign in</Link> to see your games.</Text>}
       {state.status === 'error' && <StateBlock kind="error" message="Your games could not be loaded; try again."
         action={{ label: 'Retry' }} onAction={() => setAttempt(value => value + 1)} />}
       {state.status === 'ready' && <>
-        {state.guest && <Text as="p" variant="muted">This history belongs to a legacy guest session. Clearing the browser cookie can lose access to it. New games require an account.</Text>}
+        {state.guest && <Text as="p" variant="muted">This history belongs to a legacy guest session. Clearing this browser’s cookies loses it. New games need an account.</Text>}
         {state.games.length === 0 ? <>
           <StateBlock kind="empty" message="No completed games yet." />
-          <div><Button asChild variant="link"><Link href="/play/">Invite a friend to play</Link></Button></div>
+          <div><Button asChild><Link href="/play/">Play a game</Link></Button></div>
         </>
           : <Table label="Completed games" columns={historyColumns} rowHeader="game" rowKey="id" truncate={false}
-            caption="Results read from White’s side. Pending results remain unresolved."
+            caption="Choose a game to replay it. Pending results are still being recorded."
             rows={state.games.map(game => ({
               id: game.id,
-              game: <Link href={`/${game.pgn ? 'replay' : 'play'}/?game=${encodeURIComponent(game.id)}`}>
-                <Text>{game.format === 'blitz' ? 'Blitz' : 'Rapid'} {FORMATS[game.format].label}</Text>
-                <Text variant="muted">{game.aiModel === STOCKFISH_BUILD ? 'Stockfish · Unrated' : game.aiModel ? `AI · ${game.actualModel ?? game.aiModel} · Unrated` : game.rated ? 'Ranked' : 'Casual'}</Text>
-              </Link>,
+              game: <><Link href={`/${game.pgn ? 'replay' : 'play'}/?game=${encodeURIComponent(game.id)}`}>{game.format === 'blitz' ? 'Blitz' : 'Rapid'} {FORMATS[game.format].label}</Link>
+                {' '}<Text variant="muted">{game.aiModel === STOCKFISH_BUILD ? 'Stockfish' : game.aiModel ? `AI · ${game.actualModel ?? game.aiModel}` : game.rated ? 'Ranked' : 'Casual'}</Text></>,
               finished: <time dateTime={new Date(game.endedAt).toISOString()}>{dateFormat.format(game.endedAt)}</time>,
-              result: resultLabel(game.result),
+              result: historyResult(game.result, game.color),
               save: game.pgn ? <Button variant="link" onClick={() => downloadPgn(game)}
                 aria-label={`Download PGN for ${dateFormat.format(game.endedAt)}`}>PGN</Button> : 'Unavailable',
             }))} />}
       </>}
     </AppFlow>
-    {state.status === 'ready' && state.games.length > 0 && <Text as="p" variant="muted">Showing your latest 50 games.</Text>}
-    <Text as="p" variant="muted">Read the{' '}
-      <Link href="/rules/">online rules</Link> for timeout adjudication and rating settlement.
-    </Text>
+    {state.status === 'ready' && state.games.length >= 50 && <Text as="p" variant="muted">Showing your latest 50 games.</Text>}
     {account && <FairPlayNotices key={account.id} />}
   </AppFlow></Page>;
 }

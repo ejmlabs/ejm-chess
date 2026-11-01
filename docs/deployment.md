@@ -9,25 +9,34 @@ Specialty config templates: [config-examples](../config-examples/README.md).
 
 ## Status and scope
 
-The recorded protected baseline at `https://chess.ejmlabs.com` used version `[id in private provider record]`, read back on
-2026-10-22 at 10:17 UTC. It retains the redesign, 8-character password minimum,
-single account-form submit action and signup-attempt enforcement. Its server
-bundle is unchanged from the preceding protected revision. The
-[provider inventory](provider-inventory.md) retains historical versions and
-source hashes. This section records that protected baseline. Final ranked and
-arena activation uses a separately checked release build with its own version
-readback; source changes and these instructions do not claim publication.
+The protected canary at `https://chess.ejmlabs.com` runs Worker version
+`6aa3ef0c-7286-4fab-9cc7-d3790792c882`, deployed from `main` on 2026-10-30
+(see the [verification record](verification.md#protected-canary-deployment-2026-10-30)).
+It retains the redesign, 8-character password minimum, single account-form
+submit action, explicit Join and the material timeout rule. The
+[provider inventory](provider-inventory.md) retains earlier versions and source
+hashes. This section records that protected baseline. Ranked, arena and
+tournament activation uses a separately checked release build with its own
+version readback; source changes and these instructions do not claim
+publication. The ordered launch sequence is in [live-ready prep](live-ready-prep.md).
 
-D1 migrations `0001` through `0015` are applied remotely. They include bounded
-proof bookkeeping, account-closure fences and the signup-attempt counter.
+D1 migrations `0001` through `0015` are applied remotely. `0016_cron_heartbeats.sql`
+is checked in and not yet applied: the owner applies it, after a Time Travel
+bookmark, before deploying the revision that records cron heartbeats. It is
+additive (one table and one index) and changes no existing row. The earlier
+migrations include bookkeeping tables from the retired timeout-proof path
+(migrations are never rewritten), account-closure fences and the signup-attempt
+counter.
 Migration `0015_signup_budget.sql` passed on 2026-10-21 UTC after a native
 Time Travel bookmark was saved. On October 22, the owner enabled 10,000 signup
 attempts and games and 5,000 account emails per UTC month, with 100,000 lifetime
 signup attempts. The 2026-10-30 demand policy later removed those application
-caps; the settings are usage counters only. `NEW_WORK_STOPPED=false`; saved
-account/game and email stops are clear. Server analysis remains stopped. The recorded protected version
-keeps ranked, tournaments, arenas and browser Stockfish disabled until the final
-release. Both `workers_dev` and preview URLs are disabled. The public Worker
+caps; those settings are no longer read (2026-10-31). `NEW_WORK_STOPPED=false`; saved
+account/game and email stops are clear. The recorded protected version keeps
+ranked, tournaments and arenas closed. Any `ANALYSIS_*`, `ANALYZER`, `MONTHLY_*`
+or `SIGNUP_ATTEMPT_LIMIT` setting in the private config is unused since
+2026-10-31; remove it at the next release. Browser Stockfish is enabled and game retirement uses the scaled coordinator. Both `workers_dev`
+and preview URLs are disabled. The public Worker
 CPU limit is 50 ms. Minute and daily cron expressions are configured. Keep
 scheduled-execution evidence separate from a saved cron expression.
 
@@ -46,10 +55,10 @@ resources and alert policies are preserved.
 
 Production `wrangler.jsonc` now binds the dedicated D1 database, restricted
 email sender and canonical domain. Public access is protected during release
-checks. Queues and server-analysis Containers remain absent. The local
-placeholder is confined to `env.local`. The final release keeps the existing
-production D1, Game and Competition identities and adds a fresh private
-timeout-proof service. Never attach an acceptance namespace to production.
+checks. Queues and Containers remain absent. The local
+placeholder is confined to `env.local`. The launch release keeps the existing
+production D1, Game and Competition identities and adds no binding. Never
+attach an isolated drill namespace to production.
 
 The owner approved one $100 monthly chess target, with alerts and an emergency
 stop. Earlier per-service allocations no longer gate launch. Record the exact
@@ -70,13 +79,11 @@ recipient addresses, credentials, or unrelated resource names.
 | Worker and static assets | `ejm-chess`, built from this product and its declared public UI packages |
 | D1 | A dedicated `ejm-chess` database bound as `DB`; auth, replay, admissions, evidence, and budget records stay together in its checked-in schema |
 | SQLite Durable Objects | `Game` through `GAME`, and `Competition` through `COMPETITION`, created by the Worker's `v1` migration |
-| Private timeout proofs | `ejm-chess-timeout-proofs`, with a fresh `TimeoutProver` namespace, the same production `DB`, one qualified image instance, and no public route or aliases |
 | Custom domain | Only `chess.ejmlabs.com` in the approved `ejmlabs.com` zone |
 | Access | One full-host private canary policy and a separate owner policy covering the admin page and API |
 | Turnstile | A chess widget restricted to the canonical hostname, with server-side action checks |
 | Email Sending | A verified sending domain and `EMAIL` binding restricted to sender `chess@ejmlabs.com` |
 | Notifications | Dedicated chess alert policies with approved private recipients and saved configuration readback; inbox delivery remains unverified |
-| Optional analysis | Dedicated chess queues and private analyzer namespace/Container only after a separate tested configuration and cost approval; absent initially |
 
 Use the smallest provider permissions that support the approved task. Limit
 credentials to the selected account and zone where the provider permits it.
@@ -102,16 +109,23 @@ approved secret store and out of files delivered with the site.
 
 ## Prepare the private canonical host
 
-The only production `AUTH_BASE_URL` is `https://chess.ejmlabs.com`. The
-`canonicalOrigin` guard rejects other production origin configurations.
-Noncanonical API requests and writes fail; noncanonical page GET/HEAD requests
-redirect to the canonical host. A different preview hostname is not a working
-private deployment environment for this product.
+The production `AUTH_BASE_URL` is `https://chess.ejmlabs.com`. The
+`canonicalOrigin` guard accepts only that origin and the shared pipeline's
+staging origin, `https://staging.chess.ejmlabs.com`. Each deployment serves
+exactly one of them: noncanonical API requests and writes fail, and
+noncanonical page GET/HEAD requests redirect to the configured host. The
+Content-Security-Policy socket source follows the configured origin. Any other
+preview hostname is not a working deployment environment for this product.
+
+A staging deployment needs its own `AUTH_BASE_URL`, D1 database, secrets and
+Access protection, and a Turnstile widget whose hostnames include the staging
+host, because sign-up rejects a token issued for another hostname.
 
 Before attaching the domain, configure and read back Access protection for the
 **entire canonical host**, including static pages, auth callbacks, HTTP APIs,
 and WebSocket upgrades. Permit only the approved canary identities. Verify the
-edge policy before making the first canonical route reachable. Keep:
+edge policy before making the first canonical route reachable. Protect a staging
+host the same way. Keep:
 
 ```jsonc
 "workers_dev": false,
@@ -149,8 +163,9 @@ top-level production configuration through `--env ''`; local work continues
 to use explicit `--env local` and `--local`.
 
 Prepare a reviewable production configuration with the following initial
-values. Keep the reviewed monthly, retained-storage, permanent-ID, queue, and
-CPU limits as well.
+values. Keep the reviewed CPU limit and any retained-storage, permanent-ID or
+queue limit the owner sets. Application monthly caps and product limits no
+longer exist.
 
 ```jsonc
 "AUTH_BASE_URL": "https://chess.ejmlabs.com",
@@ -160,16 +175,26 @@ CPU limits as well.
 "RANKED_ENABLED": "false",
 "TOURNAMENTS_ENABLED": "false",
 "ARENAS_ENABLED": "false",
-"ANALYSIS_ENABLED": "false",
 "AI_ENABLED": "false"
 ```
 
-Those values describe the initial stopped deployment. Current checked-in
-production settings have `NEW_WORK_STOPPED=false` and practical monthly
-allowances; game feature flags remain closed in the recorded protected build.
-The final qualified release enables ranked, tournaments, arenas and browser
-Stockfish. Keep server analysis disabled. A stop preserves accepted games,
-clocks, result delivery, replay, receipts and scheduled recovery.
+The assets block must route every request through the Worker and serve the
+built not-found page for unknown paths:
+
+```jsonc
+"assets": { "directory": "dist", "binding": "ASSETS", "run_worker_first": true, "not_found_handling": "404-page" }
+```
+
+Without `not_found_handling`, an unknown page returns an empty 404. API 404s
+stay JSON either way.
+
+Those values describe the initial stopped deployment. The recorded protected
+build has `NEW_WORK_STOPPED=false`, no application monthly caps,
+`AI_ENABLED=true` and scaled retirement, with ranked, tournaments and arenas
+closed. The launch release enables ranked, arenas, tournaments and browser
+Stockfish; its exact values are in [live-ready prep](live-ready-prep.md#production-values).
+A stop preserves accepted games, clocks, result delivery, replay,
+receipts and scheduled recovery.
 
 Run the normal checks and finish the frontend build before the Worker dry run:
 
@@ -179,6 +204,9 @@ npm test
 npm run build
 npm run worker:check
 ```
+
+`ejm-ui` removed the route size budget; load time is checked from the `ejm-ui`
+repository with `node scripts/perf.mjs <dist>` (see its `scripts/PERF.md`).
 
 Record the product/shared-owner revisions, any dirty-source patch, lockfiles,
 test results, route bytes, artifact hashes, and unrun gates. Inspect the built
@@ -190,7 +218,7 @@ sending-domain status, Access policies, and notification permissions. If a
 chess resource already exists, establish its ownership and current data before
 reusing it. Keep all unrelated resources intact.
 
-Present the concrete configuration, resource list, caps, cost assumptions,
+Present the concrete configuration, resource list, cost assumptions,
 private canary protections, rollback choice, and remaining gates for the exact
 deployment approval. Run the remote steps below only within that scope.
 
@@ -226,7 +254,10 @@ npx wrangler d1 migrations apply DB --remote --env ''
 npx wrangler d1 migrations list DB --remote --env ''
 ```
 
-Apply the checked-in migrations in order. Keep earlier migration files and
+Apply the checked-in migrations in order. Migration `0016` adds the
+`cron_heartbeats` table that Operations status reads and an index the
+minute-schedule seat cleanup uses; apply it before deploying the Worker that
+needs it. Keep earlier migration files and
 the provider migration ledger. Existing databases need a private backup and
 compatible additive migration review before application. Do not reset tables,
 rewrite accepted migration history, or import local fixtures into production.
@@ -293,9 +324,8 @@ npm run worker:check
 npx wrangler deploy --env '' --strict --secrets-file "$CHESS_SECRETS_FILE"
 ```
 
-Keep analysis queues and Containers absent. Keep both cron expressions and the
-accepted-work recovery bindings intact. Do not run a Container rollout as an
-incidental part of this first deployment.
+Keep Queues and Containers absent. Keep both cron expressions and the
+accepted-work recovery bindings intact.
 
 For a later approved secret rotation, use hidden input and read back names,
 not values:
@@ -333,11 +363,11 @@ same-origin cookies and WebSocket admission. Verify scheduled recovery from
 real trigger evidence; a saved cron expression is not execution evidence.
 
 The initial global stop also prevents verification and password-recovery sends. A later approved mail
-canary must preserve game and analysis denial while allowing a small number of
-email attempts. Set the versioned game and analysis stops, or
+canary must preserve game denial while allowing a small number of
+email attempts. Set the versioned game stop, or
 `NEW_WORK_STOPPED=true`, keep every feature gate false, choose the approved
 small email allowance, then clear the global stop for that protected test.
-Monthly limit settings are usage counters only. Record this separate
+Record this separate
 configuration change and restore the global stop afterward.
 
 Use only the approved canary inboxes. Create explicit username/password accounts
@@ -361,10 +391,31 @@ the fixed fee allocation. A Save/Test notification alone is not proof of a
 real billing policy or automatic dollar stop. Delayed usage reporting, public
 traffic, subscriptions, storage, and accepted work can exceed the envelope.
 
-Keep public ranked admission, large arenas, analysis, shared project discovery,
-and release claims closed until their own documented gates pass. Remove the
-full-host canary restriction only under the approved release scope, retaining
-the owner protection on admin page/API paths.
+Keep shared project discovery and release claims closed until their
+own documented checks pass. Ranked, arenas and tournaments open through the
+launch sequence. Remove the full-host canary restriction only under the approved
+release scope, retaining the owner protection on admin page/API paths. The order and checks are in
+[live-ready prep](live-ready-prep.md#sequence).
+
+## Update the running canary
+
+Use `node scripts/deploy-canary.mjs --check`, then `node scripts/deploy-canary.mjs`
+([live-ready prep](live-ready-prep.md#sequence), steps 2 and 3). Manual fallback,
+stopping at the first failure; record the current version as the rollback
+target before changing anything:
+
+```sh
+npx wrangler deployments list --env '' --json
+npx wrangler d1 migrations list DB --remote --env ''
+npx wrangler d1 time-travel info DB --env '' --json
+npx wrangler d1 migrations apply DB --remote --env ''
+npx wrangler deploy --env '' --strict --message "<git sha> canary"
+npx wrangler versions view "$CHESS_DEPLOYED_VERSION" --env '' --json
+npx wrangler d1 migrations list DB --remote --env ''
+```
+
+Expect only `0016_cron_heartbeats.sql` pending before and nothing after. A failed
+deploy leaves the additive `0016` applied. Roll back as below.
 
 ## Rollback and recovery
 
@@ -406,7 +457,7 @@ Game and Competition authorities. Retry through their idempotent outboxes.
 Preserve original clocks and outcome deadlines. Do not grant a winner or
 rewrite one player's rating to compensate for deployment failure.
 
-### Full restore remains a separate gate
+### Full restore is follow-up only
 
 Read-only native Game/Competition capture hooks and admitted-ID inventory are
 implemented behind the existing owner and Access checks. The separate
@@ -441,7 +492,9 @@ account/session SQL export. Synthetic isolated drills may use approved private
 exports. Never put such files in public artifacts, fixtures, source or builds.
 A D1 export does not capture Game objects or the Competition authority.
 
-Rehearse a full restore on isolated, approved resources before production use:
+The restore-and-replay provider drill is follow-up only, not a launch gate
+(owner decision, 2026-10-31); its code stays. Rehearse a full restore on
+isolated, approved resources before relying on one in production:
 
 1. Preserve the current stores, deployable code/configuration, and secret
    references. Record D1/DO recovery boundaries and the authority watermark.
@@ -463,7 +516,7 @@ Rehearse a full restore on isolated, approved resources before production use:
 
 This repository does not establish a complete cross-store restore coordinator,
 production restore drill, an independent production backup, or measured recovery
-objective. Keep full-service restore and public launch gates open. Do not run
+objective; that work is follow-up only. Do not run
 a production Time Travel/DO restore, delete a namespace, or swap a database
 binding as an unreviewed rollback step.
 
@@ -475,8 +528,7 @@ protected deployment. Command examples elsewhere are instructions, not evidence
 that each action ran. The approved recipient completed verification and password
 recovery; the budget callback destination and association passed their bounded
 test. The dated recovery and privacy reports record the extended isolated
-native restores, undo and one account's closure reapplication. The separate
-proof report records 31 native corpus/cold transport cases and partial usage.
+native restores, undo and one account's closure reapplication.
 Broad mail delivery, actual scheduled execution, a real billing threshold
 event, service-wide recovery acceptance, regional behavior and complete
 operating cost remain open.

@@ -1,7 +1,6 @@
 import { env } from 'cloudflare:workers';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BUDGET_CLEANUP_BATCH, budgetStatus, cleanupBudgetReceipts, newWorkAllowed, reserveMonthlyWork, reserveSignupAttempt, workStopped, type BudgetEnv } from '../src/server/budget';
-import { bindIsolatedGameBudget } from '../src/server/capacity-policy';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { BUDGET_CLEANUP_BATCH, budgetStatus, cleanupBudgetReceipts, newWorkAllowed, reserveMonthlyWork, reserveSignupAttempt, type BudgetEnv } from '../src/server/budget';
 import { setBudgetStops } from '../src/server/operations';
 
 beforeEach(async () => {
@@ -11,7 +10,7 @@ beforeEach(async () => {
     env.DB.prepare('DELETE FROM budget_months'),
     env.DB.prepare('DELETE FROM operations_changes'),
     env.DB.prepare("INSERT INTO signup_budget(id) VALUES('product') ON CONFLICT(id) DO UPDATE SET period=0,monthly_attempts=0,lifetime_attempts=0"),
-    env.DB.prepare("UPDATE operations_control SET version=0,games_stopped=0,email_stopped=0,analysis_stopped=0,changed_at=NULL,changed_by=NULL,reason=NULL WHERE id='product'"),
+    env.DB.prepare("UPDATE operations_control SET version=0,games_stopped=0,email_stopped=0,changed_at=NULL,changed_by=NULL,reason=NULL WHERE id='product'"),
   ]);
 });
 
@@ -39,46 +38,10 @@ describe('signup usage', () => {
 });
 
 function controls(expectedVersion: number, stopped: boolean) {
-  return { expectedVersion, gamesStopped: stopped, emailStopped: stopped, analysisStopped: stopped, reason: 'Investigating the monthly allowance.' };
+  return { expectedVersion, gamesStopped: stopped, emailStopped: stopped, reason: 'Investigating the monthly allowance.' };
 }
 
 describe('work usage', () => {
-  it('overlaps funded preflight reads and settles both while preserving stop and failure order', async () => {
-    for (const [available, allowance, expected] of [
-      [true, { accepted: 1 }, true],
-      [true, null, false],
-      [false, new Error('D1 unavailable'), false],
-      [new Error('controller unavailable'), { accepted: 1 }, 'unavailable'],
-      [true, new Error('D1 unavailable'), 'unavailable'],
-    ] as const) {
-      let release!: () => void;
-      const paused = new Promise<void>(resolve => { release = resolve; });
-      const first = vi.fn(async () => {
-        await paused;
-        if (allowance instanceof Error) throw allowance;
-        return allowance;
-      });
-      const limited = { DB: { prepare: () => ({ first, bind: () => ({ first }) }) } } as unknown as BudgetEnv;
-      const readAvailability = vi.fn(async () => {
-        await paused;
-        if (available instanceof Error) throw available;
-        return available;
-      });
-      bindIsolatedGameBudget(limited, { manifestDigest: 'a'.repeat(64), maximum: 20_000,
-        available: readAvailability, reserve: async () => true });
-      const pending = newWorkAllowed(limited, 'games').then(value => ({ value }), error => ({ error }));
-      let result: Awaited<typeof pending>;
-      try {
-        await vi.waitFor(() => {
-          expect(readAvailability).toHaveBeenCalledOnce();
-          expect(first).toHaveBeenCalledOnce();
-        }, { timeout: 500, interval: 1 });
-      } finally { release(); result = await pending; }
-      if (expected === 'unavailable') expect(result).toMatchObject({ error: { status: 503, code: 'BUDGET_UNAVAILABLE' } });
-      else expect(result).toEqual({ value: expected });
-    }
-  });
-
   it('records every game reservation and never charges a stable game ID twice', async () => {
     const ids = Array.from({ length: 12 }, () => `casual:${crypto.randomUUID()}`);
     const accepted = await Promise.all(ids.map(id => reserveMonthlyWork(env, 'games', id)));
@@ -105,7 +68,7 @@ describe('work usage', () => {
     const id = `casual:${crypto.randomUUID()}`;
     expect(await reserveMonthlyWork(env, 'games', id, first)).toBe(true);
     await setBudgetStops(env, 'owner-fixture', controls(0, true), first);
-    expect(await workStopped(env, 'analysis')).toBe(true);
+    expect(await newWorkAllowed(env, 'games')).toBe(false);
     expect(await reserveMonthlyWork(env, 'games', id, next)).toBe(true);
     expect(await reserveMonthlyWork(env, 'games', `casual:${crypto.randomUUID()}`, next)).toBe(false);
     await setBudgetStops(env, 'owner-fixture', controls(1, false), next);

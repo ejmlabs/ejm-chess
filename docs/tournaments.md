@@ -3,14 +3,15 @@
 `TOURNAMENTS_ENABLED=true` enables automatic scheduling and new registration
 for the small round-robin format.
 Turning it off cancels new starts; events already running continue to drain.
-Ranked games remain a separate gated feature.
+Ranked play is a separate feature (`RANKED_ENABLED`). Tournaments have no
+product caps on events, retained games or game IDs (owner decision, 2026-10-31).
 
 This guide covers the three- or four-player round-robin format. The large-event
 format is `arena-v1`, a timed arena with continuous pairing and its own
 `ARENAS_ENABLED` gate. See the
-[arena design and qualification contract](arena-design.md) for its rules,
-resource bounds, and qualification evidence. Configuration ceilings are not
-measurements; the release record states the tested workload.
+[arena design](arena-design.md) for its rules, resource bounds, and reference
+workload targets. Behavior under heavy load is still
+being measured.
 
 ## Local page and arena entry
 
@@ -49,7 +50,7 @@ than three remaining entrants cancels the event. A missed start can recover
 within five minutes; later recovery cancels an uncommitted event. If D1 already
 admitted its fixed game IDs, recovery drains that committed event with its
 original first-round cutoff. The next event remains
-available when capacity permits.
+available.
 
 An admitted account stays reserved through all three rounds and intermissions.
 It cannot start casual games, join ranked play, enter another running event,
@@ -106,8 +107,7 @@ keeps chronological precedence. A completed game never changes because of a late
 deadline or duplicate result.
 
 The service does not guarantee that an hourly event finishes before the next
-hour. Delays can extend an event. If three events are already active, a new
-start is cancelled. These are bounded online events, not an official federation
+hour. Delays can extend an event. These are bounded online events, not an official federation
 format or a claim of exact federation adjudication.
 
 ## Recovery and resource limits
@@ -127,46 +127,40 @@ IDs and cutoff before calling Game. A lost initialization response therefore
 retries the same game. Accepted terminal results, points, and result markers
 commit in one Competition transaction. Duplicate delivery cannot add points.
 
-| Fixed tournament limit | Value |
+| Round-robin format and work bound | Value |
 | --- | --- |
-| Active events, including starts and intermissions | 3 |
 | Entrants per event | 3 to 4 |
 | Rounds per event | 3 |
-| Retained event records | 256 |
-| Retained tournament Game payloads | 128 |
-| Permanent tournament game IDs | 10,000 |
 | Public terminal event visibility | 7 days from event start |
 | Events processed per maintenance pass | At most 4 |
 | Recent terminal events per public list | At most 12 |
 | Upcoming or active events per public list | At most 9 |
 
-These preview limits are fixed in `TOURNAMENT_LIMITS`. The new arena settings
-do not raise the preview's fixed limits. Both formats count rows in the same
-permanent D1 tournament game ledger, so arena use can consume space that the
-preview also needs. Shared game, monthly work, and authority byte guards may
-close preview starts earlier. The combined game and byte guards apply to
-casual, computer, ranked, preview, and arena work even when new arenas are
-disabled. All actual game initialization attempts share a 32-per-second start
-bucket with burst 32. Reaching a limit cancels or closes new admission;
-it does not delete accepted results or recycle game IDs. Terminal events leave
-public views after seven days from their start. Event metadata cleanup waits
-for all admitted Game payloads to retire. A retained or failed payload can
-therefore keep private event metadata longer. Active reservations end after the
-event finishes or cancels, even when terminal payload retirement is pending.
+These bounds are fixed in source. There is no product cap on active events,
+retained event records, retained Game payloads or permanent game IDs. Both
+formats count rows in the same permanent D1 tournament game ledger. Shared
+platform byte guard and the budget stop can still close new starts. The combined
+game and byte guards apply to casual, computer, ranked, round-robin, and arena
+work even when new arenas are disabled. All actual game initialization attempts
+share a 32-per-second start bucket with burst 32. Reaching a platform guard
+cancels or closes new admission; it does not delete accepted results or recycle
+game IDs. Terminal events leave public views after seven days from their start.
+Event metadata cleanup waits for all admitted Game payloads to retire. A
+retained or failed payload can therefore keep private event metadata longer.
+Active reservations end after the event finishes or cancels, even when terminal
+payload retirement is pending.
 
 Settled payload retirement keeps the D1 replay and a minimal Game tombstone.
-Permanent identity and result records still grow. The 10,000-ID ceiling is a
-deliberate stopping point, not unlimited service capacity. Changing that limit
-requires a measured storage plan. No live load or worldwide cost guarantee has
-been established.
+Permanent identity and result records still grow. No live load or worldwide
+cost guarantee has been established; the Cloudflare budget stop bounds spend.
 
-Casual play also uses its own optional limits. `CASUAL_GAME_LIMIT` counts only
+Casual play also has optional limits. `CASUAL_GAME_LIMIT` counts only
 retained payload rows and `CASUAL_GAME_ID_LIMIT` counts all casual IDs, including
 archived tombstones. Both default to no product cap; a positive integer may set
 one. Invalid values close
 new casual admission. Retirement can free payload capacity but never frees a
-permanent ID. These limits apply alongside the shared combined game and byte
-caps; they do not admit or rate a tournament game.
+permanent ID. These limits apply alongside the shared platform byte guard; they
+do not admit or rate a tournament game.
 
 `Competition` now persists casual creation intents before calling Game and
 requires a committed D1 admission first. Initialization retries keep the same

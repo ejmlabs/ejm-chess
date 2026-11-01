@@ -112,11 +112,6 @@ separate docs stylesheet.
 | Cloudflare Access | A second identity check for private owner review |
 | Email binding | Security-only verification and recovery delivery, once configured and verified |
 
-The optional private Stockfish Container and bounded analysis pipeline are
-implemented but disabled. See [analysis](analysis.md) for pins, resource
-measurements, retry controls, source obligations, and deployment gates. An engine
-summary is not a calibrated detector or a mating proof.
-
 Optional [Stockfish practice](ai-opponents.md) runs a pinned maintained engine in a browser worker loaded only for computer games. The White owner submits versioned `engine-move` proposals for Black. The Game authority still validates session, game type, turn, legality, deadline, and result; it does not trust client clocks or engine provenance. The browser includes the complete accepted move history in each search and discards stale output. Computer results are always unrated and excluded from human fair play checks. There is no external inference service or provider key.
 
 ## Game authority
@@ -130,7 +125,9 @@ turn, legal move, and server deadline. A repeated accepted command returns its
 receipt instead of applying its effect twice. A stale command receives the
 current snapshot for recovery.
 
-The game starts only after both players confirm readiness. Unused invitations
+The game starts only after both players confirm readiness. A repeated Ready,
+for example from a second tab or after a reconnect, succeeds with the current
+snapshot at any version and changes nothing. Unused invitations
 expire after ten minutes. Once paired, players have two minutes to get ready.
 An active disconnect does not stop the clock. Clocks use server deadlines;
 there is no network delay allowance.
@@ -154,15 +151,8 @@ disconnect does not stop the clock. No process may infer a win from a positive
 displayed clock. This bounded online policy does not prove all possible mating
 paths, so a fully blocked position with no possible mate scores as a loss.
 
-New ranked games may use the separate default-off `online-2026-10-v3-proof`
-profile only after qualification. Competition holds four shared proof slots and
-reserves two finite native credits per permanent game before initialization.
-One private Container runs unchanged pinned CHA-Solver with independent
-complete-history/witness validation. Only an exact, timely supported proof can
-settle a pending v3 result. Unknown keeps the original 30-second deadline and
-then applies the same material timeout rule, which is rated; historical and unrated games retain their saved rules. There is no public proof
-API or engine-score substitute. See [timeout proofs](timeout-proofs.md) for the
-private contract, per-process limits, retention and unrun provider gates.
+Ranked games use this same material timeout rule at the flag, and the result
+is rated.
 
 ## Accounts and active seats
 
@@ -239,6 +229,8 @@ Existing snapshot builds remain compatible. D1 publishes complete generations
 in pages of at most 32 rows. Public schedule,
 summary, and standings responses skip session lookup and use a ten-second edge
 cache; private entry and queue actions remain authenticated and `no-store`.
+The leaderboard and public profiles share that one helper
+(`src/server/public-cache.ts`); see [operations](operations.md#public-read-cache).
 See [the arena contract and qualification targets](arena-design.md).
 
 The Worker sheds arena registration overflow before primary authentication.
@@ -278,21 +270,24 @@ ready player receives one event point for a no-show, without a played win.
 
 Alarms and the existing minute trigger recover pending work. Recovery creates
 only bounded current/next events, with a five-minute start grace after outages.
-It never replays every missed cadence. Caps are three active events, 256 retained
-events, no product cap on retained tournament payloads or permanent game IDs,
-and seven days of public event history. See [tournaments](tournaments.md).
+It never replays every missed cadence. No product cap limits active events,
+retained events, retained tournament payloads or permanent game IDs. Public
+event history lasts seven days. See [tournaments](tournaments.md).
 
 ### Unattended operation and retained records
 
 `OPERATION_MODE=unattended` disables new case and appeal decisions.
-Reports retain private evidence without promising review. Statistical engine
-signals cannot restrict an account. Legacy restrictions expire, and unanswered
+Reports retain private evidence without promising review. Accuracy, shared-IP,
+focus and report-count signals cannot restrict an account. Legacy restrictions expire, and unanswered
 legacy appeals close as `expired-unreviewed` after 14 days without fabricating
 a human decision or reversing historical ratings. Optional reviewed operation
 requires the explicit `reviewed` mode and an available owner.
 
 Competition reconciles at most 16 due casual intents per maintenance pass.
-The minute trigger attempts at most four legacy D1 game recoveries. Payload
+Each cron run records its start, finish and failed stages in the D1
+`cron_heartbeats` row for its schedule, which Operations status returns. The
+minute trigger also deletes one bounded batch of expired growth-path rows per
+table. It attempts at most four legacy D1 game recoveries. Payload
 retirement defaults to a separate four-attempt minute budget. Exact
 `GAME_RETIREMENT_MODE=scaled` routes cron, alarms and manual calls through the
 existing global Competition single-flight coordinator. Its indexed D1 queue
@@ -317,7 +312,7 @@ the [qualification methods and evidence](local-qualification.md).
 `CASUAL_GAME_LIMIT` and `CASUAL_GAME_ID_LIMIT` have no product cap by default.
 Retirement and the Cloudflare budget stop bound growth. Retirement frees a payload
 slot, never an ID. Permanent
-records still grow, so reaching a journal ceiling closes admission. Local checks
+records still grow, and platform storage bounds still apply. Local checks
 do not establish unlimited unattended capacity. See [operations](operations.md).
 
 ### Matchmaking and ratings
@@ -327,6 +322,12 @@ Queue status renews a 120-second ticket lease. Rating preference starts within
 100 points and widens by five per second to 800; region preference relaxes after
 30 seconds. A pair may start at most two ranked games in a rolling 24 hours.
 Cancelled unstarted games and AI games do not earn competitive credit.
+
+A pairing retries creating its Game with backoff. Ten minutes after pairing,
+if an answered status call shows no Game, the match is cancelled: both seats
+and account slots are released and both players can queue again. A Game that
+exists is never cancelled this way, and an unanswered status call never
+cancels. No result is invented. Health reports `creationLifetimeMs`.
 
 Color assignment prefers the queued player with the lower White balance. Equal
 balances flip a coin. When the ranked game starts, White’s balance increases by
@@ -346,11 +347,17 @@ publishes atomically before later finishes drain once. Unknown policy versions
 leave repair paused for investigation. Do not edit current ratings, subtract
 historical point deltas, or delete reservations to bypass a repair.
 
+A reviewed decision that fails to import waits 30 seconds and shows its error
+in operations status. Decisions about other players still import meanwhile,
+untried ones first. Decisions about the same player stay in order behind it.
+
 ## Client read contracts
 
 The API is same-origin. JSON responses must remain private where they concern
 accounts or games. Errors include a machine-readable `error` and a short
-`message`; the client presents retry or recovery guidance.
+`message`; the client presents retry or recovery guidance. An `ApiError` thrown
+inside a Durable Object keeps its status and code at the Worker; any other
+failure is a generic `503`.
 
 | Request | Consumer |
 | --- | --- |
@@ -362,9 +369,9 @@ accounts or games. Errors include a machine-readable `error` and a short
 | `POST /api/auth/send-verification-email`, `GET /api/auth/verify-email` | Security-only email verification; no marketing subscription |
 | `POST /api/auth/sign-out` | End the browser session after the active-seat identity guard permits it |
 | `POST /api/account/complete` | Existing signed-in explicit account sets username/password while preserving its player ID |
-| `GET /api/leaderboard?pool=blitz\|rapid&cursor=…` | Bounded leaderboard entries, update time, and next cursor |
-| `GET /api/players/:id` | Public credential-backed player profile and two bounded rating-pool states; no guest, private email or private case records |
-| `GET /api/history` | Current account’s latest 50 terminal games, AI labels, and available PGN |
+| `GET /api/leaderboard?pool=blitz\|rapid&cursor=…` | Bounded leaderboard entries, update time, and next cursor; ten-second edge cache keyed by `pool` and `cursor` |
+| `GET /api/players/:id` | Public credential-backed player profile and two bounded rating-pool states; no guest, private email or private case records; ten-second edge cache |
+| `GET /api/history` | Current account’s latest 50 terminal games, its own color (`w` or `b`), AI labels, and available PGN |
 | `GET /api/games/:id/pgn` | Participant-only completed PGN from D1, including retired games |
 | `GET /api/tournaments` | Bounded public schedule/standings and current caller’s event status |
 | `GET /api/tournaments/:id` | One public event with caller-specific game/status fields |
@@ -376,10 +383,11 @@ accounts or games. Errors include a machine-readable `error` and a short
 | `GET /api/arenas/:id/me` | Private current entrant status and accepted game link |
 | `POST /api/arenas/:id/register\|withdraw\|queue\|pause\|resume` | Authenticated entrant actions under current account and cross-mode reservation checks |
 | `POST /api/games` | `{id, format, ai?: {modelId, level}}`; creator-bound idempotent casual/Stockfish admission, with the pinned engine build and one named strength |
+| `GET /api/games/open` | `{ids}`: games the current account still holds a seat in, newest first, at most 10 |
 | `POST /api/games/:id/join` | Single-claim invitation or authorized participant reopen |
 | `GET /api/games/:id/connect` | Same-origin authenticated WebSocket |
-| `GET /api/admin/operations` | Access and owner protected status/cap/lag counters |
-| `POST /api/admin/operations/maintenance` | Bounded retry of authority, unattended games, and analysis work |
+| `GET /api/admin/operations` | Access and owner protected status/lag counters and cron heartbeats |
+| `POST /api/admin/operations/maintenance` | Bounded retry of authority and unattended game work |
 | `GET /api/admin/operations/export/manifest` | Fixed journal watermarks and policy versions |
 | `GET /api/admin/operations/export?kind=…&watermark=…&after=…` | At most 50 accepted journal events and a SHA-256 page hash |
 

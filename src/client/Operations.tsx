@@ -17,12 +17,19 @@ interface BudgetView {
   month: string;
   envelopeUsd: number;
   stoppedByEnv: boolean;
-  control: { version: number; games_stopped: number; email_stopped: number; analysis_stopped: number };
-  allowances: { kind: 'games' | 'email' | 'analysis'; used: number; accepting: boolean; denied: number }[];
+  /** Each `<kind>_stopped` column is one stop the server accepts as `<kind>Stopped`. */
+  control: { version: number } & Record<string, number>;
+  allowances: { kind: string; used: number; accepting: boolean; denied: number }[];
   signup: { used: number; lifetimeUsed: number; accepting: boolean };
 }
 interface OperationsStatus { budget: BudgetView;[key: string]: unknown }
-const budgetLabels = { games: 'New games', email: 'Account email', analysis: 'Server analysis' } as const;
+const budgetLabels: Record<string, string> = { games: 'New games', email: 'Account email' };
+const stopLabels: Record<string, string> = { games: 'Stop new accounts and games', email: 'Stop account email' };
+
+/** Follow the stop set the server reports, so the form never sends a stop the server does not know. */
+function readStops(control: BudgetView['control']): Record<string, boolean> {
+  return Object.fromEntries(Object.keys(control).filter(key => key.endsWith('_stopped')).map(key => [key.slice(0, -'_stopped'.length), control[key] !== 0]));
+}
 
 function saveJson(value: unknown, name: string) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }));
@@ -33,7 +40,7 @@ function saveJson(value: unknown, name: string) {
 
 export default function Operations() {
   const [status, setStatus] = useState<OperationsStatus | null>(null);
-  const [stops, setStops] = useState({ gamesStopped: false, emailStopped: false, analysisStopped: false });
+  const [stops, setStops] = useState<Record<string, boolean>>({});
   const [stopReason, setStopReason] = useState('');
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [page, setPage] = useState<ExportPage | null>(null);
@@ -50,10 +57,7 @@ export default function Operations() {
   async function loadStatus() {
     const next = await api<OperationsStatus>('/api/admin/operations');
     setStatus(next);
-    setStops({
-      gamesStopped: next.budget.control.games_stopped !== 0,
-      emailStopped: next.budget.control.email_stopped !== 0, analysisStopped: next.budget.control.analysis_stopped !== 0
-    });
+    setStops(readStops(next.budget.control));
     setStopReason('');
   }
   async function loadPage(after: number) {
@@ -66,8 +70,8 @@ export default function Operations() {
     {error && <StateBlock kind="error" message={error} />}{message && <div role="status"><Status status="info" label={message} /></div>}
     <AppActions><Button variant="secondary" disabled={busy} onClick={() => void run(loadStatus)}>Refresh status</Button>
       <Button variant="ghost" disabled={busy} onClick={() => void run(async () => {
-        const result = await api<{ authority: { errors: string[] }; analysis: string }>('/api/admin/operations/maintenance', {});
-        setMessage(`Maintenance completed. Authority errors: ${result.authority.errors.join(', ') || 'none'}. Analysis: ${result.analysis}.`);
+        const result = await api<{ authority: { errors: string[] } }>('/api/admin/operations/maintenance', {});
+        setMessage(`Maintenance completed. Authority errors: ${result.authority.errors.join(', ') || 'none'}.`);
         await loadStatus();
       })}>Retry pending work</Button></AppActions>
     {status !== null && <AppSection>
@@ -82,13 +86,13 @@ export default function Operations() {
         { key: 'denied', label: 'Denied', align: 'right' }, { key: 'state', label: 'State' }]}
         rows={[{ id: 'signup', kind: 'Signup attempts', used: status.budget.signup.used, denied: 0,
           state: status.budget.signup.accepting ? 'Available' : 'Stopped' }, ...status.budget.allowances.map(item => ({
-          id: item.kind, kind: budgetLabels[item.kind], used: item.used, denied: item.denied,
+          id: item.kind, kind: budgetLabels[item.kind] ?? item.kind, used: item.used, denied: item.denied,
           state: item.accepting ? 'Available' : 'Stopped'
         }))]} rowKey="id" rowHeader="kind" />
       <Text as="p" variant="muted">Lifetime signup attempts: {status.budget.signup.lifetimeUsed}. Failed and repeated attempts stay charged.</Text>
       <AppForm onSubmit={event => {
         event.preventDefault(); void run(async () => {
-          await api('/api/admin/operations/budget', { expectedVersion: status.budget.control.version, ...stops, reason: stopReason });
+          await api('/api/admin/operations/budget', { expectedVersion: status.budget.control.version, ...Object.fromEntries(Object.entries(stops).map(([kind, stopped]) => [`${kind}Stopped`, stopped])), reason: stopReason });
           await loadStatus();
           setMessage('Budget stops saved. Existing games and accepted results continue.');
         });
@@ -96,9 +100,7 @@ export default function Operations() {
         <AppFieldset disabled={busy}>
           <legend>Stop new work</legend>
           <AppGroup>
-            <Checkbox checked={stops.gamesStopped} label="Stop new accounts and games" onCheckedChange={value => setStops(current => ({ ...current, gamesStopped: value === true }))} />
-            <Checkbox checked={stops.emailStopped} label="Stop account email" onCheckedChange={value => setStops(current => ({ ...current, emailStopped: value === true }))} />
-            <Checkbox checked={stops.analysisStopped} label="Stop server analysis" onCheckedChange={value => setStops(current => ({ ...current, analysisStopped: value === true }))} />
+            {Object.entries(stops).map(([kind, stopped]) => <Checkbox key={kind} checked={stopped} label={stopLabels[kind] ?? `Stop ${kind}`} onCheckedChange={value => setStops(current => ({ ...current, [kind]: value === true }))} />)}
           </AppGroup>
         </AppFieldset>
         <AppField>

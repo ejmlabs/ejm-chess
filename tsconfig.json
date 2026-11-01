@@ -6,6 +6,6 @@
     "esModuleInterop": true,
     "resolveJsonModule": true
   },
-  "include": ["src", "vite.config.ts", "vitest.config.ts"],
+  "include": ["src", "vite.config.ts", "vitest.config.ts", "vitest.qualification.config.ts", "vitest.recovery-drill.config.ts"],
   "exclude": ["src/server"]
 }

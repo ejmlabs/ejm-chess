@@ -1,8 +1,0 @@
-{
-  "url": "https://database.lichess.org/",
-  "retrievedAt": "2026-10-21T00:09:07.241084+00:00",
-  "license": "CC0-1.0",
-  "sourcePrefixSha256": "9b8274df8f7b51d08e2023c18a62cd0c3996ff5e6ab39baf7bf7407d4e34b6a5",
-  "sourcePrefixBytes": 65536,
-  "quotedHtml": "<p class=\"license\">\n          Database exports are released under the\n          <a href=\"https://tldrlegal.com/license/creative-commons-cc0-1.0-universal\">Creative Commons CC0 license</a>.<br />\n          Use them for research, commercial purpose, publication, anything you like.<br />\n          You can download, modify and redistribute them, without asking for permission.<br />\n        </p>"
-}

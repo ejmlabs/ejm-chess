@@ -1,12 +1,11 @@
 import { env } from 'cloudflare:workers';
 import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { expect, it, vi } from 'vitest';
-import type { Actor } from '../src/shared/protocol';
-import type { Env } from '../src/server/env';
+import type { Actor, GameSnapshot } from '../src/shared/protocol';
 import { readArenaStandings, readArenaSummary } from '../src/server/arena-projection';
-import { player } from '../test/authority-helpers';
+import { gamesAnswering, holdAlarms, player, swapBindings } from '../test/authority-helpers';
+import { authorityBindings } from './isolation';
 
-declare const __QUALIFICATION_ENTRANTS__: number;
 type Intent = { game_id: string; event_id: string; white_actor: string; black_actor: string };
 
 async function parallel<T, R>(items: T[], concurrency: number, work: (item: T, index: number) => Promise<R>): Promise<R[]> {
@@ -28,14 +27,8 @@ it('qualifies three native 2000-entry events sharing 1000 games across both form
   const clock = vi.spyOn(Date, 'now').mockReturnValue(registrationAt);
   const authorityName = crypto.randomUUID();
   const competition = env.COMPETITION.get(env.COMPETITION.idFromName(authorityName));
-  async function configure() {
-    await runInDurableObject(competition, async (instance, state) => {
-      const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-      internal.env = { ...internal.env, ARENAS_ENABLED: 'true', TOURNAMENTS_ENABLED: 'false', RANKED_ENABLED: 'false',
-        ARENA_ENTRANT_LIMIT: '2000', ARENA_GAME_LIMIT: '1000', ARENA_RETAINED_GAME_LIMIT: '2000', ARENA_AUTHORITY_BYTE_LIMIT: '2147483648' };
-      internal.schedule = async () => {}; await state.storage.deleteAlarm();
-    });
-  }
+  const configure = () => holdAlarms(competition, { ARENAS_ENABLED: 'true', TOURNAMENTS_ENABLED: 'false', RANKED_ENABLED: 'false',
+    ARENA_ENTRANT_LIMIT: '2000', ARENA_GAME_LIMIT: '1000', ARENA_RETAINED_GAME_LIMIT: '2000', ARENA_AUTHORITY_BYTE_LIMIT: '2147483648' });
   async function intents() {
     return runInDurableObject(competition, (_instance, state) => state.storage.sql.exec<Intent>(
       "SELECT game_id,event_id,white_actor,black_actor FROM arena_intents WHERE status='live' ORDER BY event_id,game_id").toArray());
@@ -80,14 +73,8 @@ it('qualifies three native 2000-entry events sharing 1000 games across both form
       return parallel(games, 16, async intent => {
         const white = JSON.parse(intent.white_actor) as Actor; const black = JSON.parse(intent.black_actor) as Actor;
         const game = env.GAME.get(env.GAME.idFromName(intent.game_id));
-        await runInDurableObject(game, async (instance, state) => {
-          const internal = instance as unknown as { schedule(): Promise<void>; env: Env };
-          internal.schedule = async () => {};
-          internal.env = { ...internal.env, COMPETITION: { idFromName: env.COMPETITION.idFromName.bind(env.COMPETITION),
-            get: () => env.COMPETITION.get(env.COMPETITION.idFromName(authorityName)) } as unknown as Env['COMPETITION'] };
-          await state.storage.deleteAlarm();
-        });
-        let snapshot = await game.snapshot(white);
+        await holdAlarms(game, authorityBindings(authorityName));
+        let snapshot: GameSnapshot = await game.snapshot(white);
         for (const actor of [white, black]) {
           const reply = await game.command(actor, { type: 'ready', id: crypto.randomUUID(), expectedVersion: snapshot.version });
           expect(reply.ok).toBe(true); snapshot = reply.snapshot;
@@ -122,9 +109,7 @@ it('qualifies three native 2000-entry events sharing 1000 games across both form
       return (await context.game.status())!.result!;
     });
     await runInDurableObject(competition, async instance => {
-      const internal = instance as unknown as { env: Env };
-      internal.env = { ...internal.env, GAME: { idFromName: env.GAME.idFromName.bind(env.GAME),
-        get: () => ({ status: async () => { throw new Error('injected_verification_outage'); } }) } as unknown as Env['GAME'] };
+      swapBindings(instance, gamesAnswering(() => ({ status: async () => { throw new Error('injected_verification_outage'); } })));
       let error: string | null = null;
       try { await instance.settle(results[0]); } catch (failure) { error = (failure as Error).message; }
       expect(error).toBe('injected_verification_outage');

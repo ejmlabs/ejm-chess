@@ -4,7 +4,7 @@ import { StateBlock } from '@ejm/ui/components/StateBlock';
 import { Page } from '@ejm/ui/layout/Band';
 import { SectionHead } from '@ejm/ui/layout/SectionHead';
 import { Text } from '@ejm/ui/layout/Text';
-import { api, type Me, type PublicConfig } from '../client/api';
+import { api, RequestFailure, type Me, type PublicConfig } from '../client/api';
 import { playReturnPath } from '../client/accountPath';
 
 const AccountForm = lazy(() => import('./AccountForm'));
@@ -12,6 +12,17 @@ const AccountSession = lazy(() => import('./AccountSession'));
 
 export type View = 'sign-in' | 'sign-up' | 'forgot' | 'reset';
 const titles: Record<View, string> = { 'sign-in': 'Sign in', 'sign-up': 'Create account', forgot: 'Reset password', reset: 'Choose a new password' };
+
+/** The server's per-network security limit stays; say what it is and when to retry. */
+function failureText(reason: unknown, view: View): string {
+  if (reason instanceof RequestFailure && reason.status === 429) {
+    const wait = reason.retryAfter ? `in ${reason.retryAfter} seconds` : 'in a minute';
+    return view === 'sign-in' || view === 'sign-up'
+      ? `Too many tries from this network. For security, sign-in and sign-up allow only a few tries a minute. Try again ${wait}.`
+      : `Too many tries from this network. Try again ${wait}.`;
+  }
+  return reason instanceof Error ? reason.message : 'This request failed. Try again.';
+}
 
 export default function Account() {
   const [config, setConfig] = useState<PublicConfig | null>(null);
@@ -30,6 +41,7 @@ export default function Account() {
   const [message, setMessage] = useState('');
   const pending = useRef(false);
   const errorElement = useRef<HTMLDivElement>(null);
+  const viewChosen = useRef(false);
 
   useEffect(() => {
     const query = new URLSearchParams(location.search);
@@ -55,9 +67,15 @@ export default function Account() {
   }, []);
 
   useEffect(() => { if (error) errorElement.current?.focus(); }, [error]);
+  // The control that switched the view is gone, so keyboard focus moves to the new first field.
+  useEffect(() => {
+    if (viewChosen.current) document.querySelector<HTMLElement>('main form input')?.focus();
+    viewChosen.current = false;
+  }, [view]);
 
   function changeView(next: View) {
     if (pending.current) return;
+    viewChosen.current = true;
     setView(next); setPassword(''); setResetToken(''); setError(''); setMessage('');
     setToken(''); setChallengeKey(value => value + 1);
   }
@@ -66,7 +84,7 @@ export default function Account() {
     if (pending.current) return;
     pending.current = true; setBusy(true); setError(''); setMessage('');
     try { await action(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'This request failed. Try again.'); }
+    catch (reason) { setError(failureText(reason, view)); }
     finally {
       pending.current = false; setBusy(false); setPassword('');
       setToken(''); setChallengeKey(value => value + 1);

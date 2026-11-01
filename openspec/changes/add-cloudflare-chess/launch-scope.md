@@ -22,8 +22,10 @@ the remaining correctness, privacy, cost, recovery or capacity gates.
   stay disabled. Keep ranked and new work closed while checking deployment,
   recovery, mail, cost and capacity. Open the approved features only after their
   gates pass, then verify the public host and guides before studio discovery.
+  The gates are now those of the 2026-10-31 launch policy below.
 - The approved budget remains $100 per month. Workers Paid already exists.
-  Keep conservative application quotas and preserve accepted work when stopped.
+  Superseded on 2026-10-30 and 2026-10-31: no application quotas or other
+  arbitrary product caps; preserve accepted work when stopped.
   The notification thresholds are kept in the private provider record in account-wide usage
   charges. These delayed notices cannot enforce a hard invoice cap.
 - Sender remains `chess@ejmlabs.com`; delivery tests and budget alerts use the
@@ -53,3 +55,33 @@ repository. Read [the relocation record](../../RELOCATION.md) and
 [current handoff](HANDOFF.md). This supersedes earlier location and no-root
 guidance only; launch scope, budgets, gates and task status remain unchanged.
 Shared UI and Studio changes still belong to their respective owners.
+
+## Launch policy, 2026-10-31
+
+The owner said: "i do not like these arbitrary caps. we just need a billing
+ceiling in cloudflare. we don't want to over optimize here." This supersedes the
+capacity, proof and quota gates in the records above.
+
+- Cloudflare budget alerts and the existing $85 stop webhook are the economic
+  limit, not a hard invoice cap. No arbitrary product caps. Keep security and
+  abuse limits, protocol and input bounds, bounded per-request and per-alarm
+  work, fair-play rules (including the ranked pair limit), platform-safety
+  bounds, ID non-recycling and the explicit stops.
+- The first-tier 2,000-player provider load test is not a gate. Measure real
+  demand after opening.
+- Ranked uses the material timeout rule only, as casual does. The private
+  CHA-Solver timeout-proof path is retired.
+- Ranked play and arenas open after task 3.9 (proof path retired), the
+  protected-host player checks (3.6, 7.1) including ranked and arena play, and
+  the live mail, alert, cron and stop readbacks (6.2, 6.3). Access removal and
+  public verification follow, then discovery (7.3).
+
+### Tooling decision, 2026-10-31
+
+Later the same day the owner deleted the 2,000-player capacity harness (no load
+run is planned; write a small staging load script if demand ever needs checking)
+and server-side Stockfish analysis (reports stay informational with no engine
+screening; browser Stockfish practice stays). The restore-and-replay provider
+drill is follow-up only, not a launch gate. Its code stays.
+
+This changes no other owner, account, sender, credential or budget-target rule.

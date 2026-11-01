@@ -271,13 +271,7 @@ export async function requireActor(request: Request, env: AuthEnv): Promise<Acto
   return actor;
 }
 
-export async function requireRankedActor(request: Request, env: AuthEnv): Promise<Actor> {
-  const actor = await requireActor(request, env);
-  const eligibility = await rankedEligibility(env, actor.id);
-  if (!eligibility.eligible) throw new ApiError(403, eligibility.reason ?? 'RANKED_UNAVAILABLE', eligibility.reason === 'RANKED_CLOSED' ? 'Ranked play is closed while launch checks remain.' : 'Ranked play requires an eligible account.');
-  return actor;
-}
-
+/** Test-only: arenas.test.ts and tournaments.test.ts assert the seat guard's state through this one query instead of each repeating its join. */
 export async function hasActiveSeat(db: D1Database, userId: string): Promise<boolean> {
   return Boolean(await db.prepare(`SELECT 1 WHERE EXISTS(SELECT 1 FROM active_game_seats WHERE user_id=? AND released_at IS NULL)
     OR EXISTS(SELECT 1 FROM tournament_account_locks WHERE user_id=?)`).bind(userId, userId).first());
@@ -405,7 +399,6 @@ function authJson(response: Response, body: unknown, status = response.status): 
 
 /** Explicit upgrade for a signed-in legacy account. Guest ownership never transfers. */
 export async function completeAccount(request: Request, env: AuthEnv): Promise<Response> {
-  requireSameOrigin(request, env);
   const body = await readJson(request, 2048);
   onlyFields(body, ['username', 'password']);
   const username = accountUsername(body.username);

@@ -8,20 +8,19 @@ Provide accountable ranked matchmaking and worldwide chess leaderboards whose ra
 
 ### Requirement: Simplified operating budget
 
-The service SHALL use the owner's 2026-10-22 decision: one $100 monthly
-spending target, existing usage alerts and emergency stop.
-This requirement supersedes earlier mandatory per-service allocations and
-repeated financial-review gates in this change. Dated cost calculations are
-historical estimates. Runtime bounds, source integrity, ranked correctness
-and tournament qualification SHALL remain required. Billing alerts SHALL NOT
-be described as a guaranteed invoice cap.
+The service SHALL use the owner's one $100 monthly spending target (2026-10-22). Under the 2026-10-31 launch policy, Cloudflare budget alerts and the existing $85 stop webhook SHALL be the economic limit, with no arbitrary product admission or retention caps. Security and abuse limits, protocol and input bounds, bounded per-request and per-alarm work, platform-safety bounds and ranked correctness SHALL remain. Alerts and the stop SHALL NOT be described as a guaranteed invoice cap.
 
-#### Scenario: Practical quotas replace stopped preview settings
+#### Scenario: Earlier allocations are history
+
+- **WHEN** a dated per-service allocation, reserve, cost calculation or repeated financial-review gate is read
+- **THEN** it is a historical estimate and imposes no current requirement
+
+#### Scenario: Application caps are off
 
 - **WHEN** the owner enables protected-host use
-- **THEN** monthly signup, game and email caps SHALL be 10,000, 10,000 and 5,000, with a 100,000 lifetime signup cap
-- **AND** account/game and email stops SHALL be cleared while abuse controls, authentication and accepted-work recovery remain enforced
-- **AND** optional server analysis SHALL remain disabled and public Access removal SHALL follow the launch sequence
+- **THEN** monthly and lifetime signup, game and email application caps SHALL be off
+- **AND** account/game and email stops SHALL be cleared while abuse controls, authentication, protocol and input bounds, platform-safety bounds and accepted-work recovery remain enforced
+- **AND** public Access removal SHALL follow the launch sequence
 
 
 ### Requirement: Bounded finished-game payload retirement
@@ -280,43 +279,34 @@ The service SHALL create opt-in bounded round-robin events at published UTC cade
 
 ### Requirement: Large-entry automatic events
 
-The release design SHALL support hundreds and thousands of entrants with an
-admission limit selected from measured qualification. The four-player preview
-SHALL NOT satisfy this claim. Registration, pairing, cross-mode reservations,
-scores, public reads and recovery SHALL remain bounded. The first tier SHALL
-target 2,000 entrants, 1,000 live games and 20 results/second within storage and
-the $100 monthly budget; the later 10,000-entry/5,000-live tier SHALL need separate
-qualification.
+The release design SHALL support hundreds and thousands of entrants without an arbitrary product entrant or concurrent-game cap. The four-player preview SHALL NOT satisfy this. Registration, pairing, cross-mode reservations, scores, public reads and recovery SHALL stay bounded per request and per alarm. The 2,000-entrant/1,000-live-game first tier and the later 10,000-entry/5,000-live tier SHALL be reference targets only, neither caps nor launch gates.
 
-#### Scenario: Capacity tier is selected
+#### Scenario: Capacity is published
 
-- **WHEN** operators select a public admission ceiling
-- **THEN** it stays within measured signup, concurrency, settlement, retention, recovery, region and cost evidence, and a smaller tier never proves the later tier
+- **WHEN** operators publish a capacity figure
+- **THEN** it states the measured signup, concurrency, settlement, retention, recovery, region and cost evidence, a smaller tier never proves the later tier, and the lack of a measurement does not by itself close admission
 
 ### Requirement: Initial ranked and large-arena release qualification
 
-Public opening SHALL require real ranked proof/settlement/recovery qualification,
-the complete approved first-tier provider workload, protected-host player flows,
-and verified privacy, spending, signup and accepted-work controls. Optional
-server analysis SHALL stay disabled.
+Public opening of ranked play and arenas SHALL require retirement of the
+timeout-proof path so ranked uses the material timeout rule, protected-host
+player checks that include ranked and arena play, and live readbacks of mail
+delivery, budget alerts, cron and the stop webhook. Access removal and public
+verification SHALL follow. No provider load run or restore-and-replay provider
+drill SHALL gate opening; the capacity harness was deleted on 2026-10-31.
 
 #### Scenario: Financial adoption precedes release evidence
 
 - **WHEN** the owner adopts the reviewed financial policy
 - **THEN** it SHALL use the simplified operating budget with one $100 target
-- **AND** source integrity and provider-resource evidence SHALL remain required
+- **AND** source integrity SHALL remain required
 - **AND** financial adoption SHALL pass no workload or release check
 
 #### Scenario: Initial public release is selected
 
-- **WHEN** the initial ranked and large-arena release gates pass
-- **THEN** public access may open with ceilings no higher than passing first-tier evidence, existing production guards and monthly headroom
-- **AND** the nine-day calendar observation, full-hour retention/endurance and 25-per-second retirement run, six-region external WAN benchmarks and later tier remain explicit unfinished follow-up qualification without blocking that release or being reported as passed
-
-#### Scenario: The first-tier run has one real client egress
-
-- **WHEN** the frozen approved run uses one named real client egress
-- **THEN** its measurements identify that egress and all unrun regions, and make no worldwide latency or sustained monthly throughput claim
+- **WHEN** the protected-host player checks and the live mail, alert, cron and stop readbacks pass
+- **THEN** Access may be removed and public ranked play and arenas open with no product admission caps, and public verification follows
+- **AND** the first-tier provider run, nine-day calendar observation, full-hour retention/endurance and 25-per-second retirement run, six-region external WAN benchmarks and later tier are not planned, block nothing and SHALL NOT be reported as passed
 
 ### Requirement: Timed arena lifecycle
 
@@ -378,60 +368,4 @@ and no-store responses.
 #### Scenario: Public capacity is announced
 
 - **WHEN** an event's supported entrant or concurrent-game capacity is published
-- **THEN** the claim identifies the measured admission envelope and recovery/cost limits rather than treating a configured maximum or local test as production evidence
-
-### Requirement: Once-only isolated native capacity qualification
-
-The private harness SHALL preserve failed run evidence and permit only the
-confirmed fixture repair after exact candidate review. All attempts SHALL share
-a $25 ceiling and at most 20,000 permanently charged Game IDs. Normal atomic
-receipts and native Game/Competition authority SHALL apply. Production SHALL
-reject the private budget exception and retain its ceilings.
-
-#### Scenario: A run is retried or restarted
-
-- **WHEN** restart, retry, month change, token replacement or deployment occurs
-- **THEN** the run is not renewed, uncertain reservations are not refunded and unresolved work permits remain charged
-- **AND** all attempts share the same $25 isolated test ceiling inside the current single $100 target; savings grant no additional work
-
-#### Scenario: The stopped preparation failures are corrected
-
-- **WHEN** root reviews the fresh candidate under the owner's finish-and-launch instruction
-- **THEN** the initial two failed identities remain consumed and permanently stopped, and the third failed arm remains unchanged with its original trace, empty-resource diagnostic and arm-delivery uncertainty; held permits, unresolved dispatches and measured or uncertain work remain retained without a native-shutdown claim
-- **AND** failed fourth run `e8932527-765c-4613-b453-b09a6d6842de` in `capacity-provider-20261022-warm-v1` retains its historical empty `firsttier03` reuse, successful arm, incomplete trace with 297 successful preparation responses and 11 uncertain requests, and owner stop with zero charged Game IDs, two active objects, one unresolved dispatch and no native-shutdown receipt
-- **AND** fifth run `f92e8db1-9991-4432-8c30-487eedaf6d17` retains all 6,000 prepared primary accounts, 256 uncertain registration replies, zero acknowledged registration replies, its stop, zero charged Game IDs, two held permits and one unresolved dispatch; no passing full candidate is recorded
-- **AND** sixth diagnostic `56089a5b-0826-45e2-85ed-8a7bae106eb0` retains 256 prepared accounts, 238 registration offers, 56 expected retries, 182 uncertain HTTP 503 replies, zero acknowledged registrations and the accepted controller-call-allowance stop; native reads show zero Games, admissions and Game receipts, but two permits and one dispatch remain held without native closure, for ten held permits and five unresolved dispatches across six attempts
-- **AND** a corrected diagnostic addresses the finite ingress grant envelope, carries the saved signed Competition ticket from arm and recovers only saved workflow state for stop, without changing production ceilings, required workload or the shared allowance
-- **AND** one reviewed, sealed registration-only diagnostic may use 256 primary accounts and exactly 768 normal registration attempts at 3 ms intervals, at most 256 inflight requests, five-second response deadlines and a 90-second hard window; it SHALL reject Games, queues, sockets, proofs, spectator/cache-load and fault work before dispatch and reserve no Game workflow
-- **AND** the diagnostic SHALL preserve authentication, finite native/controller envelopes, original failures and the shared ledger, require an exact native zero-Game stop with drained work and deleted alarms, and establish no first-tier capacity or launch pass
-- **AND** exact native prearm status remains readiness evidence only, and account preparation may wait at most 15 seconds for a response, clipped to the unchanged credential-seal deadline
-- **AND** game/control response deadlines, fixed slots, the full 19,000-game workload, 900-second stream, fixed recovery lead and every runtime ceiling remain required
-- **AND** fresh resource readbacks, exact frozen bytes, feasible UTC times and root's final review remain required before load, with no claim of owner hash inspection
-
-#### Scenario: Fixture reads have platform retries
-
-- **WHEN** a bounded private fixture operation has a 640-read single-attempt limit and the platform may make up to three total read attempts while returning metadata for the final attempt only
-- **THEN** the operation SHALL reserve up to 1,280 extra read units before dispatch and preserve conservative retry charges separately from observed final-attempt metadata
-- **AND** those units SHALL remain inside the unchanged 100-million-read run ceiling and combined $25 test ceiling, with no write retry, new fixture identity, uncertainty refund or financial reapproval
-
-#### Scenario: Capacity resources are prepared
-
-- **WHEN** the approved isolated harness is built
-- **THEN** it has reviewed isolated synthetic resources with current state readbacks, fixed expiry, private authentication, a once-only arm per run identity, native work/storage/request metering and at most 2,048 non-hibernatable objects over 60 minutes, with no production, mail, engine, analysis or Container binding
-- **AND** a frozen exact candidate and shared complete test ledger require root review under the owner's finish-and-launch instruction before load
-- **AND** a common account-cycle ledger counts each started billing unit once with no assumed shared allowance; changed cycles, quantities or tariffs require reconciliation, and missing costs remain explicit unknowns under the reviewed policy
-
-#### Scenario: The sustained and delayed workload is measured
-
-- **GIVEN** focused local native checks have established uncertainty fencing, held permits, accounting and drained shutdown for the exact source, without requiring a separate full local performance pass
-
-- **WHEN** the first-tier provider run is accepted
-- **THEN** 18,000 distinct native regular results span 900 elapsed seconds, with 400 of 1,000 additional distinct delayed results recovered during a fixed ten-second lead at 40 per second and the remaining 600 during the stream's first 30 seconds at 20 per second alongside 20 regular results per second
-- **AND** all 1,000 delayed results recover within 60 seconds from recovery start with five matching duplicates each, unchanged normal authority, account and score checks, the unchanged 1,000 unfinished-game cap, and missed or late slots recorded as failures
-- **AND** real registration, sockets, reconnects, public cached standings, declared faults and named regional paths are reported without fabricated clocks, terminal rows or unsupported regional claims
-
-#### Scenario: A run reaches a safety boundary
-
-- **WHEN** expiry, a finite work ceiling, uncertain control state, missing metrics or complete-cost headroom blocks further work
-- **THEN** new synthetic admission stops permanently, accepted receipts reconcile only under their original IDs, unresolved work remains charged, and the failed or unrun target remains visible
-- **AND** this run does not complete the separate full retention, calendar, regional, ranked or later-tier measurements; initial public opening still requires its own ranked and operational release gates
+- **THEN** the claim identifies the measured envelope and recovery/cost limits rather than treating a configured maximum or local test as production evidence

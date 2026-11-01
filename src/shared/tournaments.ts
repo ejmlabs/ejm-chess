@@ -34,7 +34,7 @@ export interface TournamentList {
   enabled: boolean;
   serverNow: number;
   events: TournamentView[];
-  limits: { minPlayers: number; maxPlayers: number; maxActive: number; registrationMinutes: number };
+  limits: { minPlayers: number; maxPlayers: number; registrationMinutes: number };
 }
 
 /** Expected failures cross the Durable Object RPC boundary as data. */

@@ -2,6 +2,8 @@
 
 The owner requested implementation on 2026-10-20. The planning home remains this change. Follow `openspec-apply-change` here. Product and UI work use their existing owner workflows; neither isolated owner has an OpenSpec root, and none is initialized.
 
+This file is dated evidence. The 2026-10-31 launch policy in [proposal.md](proposal.md) supersedes its timeout-proof, first-tier run and product-cap gates: no arbitrary caps, no first-tier gate, ranked uses the material timeout rule only. The 2026-10-31 tooling decision then deleted the capacity harness and server-side Stockfish analysis and made the restore drill follow-up only; the capacity, analysis, sealing and proof records below describe deleted tooling. Read earlier boundaries as history.
+
 | Owner | Isolated checkout | Scope |
 | --- | --- | --- |
 | `ejm-chess` | `/private/tmp/ejm-chess-2yz1VsKp/ejm-chess` | New standalone product repository on `codex/chess-foundation`: Cloudflare runtime, account integration, game and competition state, board, product guides, and meaningful tests. |
@@ -374,7 +376,7 @@ Independent reviews and the exact source hashes are retained with
 controller, intent-observation, corpus and driver work is not covered by that
 checkpoint. The private capacity gates remain disabled.
 
-Task 18.6 is preparation only. Product `docs/capacity-follow-up.md` now contains
+Task 18.6 is preparation only. Product `docs/capacity-follow-up.md` (deleted 2026-10-31) then contained
 separate finite proposals for full-hour retention and holds, real nine-day
 calendar scheduling, ranked proof cost/recovery, and the 10,000-entry/5,000-live
 tier. An independent read-only review found no remaining preparation gap.

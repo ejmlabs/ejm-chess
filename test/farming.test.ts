@@ -3,7 +3,7 @@ import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { FARMING_PATTERNS, FARMING_POLICY, farmingStatus, initializeFarmingChecks, recordFarmingCheck } from '../src/server/farming';
 import { RULES_VERSION, type GameResult } from '../src/shared/protocol';
-import { enableRanked, player } from './authority-helpers';
+import { enableRanked, holdAlarms, player } from './authority-helpers';
 
 function result(overrides: Partial<GameResult> = {}): GameResult {
   const id = crypto.randomUUID();
@@ -50,7 +50,7 @@ describe('informational farming facts', () => {
       recordFarmingCheck(state.storage.sql, older, Date.now());
       return farmingStatus(state.storage.sql);
     });
-    expect(status).toMatchObject({ checked: 2, flagged: 2, patterns: { 'repeated-pair': 2, 'reciprocal-wins': 2, 'early-resignation': 0 } });
+    expect(status).toMatchObject({ truncated: false, checked: 2, flagged: 2, patterns: { 'repeated-pair': 2, 'reciprocal-wins': 2, 'early-resignation': 0 } });
     expect(status.recent.map(check => check.gameId).sort()).toEqual([older.id, newer.id].sort());
     for (const check of status.recent) expect(check.patterns).toEqual(expect.arrayContaining(['repeated-pair', 'reciprocal-wins']));
   });
@@ -193,12 +193,40 @@ describe('informational farming facts', () => {
     console.info('farming guard 1001', observed.work);
   });
 
+  it('reads a bounded window of the newest checks yet still reports an old coverage gap', async () => {
+    const competition = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
+    const now = Date.now();
+    const observed = await runInDurableObject(competition, (_instance, state) => {
+      const sql = state.storage.sql;
+      // The two oldest checks fall outside the 1,000 newest: one flagged, one with incomplete coverage.
+      const flagged = between('old-a', 'old-b', now);
+      storeCheck(sql, flagged);
+      sql.exec("UPDATE rated_result_checks SET patterns_json='[\"early-resignation\"]' WHERE game_id=?", flagged.id);
+      const gap = between('gap-a', 'gap-b', now);
+      storeCheck(sql, gap);
+      sql.exec("UPDATE rated_result_checks SET coverage='incomplete',coverage_reason='source-unavailable' WHERE game_id=?", gap.id);
+      for (let index = 0; index < 1_000; index++) storeCheck(sql, between(`bulk-${index}`, 'bulk-peer', now));
+      const cursors: Array<{ rowsRead: number }> = [];
+      const measured = { exec: (statement: string, ...bindings: SqlStorageValue[]) => {
+        const cursor = sql.exec(statement, ...bindings);
+        cursors.push(cursor);
+        return cursor;
+      } } as unknown as SqlStorage;
+      const status = farmingStatus(measured);
+      return { status, rowsRead: cursors.reduce((total, cursor) => total + cursor.rowsRead, 0) };
+    });
+    expect(observed.status).toMatchObject({ truncated: true, checked: 1_000, flagged: 0, recent: [], patterns: { 'early-resignation': 0 },
+      coverage: { complete: false, pending: false, incomplete: 1, reasons: { 'source-unavailable': 1 } } });
+    // One scan reads the window and its detecting extra row; the coverage index adds only the open rows.
+    expect(observed.rowsRead).toBeLessThanOrEqual(1_001 + 4);
+  });
+
   it('upgrades v1 through at most eight checks per maintenance call and resumes after restart', async () => {
     const competition = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
     const now = Date.now();
-    await runInDurableObject(competition, (instance, state) => {
-      // Keep the bounded upgrade page deterministic while checking catch-up.
-      (instance as unknown as { schedule(): Promise<void> }).schedule = async () => {};
+    // Keep the bounded upgrade page deterministic while checking catch-up.
+    await holdAlarms(competition);
+    await runInDurableObject(competition, (_instance, state) => {
       const sql = state.storage.sql;
       sql.exec('DROP TABLE rated_result_checks');
       sql.exec(`CREATE TABLE rated_result_checks

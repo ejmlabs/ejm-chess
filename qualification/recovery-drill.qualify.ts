@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { SELF } from 'cloudflare:test';
 import { expect, it } from 'vitest';
-import { PROOF_PROFILE, PROOF_RULES_VERSION } from '../src/server/proof-contract';
+import { RULES_VERSION } from '../src/shared/protocol';
 import { reserveMonthlyWork } from '../src/server/budget';
 import type { DrillEnv } from '../src/server/recovery-drill-controls';
 
@@ -11,6 +11,11 @@ interface FixtureStatus {
   game: { terminalAck: string | null; pendingDelivery: boolean; archived: boolean };
   projection: { status: string; settlement: string; projection_epoch: number; ended_at: number; storage_state: string | null };
   authority: { watermarks: { results: number; ratings: number }; publishedEpochs: { blitz: number } };
+}
+
+/** Rows only. A D1 result also carries per-call timings that never repeat. */
+async function controlRows() {
+  return (await env.DB.prepare('SELECT * FROM operations_control').all()).results;
 }
 
 async function operation(body: Record<string, unknown>) {
@@ -25,14 +30,12 @@ it('isolates synthetic active and ranked delivery fixtures without using product
   const start = await seeded.json<{ status: string; version: number; deadline: number }>();
   expect(start.status).toBe('active');
   expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM active_game_seats WHERE game_id=? AND released_at IS NULL').bind(gameId).first('count')).toBe(2);
-  expect(await env.DB.prepare('SELECT rules_version,profile_version,credits FROM timeout_proof_admissions WHERE game_id=?').bind(gameId).first())
-    .toEqual({ rules_version: PROOF_RULES_VERSION, profile_version: PROOF_PROFILE, credits: 2 });
-  const control = await env.DB.prepare('SELECT * FROM operations_control').all();
+  const control = await controlRows();
   const budget = await (await operation({ operation: 'reserve-budget', gameId })).json<{ accepted: boolean; receipt: unknown }>();
   expect(budget.accepted).toBe(true);
   const budgetRetry = await (await operation({ operation: 'reserve-budget', gameId })).json<typeof budget>();
   expect(budgetRetry.receipt).toEqual(budget.receipt);
-  expect(await env.DB.prepare('SELECT * FROM operations_control').all()).toEqual(control);
+  expect(await controlRows()).toEqual(control);
   expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM budget_receipts WHERE kind=? AND id=?').bind('games', `recovery:${gameId}`).first('count')).toBe(1);
   // Accepted work remains recognized when the real deployment stop is used again.
   expect(await reserveMonthlyWork(env, 'games', `recovery:${gameId}`)).toBe(true);
@@ -51,7 +54,7 @@ it('isolates synthetic active and ranked delivery fixtures without using product
   else {
     expect(captured.status).toBe(200);
     expect(capture.points?.game.metadata.version).toBe(move.snapshot.version);
-    expect(capture.points?.game.policies.rules).toBe(PROOF_RULES_VERSION);
+    expect(capture.points?.game.policies.rules).toBe(RULES_VERSION);
     expect(capture.probeBoundary).toEqual({ schema: 'ejm-chess-drill-probes-v1', d1: 'original', game: 'original', competition: 'original' });
   }
   const retried = await operation({ operation: 'command', gameId, color: 'w', command });
@@ -150,7 +153,7 @@ it('reapplies a preserved synthetic account closure after local D1 boundary reco
   const credentials = (await env.DB.prepare('SELECT * FROM account WHERE userId=?').bind(userId).all()).results;
   const sessions = (await env.DB.prepare('SELECT * FROM session WHERE userId=?').bind(userId).all()).results;
   const history = await env.DB.prepare('SELECT * FROM games WHERE id=?').bind(gameId).first();
-  const control = await env.DB.prepare('SELECT * FROM operations_control').all();
+  const control = await controlRows();
   const boundary = await privacy('boundary', { d1Bookmark: 'local-only-boundary-not-native-provider-evidence' });
   expect(boundary.status).toBe(200);
   expect(await boundary.json()).toMatchObject({ boundary: { gameId, sourceRevision: drillEnv.RECOVERY_SOURCE_REVISION,
@@ -197,7 +200,7 @@ it('reapplies a preserved synthetic account closure after local D1 boundary reco
     expect(await response.json()).toEqual(closed);
   }
   expect(await env.DB.prepare('SELECT * FROM games WHERE id=?').bind(gameId).first()).toEqual(history);
-  expect(await env.DB.prepare('SELECT * FROM operations_control').all()).toEqual(control);
+  expect(await controlRows()).toEqual(control);
   expect(env.RANKED_ENABLED).toBe('false');
   expect(env.NEW_WORK_STOPPED).toBe('true');
 });

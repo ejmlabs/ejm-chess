@@ -11,5 +11,5 @@
     "resolveJsonModule": true,
     "noEmit": true
   },
-  "include": ["src/server", "src/shared/protocol.ts", "src/shared/glicko2.d.ts", "test"]
+  "include": ["src/server", "src/shared/protocol.ts", "src/shared/glicko2.d.ts", "test", "qualification"]
 }

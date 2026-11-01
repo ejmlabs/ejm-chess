@@ -97,7 +97,8 @@ describe('native D1 player accounts', () => {
 
   it('charges failed signup work, rejects stopped signup before hashing, and keeps existing signin available', async () => {
     const created = await account();
-    const guarded = { ...env, MONTHLY_SIGNUP_LIMIT: '1000' };
+    // A distinct env object gets its own Better Auth instance, so the spy cannot leak into other tests.
+    const guarded = { ...env };
     const native = vi.spyOn(createAuth(guarded), 'handler');
     const originalControl = (await budgetStatus(guarded)).control;
     try {
@@ -110,7 +111,7 @@ describe('native D1 player accounts', () => {
       native.mockClear();
       const users = await env.DB.prepare('SELECT COUNT(*) AS count FROM user').first('count');
       const version = (await budgetStatus(guarded)).control.version;
-      await setBudgetStops(guarded, 'owner-fixture', { expectedVersion: version, gamesStopped: true, emailStopped: false, analysisStopped: true, reason: 'Testing bounded signup admission.' });
+      await setBudgetStops(guarded, 'owner-fixture', { expectedVersion: version, gamesStopped: true, emailStopped: false, reason: 'Testing bounded signup admission.' });
       await expect(authHandler(post('/api/auth/sign-up/email', { username: name(), password }, undefined, guarded), guarded)).rejects.toMatchObject({ status: 503, code: 'SIGNUP_UNAVAILABLE' });
       expect(native).not.toHaveBeenCalled();
       expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM user').first('count')).toBe(users);
@@ -121,7 +122,7 @@ describe('native D1 player accounts', () => {
       const control = (await budgetStatus(guarded)).control;
       if (control.version !== originalControl.version) await setBudgetStops(guarded, 'owner-fixture', {
         expectedVersion: control.version, gamesStopped: Boolean(originalControl.games_stopped),
-        emailStopped: Boolean(originalControl.email_stopped), analysisStopped: Boolean(originalControl.analysis_stopped),
+        emailStopped: Boolean(originalControl.email_stopped),
         reason: 'Restore the pre-test stop settings.',
       });
     }

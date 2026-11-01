@@ -8,46 +8,40 @@ Let people play dependable live chess worldwide, with clear controls, authoritat
 
 ### Requirement: Simplified operating budget
 
-The service SHALL use the owner's 2026-10-22 decision: one $100 monthly
-spending target, existing usage alerts and emergency stop.
-This requirement supersedes earlier mandatory per-service allocations and
-repeated financial-review gates in this change. Dated cost calculations are
-historical estimates. Runtime bounds, source integrity, ranked correctness
-and tournament qualification SHALL remain required. Billing alerts SHALL NOT
-be described as a guaranteed invoice cap.
+The service SHALL use the owner's one $100 monthly spending target (2026-10-22). Under the 2026-10-31 launch policy, Cloudflare budget alerts and the existing $85 stop webhook SHALL be the economic limit, with no arbitrary product admission or retention caps. Security and abuse limits, protocol and input bounds, bounded per-request and per-alarm work, platform-safety bounds and ranked correctness SHALL remain. Alerts and the stop SHALL NOT be described as a guaranteed invoice cap.
 
-#### Scenario: Practical quotas replace stopped preview settings
+#### Scenario: Earlier allocations are history
+
+- **WHEN** a dated per-service allocation, reserve, cost calculation or repeated financial-review gate is read
+- **THEN** it is a historical estimate and imposes no current requirement
+
+#### Scenario: Application caps are off
 
 - **WHEN** the owner enables protected-host use
-- **THEN** monthly signup, game and email caps SHALL be 10,000, 10,000 and 5,000, with a 100,000 lifetime signup cap
-- **AND** account/game and email stops SHALL be cleared while abuse controls, authentication and accepted-work recovery remain enforced
-- **AND** optional server analysis SHALL remain disabled and public Access removal SHALL follow the launch sequence
+- **THEN** monthly and lifetime signup, game and email application caps SHALL be off
+- **AND** account/game and email stops SHALL be cleared while abuse controls, authentication, protocol and input bounds, platform-safety bounds and accepted-work recovery remain enforced
+- **AND** public Access removal SHALL follow the launch sequence
 
 
 ### Requirement: Bounded chess spending
 
-The product SHALL bound new games, email, analysis and reserved timeout proofs
-within the owner's $100 monthly Cloudflare budget, with idempotent receipts and
-private stops. Active games, funded proofs, accepted results and recovery SHALL
-continue. Invalid configuration or unavailable quota authority SHALL close new
-work. Docs SHALL state that delayed account-wide billing alerts exclude
-subscriptions and impose no hard invoice cap.
+The product SHALL keep usage counters, idempotent receipts and private stops, with Cloudflare budget alerts and the stop webhook as the economic limit and no enforced monthly application admission caps. Active games, accepted results and recovery SHALL continue under a stop. An active explicit stop or invalid stop configuration SHALL close new work. Docs SHALL state that delayed alerts exclude subscriptions and impose no hard invoice cap.
 
 #### Scenario: The approved financial policy is applied
 
 - **WHEN** the service applies the owner's monthly allocation
 - **THEN** it SHALL use the single $100 target, billing alerts and emergency stop described by the simplified operating budget
-- **AND** financial adoption SHALL NOT raise work or test limits or qualify resources
+- **AND** financial adoption SHALL NOT qualify resources
 
-#### Scenario: Monthly admission budget is exhausted
+#### Scenario: An explicit stop is active
 
-- **WHEN** a new operation would exceed an enforced quota or an explicit stop is active
+- **WHEN** an explicit stop is active and a new expensive operation is requested
 - **THEN** the service rejects new expensive work truthfully while existing games and accepted-result delivery continue, and retrying an accepted operation does not consume a second admission receipt
 
-#### Scenario: Billing alerts are configured
+#### Scenario: Billing alerts and stop are configured
 
-- **WHEN** account usage alert thresholds and recipients are saved
-- **THEN** the operational record includes their successful readback, billing scope and delay, preserves existing alerts, and does not claim that the alert automatically caps provider charges
+- **WHEN** account usage alert thresholds, recipients and the stop webhook are saved
+- **THEN** the operational record includes their successful readback, billing scope and delay, preserves existing alerts, and does not claim that the alerts or stop automatically cap provider charges
 
 ### Requirement: Private provider recovery
 
@@ -56,7 +50,8 @@ seat ownership, and authoritative deadlines consistent across database and
 object recovery. They SHALL identify exact targets and boundaries, remain
 private, reject incompatible or uncertain recovery plans, and preserve later
 accepted work. Local hooks and tests SHALL NOT be reported as a verified
-provider restore.
+provider restore. The restore-and-replay provider drill is follow-up only
+and SHALL NOT gate launch.
 
 #### Scenario: Capture a private recovery point
 
@@ -151,7 +146,7 @@ Players SHALL be able to choose labelled, unrated Stockfish games with named dif
 
 ### Requirement: Cloudflare hosted game service
 
-The game, its authoritative services, stored player data, and background analysis SHALL run on Cloudflare. Production SHALL use `https://chess.ejmlabs.com`. Documentation SHALL distinguish proposed, locally tested, staged, and released behavior.
+The game, its authoritative services, stored player data, and background work SHALL run on Cloudflare. Production SHALL use `https://chess.ejmlabs.com`. Documentation SHALL distinguish proposed, locally tested, staged, and released behavior.
 
 #### Scenario: Production service inventory
 
@@ -204,7 +199,7 @@ Clocks SHALL start only after both seats are ready. The service SHALL use its ow
 #### Scenario: Move arrives after a deadline
 
 - **WHEN** a move reaches the authoritative service at or after the moving player's deadline
-- **THEN** the game is adjudicated as a timeout using the published mating-potential rule, even if its timeout task ran late
+- **THEN** the game is adjudicated as a timeout using the published material timeout rule, even if its timeout task ran late
 
 #### Scenario: One player never becomes ready
 
@@ -241,18 +236,19 @@ The product SHALL publish and version its draw and timeout policy. It SHALL supp
 
 #### Scenario: Timeout against mating material
 
-- **WHEN** a player's time expires and the opponent can still deliver checkmate by some legal sequence of moves
-- **THEN** the player who ran out of time loses and the opponent receives the point, including in casual, tournament and arena games
+- **WHEN** a player's time expires and the opponent has mating material
+- **THEN** the player who ran out of time loses and the opponent receives the point, including in casual, ranked, tournament and arena games
 
 #### Scenario: Disconnect runs the clock out
 
 - **WHEN** a disconnected player's clock expires
 - **THEN** the same timeout rule applies, because a disconnect neither stops nor changes the clock
 
-#### Scenario: Unresolved adjudication cases
+#### Scenario: Dead position the material rule cannot see
 
-- **WHEN** a known timeout or dead-position case has no correct implementation under the published policy
-- **THEN** public ranked release remains disabled until the policy and implementation agree and the case has a regression fixture
+- **WHEN** a player's time expires in a fully blocked position where the opponent has material but no mate is reachable
+- **THEN** the published material rule scores a loss for the player who ran out, the guides state this accepted limit, and ranked opening does not wait for exact dead-position detection
+- **AND** the case keeps a regression fixture
 
 #### Scenario: Checkmate and draw boundary coincide
 
@@ -264,132 +260,24 @@ The product SHALL publish and version its draw and timeout policy. It SHALL supp
 - **WHEN** a player accepts an active opponent draw offer or replies with a legal move
 - **THEN** acceptance concludes the game as drawn, while the move rejects the offer and continues play
 
-### Requirement: Unresolved adjudication stays pending
+### Requirement: Timeouts resolve at the flag by the material rule
 
-A timeout SHALL end the game with a result: a loss for the player who ran out of time when the other side has mating material, otherwise a draw. A ranked proof-policy game MAY wait at most 30 seconds for a validated private proof, then SHALL fall back to that rule. A timeout SHALL NOT become a technical void.
+A timeout SHALL end the game at the flag with a result: a loss for the player who ran out of time when the other side has mating material, otherwise a draw. Casual, ranked, tournament and arena games SHALL use this same material rule, decided once by the server at the original deadline with no private proof, waiting period or analysis service. A timeout SHALL NOT become a technical void. Games saved under an earlier rules version SHALL keep their recorded result.
 
-#### Scenario: Mating-potential analysis is inconclusive
+#### Scenario: A ranked game flags
 
-- **WHEN** an adjudication tool reaches its resource limit without determining whether the non-flagging player can mate
-- **THEN** both clocks stop, the result waits at most 30 seconds, and the material rule then gives the non-flagging player the win when that player has more than a bare king, or a draw otherwise
+- **WHEN** a ranked game's clock expires
+- **THEN** the server decides it at once by the material rule and settles it through the ordinary durable path, with no wait for a proof
+
+#### Scenario: Ranked pair is admitted
+
+- **WHEN** two eligible accounts are paired for a ranked game
+- **THEN** the game initializes without a proof slot, attempt credit, proof budget receipt or proof Container, and retry cannot double-book accounts or create another game identity
 
 #### Scenario: Remaining technical voids
 
 - **WHEN** an owner records a void, a tournament or arena round cutoff passes, eligibility is revoked or the computer opponent is unavailable
 - **THEN** the game ends without a winner; no timeout does
-
-### Requirement: Ranked timeout-proof admission
-
-Before ranked initialization, new proof-policy games SHALL reserve a durable
-slot and two finite attempt credits. Valid capacity, policy and spend authority
-SHALL obey the current single $100 spending target and existing alerts and
-emergency stop; superseded per-service allocations SHALL NOT add a gate. Stops SHALL close new reservations while funded work
-drains. Historical policies SHALL remain unchanged. Missing authority SHALL
-refuse admission.
-
-#### Scenario: A proof reservation passes cost review
-
-- **WHEN** a new proof-policy ranked game reserves capacity and finite credits
-- **THEN** its budget authority SHALL use finite credits, current workload caps and spending stops; the record SHALL count billing units once and disclose remaining invoice exposure
-
-#### Scenario: Proof capacity or budget is absent
-
-- **WHEN** a ranked pair has no available proof slot, finite credits or verified budget authority
-- **THEN** no ranked game initializes and retry cannot double-book accounts, create another game identity or consume duplicate admission credits
-
-#### Scenario: Admission reply is lost
-
-- **WHEN** capacity or budget reservation succeeds but its reply or game initialization is interrupted
-- **THEN** recovery reconciles the same durable intent, receipt and game before releasing capacity or starting play, without assuming a cross-service transaction
-
-#### Scenario: New admission is stopped
-
-- **WHEN** a stop or month rollover occurs after a ranked proof reservation was accepted
-- **THEN** its saved finite credits, proof deadline, active game and accepted-result delivery remain valid while new work obeys the current ceiling
-
-### Requirement: Private bounded timeout proofs
-
-The product SHALL use unchanged pinned CHA-Solver through a private bounded
-adapter outside move processing. A timeout win SHALL require an independently
-validated legal mating witness using retained history and the saved online draw
-policy. Supported unwinnability SHALL draw; failed, unsupported or exhausted
-work SHALL remain unknown. CPU, wall, memory, output and retries SHALL be capped.
-Full FIDE or universal completion SHALL NOT be claimed.
-
-#### Scenario: Positive proof respects the full game history
-
-- **WHEN** a bounded solver returns a mating line for the non-flagging side
-- **THEN** an independent maintained rules package verifies the retained history, exact position, legal witness, intended winner and automatic-draw precedence before that pending game may accept one timeout win
-
-#### Scenario: Supported negative proof is returned
-
-- **WHEN** the pinned supported solver proves the surviving side cannot mate for the exact reserved request
-- **THEN** the still-pending game records one timeout draw through its ordinary terminal arbitration and durable settlement path
-
-#### Scenario: A result is malformed, stale or late
-
-- **WHEN** proof input or output is invalid, oversized, mismatched, unsupported, duplicated, expired or delivered after a terminal result
-- **THEN** no fabricated win or rating change occurs, and stale work cannot replace the saved outcome or extend the original pending deadline
-
-#### Scenario: Proof work fails or exhausts a bound
-
-- **WHEN** a solver or validator reaches its CPU, wall, memory or output limit, returns unknown, or is interrupted
-- **THEN** only saved finite transient retry credits may be used, the original 30-second deadline remains, and any unresolved result falls back to the material timeout rule
-
-#### Scenario: A delivery acknowledgement is lost
-
-- **WHEN** the same private proof request and attempt are delivered again
-- **THEN** a durable attempt receipt returns its recorded result without duplicate native execution, budget use or terminal settlement
-
-### Requirement: Qualified ordinary flagging
-
-The proof profile SHALL remain disabled until local and provider tests resolve
-the required ordinary timeout corpus correctly under fixed resource and cost
-limits, including full histories and a cold burst of all reserved slots.
-Failure, unknown and race tests SHALL preserve the material-rule fallback.
-This gate SHALL NOT replace other ranked release gates or imply full FIDE
-adjudication, measured worldwide latency or large-event ranked capacity.
-
-#### Scenario: Native unknown evidence is kept distinct
-
-- **WHEN** local and provider timeout-proof qualification is assessed
-- **THEN** C14/C15 SHALL use real native witnesses and record `unknown`/`invalid-witness` after independent online-draw validation
-- **AND** G07 SHALL retain both exact solver-child kill evidence and its native attempt receipt showing `unknown`/`resource-limit`
-- **AND** native `undetermined` parser coverage SHALL be labelled synthetic, production SHALL retain the `solver-undetermined` mapping, and neither SHALL count as a genuine native observation
-- **AND** qualification SHALL disclose that no known legal native `undetermined` fixture is retained or claimed executed, record that observation gap and add a genuine fixture if found
-- **AND** injected results or other unknown reasons SHALL NOT substitute for real native evidence or be relabelled `solver-undetermined`
-- **AND** all ordinary-answer, original-deadline, material-fallback, once-only settlement, slot-release, resource, cost, failure and recovery gates SHALL remain required
-
-#### Scenario: Retained Basic native corpus evidence is reused
-
-- **WHEN** the historical Basic run is matched to the same immutable image and all 27 current fixture inputs, including the exact raw-file to structured-JSON digest mapping
-- **THEN** its native corpus and four cold-request coverage SHALL remain reusable without another full corpus run
-- **AND** the different current Worker build SHALL require its own Game/Competition settlement, Prover restart/restore, spent-credit reconciliation and physical shutdown evidence; the historical synthetic transport and dated stop SHALL NOT pass those gates
-- **AND** preparation of the renewed inert 12-Game Basic candidate SHALL pass no current Game branch or authorize unreviewed execution
-
-#### Scenario: Finite execution is reviewed
-
-- **WHEN** a private finite measurement is prepared
-- **THEN** execution SHALL require separate immutable cost and source-permit reviews and actual owner residual-cost acceptance, bound by document hashes in the frozen manifest and runtime identity
-- **AND** the checked-in template SHALL remain unarmed with all reviews pending and hashes null
-- **AND** provider qualification SHALL remain a distinct later report bound to the unchanged measurement manifest, source, bundle, config and exact resources; production SHALL require that passing report and all existing release gates
-
-#### Scenario: Financial adoption precedes provider qualification
-
-- **WHEN** the owner accepts the disclosed estimate, named reserve and residual pricing or stop-failure risk
-- **THEN** only that financial decision is recorded; real proof, Game/Competition settlement, restore, capacity and player-flow gates remain incomplete until their own evidence passes
-- **AND** finite execution still requires the exact source-permit and cost review hashes, fixed work bounds, original-binding stop path and matching immutable runtime identity
-
-#### Scenario: A cost line is unpriced or a cycle changes
-
-- **WHEN** an image, historical, current-spend, tax or provider-stop cost is unknown, or the common billing cycle or quantity bounds differ
-- **THEN** it remains explicit unknown exposure, the ledger is rebuilt as needed and neither zero cost nor a hard invoice fit is claimed
-- **AND** unexpected cost evidence closes new proof and ranked work while accepted work and bounded shutdown continue
-
-#### Scenario: Qualification is incomplete
-
-- **WHEN** only feasibility fixtures, local execution or an unbounded search have passed, or ordinary required flags fall through to technical void
-- **THEN** the proof profile and public ranked launch stay disabled until the fixed-bound difficult-corpus and provider evidence passes
 
 ### Requirement: Focused and accessible board controls
 
@@ -519,7 +407,7 @@ Participants SHALL have access to their game history and completed PGN exports. 
 #### Scenario: Unrelated account requests live state
 
 - **WHEN** an unrelated account requests a game that is still in progress
-- **THEN** it receives no private position, player session, or analysis data
+- **THEN** it receives no private position or player session data
 
 #### Scenario: Completed game export
 

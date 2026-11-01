@@ -20,7 +20,7 @@ beforeEach(async () => {
     env.DB.prepare('UPDATE budget_receipt_counts SET count=0'),
     env.DB.prepare('DELETE FROM budget_months'),
     env.DB.prepare('DELETE FROM operations_changes'),
-    env.DB.prepare("UPDATE operations_control SET version=0,games_stopped=0,email_stopped=0,analysis_stopped=0,changed_at=NULL,changed_by=NULL,reason=NULL WHERE id='product'"),
+    env.DB.prepare("UPDATE operations_control SET version=0,games_stopped=0,email_stopped=0,changed_at=NULL,changed_by=NULL,reason=NULL WHERE id='product'"),
   ]);
 });
 
@@ -49,19 +49,19 @@ describe('dedicated budget stop webhook', () => {
     await expect(budgetStopWebhook(malformed, bindings)).rejects.toMatchObject({ status: 400, code: 'INVALID_JSON' });
     await expect(budgetStopWebhook(request({ text: 'stop', extra: 'x'.repeat(8_193) }), bindings)).rejects.toMatchObject({ status: 413 });
     expect(prepare).not.toHaveBeenCalled();
-    expect((await budgetStatus(env)).control).toMatchObject({ version: 0, games_stopped: 0, email_stopped: 0, analysis_stopped: 0 });
+    expect((await budgetStatus(env)).control).toMatchObject({ version: 0, games_stopped: 0, email_stopped: 0 });
   });
 
   it('stops monotonically across an owner version race and repeated test notifications without trusting payload controls or dollars', async () => {
     const accepted = `casual:${crypto.randomUUID()}`;
     expect(await reserveMonthlyWork(env, 'games', accepted)).toBe(true);
     const outcomes = await Promise.allSettled([
-      setBudgetStops(env, 'owner-fixture', { expectedVersion: 0, gamesStopped: false, emailStopped: false, analysisStopped: false, reason: 'Owner reviewed the current allowance.' }),
+      setBudgetStops(env, 'owner-fixture', { expectedVersion: 0, gamesStopped: false, emailStopped: false, reason: 'Owner reviewed the current allowance.' }),
       budgetStopWebhook(request({ text: 'private notification text', amount: 0, gamesStopped: false, data: { account_id: 'private-account-reference' } }), config),
     ]);
     expect(outcomes[1].status).toBe('fulfilled');
     const stopped = await budgetStatus(env);
-    expect(stopped.control).toMatchObject({ games_stopped: 1, email_stopped: 1, analysis_stopped: 1, changed_by: 'cloudflare:budget-stop' });
+    expect(stopped.control).toMatchObject({ games_stopped: 1, email_stopped: 1, changed_by: 'cloudflare:budget-stop' });
     expect(JSON.stringify(stopped)).not.toContain('private notification text');
     expect(JSON.stringify(stopped)).not.toContain('private-account-reference');
     await Promise.all(Array.from({ length: 8 }, () => budgetStopWebhook(request(), config)));

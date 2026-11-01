@@ -1,27 +1,19 @@
 import { env } from 'cloudflare:workers';
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from 'cloudflare:test';
 import { describe, expect, it, vi } from 'vitest';
-import { initialRating, rateMatch, type JournalKind } from '../src/server/competition';
-import { enableRanked, player } from './authority-helpers';
+import type { JournalKind } from '../src/server/competition';
+import { initialRating, rateMatch } from '../src/server/rating';
+import { enableRanked, gamesAnswering, holdAlarms, patchBindings, player, privates, rankedPair, swapBindings } from './authority-helpers';
 import { RULES_VERSION, type Actor, type GameResult, type Pool, type RatingState } from '../src/shared/protocol';
+
+async function sha256Hex(value: string): Promise<string> {
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
 
 async function paired(actors?: readonly [Actor, Actor], pool: Pool = 'blitz') {
   const competition = env.COMPETITION.get(env.COMPETITION.idFromName('global'));
   await enableRanked(competition);
-  const [a, b] = actors ?? await Promise.all([player(), player()]);
-  await competition.joinQueue(a, pool, 'test');
-  let queue = await competition.joinQueue(b, pool, 'test');
-  if (queue.status === 'queued') {
-    await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('UPDATE queue SET joined_at=? WHERE user_id IN (?,?)', Date.now() - 120_000, a.id, b.id));
-    queue = await competition.queueStatus(b);
-  }
-  if (queue.status !== 'reserved' && queue.status !== 'live') throw new Error('not_paired');
-  const game = env.GAME.get(env.GAME.idFromName(queue.gameId));
-  await enableRanked(game);
-  const initial = await game.snapshot(a);
-  const white = initial.white.id === a.id ? a : b;
-  const black = initial.white.id === a.id ? b : a;
-  return { competition, game, white, black, initial };
+  return { competition, ...await rankedPair(competition, actors ?? await Promise.all([player(), player()]), { pool, region: 'test' }) };
 }
 
 async function startMatch(match: Awaited<ReturnType<typeof paired>>) {
@@ -40,13 +32,6 @@ async function finishedMatch(actors?: readonly [Actor, Actor], loser?: Actor, po
   const status = await match.game.status();
   if (!status?.result) throw new Error('missing_result');
   return { ...match, result: status.result };
-}
-
-async function pauseAutomaticAlarms(competition: Awaited<ReturnType<typeof paired>>['competition']): Promise<void> {
-  await runInDurableObject(competition, async (instance, state) => {
-    (instance as unknown as { schedule(): Promise<void> }).schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
 }
 
 async function reviewedDecision(subject: Actor, gameId: string, affected: string[], prior?: { caseId: string }): Promise<{ id: string; caseId: string }> {
@@ -95,13 +80,9 @@ async function readRating(competition: Awaited<ReturnType<typeof paired>>['compe
   });
 }
 
-async function analysisMatch(enabled: string | undefined, queue?: Queue) {
+async function settledMatch() {
   const match = await paired();
-  await pauseAutomaticAlarms(match.competition);
-  await runInDurableObject(match.competition, instance => {
-    const internal = instance as unknown as { env: typeof env };
-    internal.env = { ...internal.env, ANALYSIS_ENABLED: enabled, ANALYSIS_QUEUE: queue };
-  });
+  await holdAlarms(match.competition);
   const active = await startMatch(match);
   const ended = await match.game.command(match.black, { type: 'resign', id: crypto.randomUUID(), expectedVersion: active.version });
   if (!ended.ok) throw new Error(ended.code);
@@ -110,9 +91,40 @@ async function analysisMatch(enabled: string | undefined, queue?: Queue) {
   return { ...match, result };
 }
 
+/** A finished result that no real Game produced, for driving settlement past its verification step. */
+function syntheticResult(overrides: Partial<GameResult> = {}): GameResult {
+  const id = crypto.randomUUID();
+  const now = Date.now();
+  return {
+    id, eventId: `${id}:2`, format: 'blitz', rated: false, reservationId: null,
+    white: { id: 'account-a', name: 'A', isAnonymous: false, ready: true },
+    black: { id: 'account-b', name: 'B', isAnonymous: false, ready: true },
+    status: 'finished', version: 2, rulesVersion: RULES_VERSION, terminalDigest: id,
+    outcome: { winner: 'w', score: 1, reason: 'checkmate' },
+    createdAt: now - 120_000, startedAt: now - 60_000, endedAt: now, pgn: '', plies: 30,
+    ...overrides,
+  };
+}
+
+/** Settles `result` on a fresh Competition whose Game reports it as final, running `beforeReply` as the Game answers. */
+async function settleAgainstGame(result: GameResult, beforeReply: (sql: SqlStorage) => void = () => {}) {
+  const competition = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
+  const outcome = await runInDurableObject(competition, async (instance, state) => {
+    swapBindings(instance, gamesAnswering(() => ({ status: async () => { beforeReply(state.storage.sql); return { result }; } })));
+    let error = 'unexpected_success';
+    try { await instance.settle(result); } catch (thrown) { error = (thrown as Error).message; }
+    return {
+      error,
+      incidents: state.storage.sql.exec<{ kind: string }>('SELECT kind FROM incidents WHERE game_id=?', result.id).toArray().map(row => row.kind),
+      events: state.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM result_events WHERE game_id=?', result.id).one().count,
+    };
+  });
+  return { competition, ...outcome };
+}
+
 describe('competitive authority', () => {
-  it.each([undefined, 'false'])('drains scored ranked projections with optional analysis disabled (%s)', async enabled => {
-    const { competition, result, white, black } = await analysisMatch(enabled);
+  it('drains scored ranked projections', async () => {
+    const { competition, result, white, black } = await settledMatch();
     await competition.flush();
     expect(await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('SELECT id FROM outbox').toArray())).toEqual([]);
     expect(await env.DB.prepare('SELECT status,settlement,score FROM games WHERE id=?').bind(result.id).first())
@@ -121,52 +133,19 @@ describe('competitive authority', () => {
       .toEqual([{ games: 1 }, { games: 1 }]);
   });
 
-  it('does not backfill disabled results when optional analysis is later enabled', async () => {
-    const { competition } = await analysisMatch('false');
-    const send = vi.fn().mockResolvedValue(undefined);
-    await runInDurableObject(competition, instance => {
-      const internal = instance as unknown as { env: typeof env };
-      internal.env = { ...internal.env, ANALYSIS_ENABLED: 'true', ANALYSIS_QUEUE: { send } as unknown as Queue };
-    });
-    await competition.flush();
-    expect(send).not.toHaveBeenCalled();
-    expect(await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('SELECT id FROM outbox').toArray())).toEqual([]);
-  });
-
-  it('drains stored optional analysis retries when the feature is disabled', async () => {
-    const { competition, result, white } = await analysisMatch('true');
-    await competition.flush();
-    expect(await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('SELECT projected,analysed,attempts FROM outbox').toArray()))
-      .toEqual([{ projected: 1, analysed: 0, attempts: 1 }]);
+  it('retries a failed projection from the outbox without repeating settlement', async () => {
+    const { competition, result, white } = await settledMatch();
     const rating = await readRating(competition, white);
-    await runInDurableObject(competition, (instance, state) => {
-      const internal = instance as unknown as { env: typeof env };
-      internal.env = { ...internal.env, ANALYSIS_ENABLED: 'false', ANALYSIS_QUEUE: undefined };
+    await runInDurableObject(competition, async (instance, state) => {
+      const batch = vi.spyOn(privates(instance).env.DB, 'batch').mockRejectedValueOnce(new Error('d1_unavailable'));
+      try { await instance.flush(); } finally { batch.mockRestore(); }
+      expect(state.storage.sql.exec('SELECT projected,attempts FROM outbox').toArray()).toEqual([{ projected: 0, attempts: 1 }]);
       state.storage.sql.exec('UPDATE outbox SET next_attempt_at=0');
+      await instance.flush();
+      expect(state.storage.sql.exec('SELECT id FROM outbox').toArray()).toEqual([]);
     });
-    await competition.flush();
-    expect(await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('SELECT id FROM outbox').toArray())).toEqual([]);
+    expect(await env.DB.prepare('SELECT status,settlement FROM games WHERE id=?').bind(result.id).first()).toEqual({ status: 'finished', settlement: 'settled' });
     expect(await readRating(competition, white)).toEqual(rating);
-    expect(await env.DB.prepare('SELECT status,settlement FROM games WHERE id=?').bind(result.id).first())
-      .toEqual({ status: 'finished', settlement: 'settled' });
-  });
-
-  it('retains enabled optional analysis until queue delivery succeeds without repeating settlement', async () => {
-    const send = vi.fn().mockRejectedValueOnce(new Error('queue_unavailable')).mockResolvedValue(undefined);
-    const { competition, result, white } = await analysisMatch('true', { send } as unknown as Queue);
-    await competition.flush();
-    expect(await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('SELECT projected,analysed,attempts FROM outbox').toArray()))
-      .toEqual([{ projected: 1, analysed: 0, attempts: 1 }]);
-    const rating = await readRating(competition, white);
-    await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('UPDATE outbox SET next_attempt_at=0'));
-    await competition.flush();
-    expect(send).toHaveBeenCalledTimes(2);
-    expect(send).toHaveBeenLastCalledWith({ gameId: result.id, resultVersion: result.version, rulesVersion: result.rulesVersion,
-      priority: 'sample', engineVersion: 'stockfish-17.1', profileVersion: 'screen-v1' });
-    expect(await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('SELECT id FROM outbox').toArray())).toEqual([]);
-    expect(await readRating(competition, white)).toEqual(rating);
-    await competition.flush();
-    expect(send).toHaveBeenCalledTimes(2);
   });
 
   it('keeps ranked admission closed by default', async () => {
@@ -180,8 +159,8 @@ describe('competitive authority', () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
     try {
       await runInDurableObject(competition, async (instance, state) => {
-        const internal = instance as unknown as { env: typeof env; schedule(completedThrough?: number): Promise<void> };
-        internal.env = { ...internal.env, ARENAS_ENABLED: 'false', TOURNAMENTS_ENABLED: 'false' };
+        const internal = privates(instance);
+        swapBindings(instance, { ARENAS_ENABLED: 'false', TOURNAMENTS_ENABLED: 'false' });
         expect((await instance.maintenance()).errors).toEqual([]);
         expect(await state.storage.getAlarm()).toBeNull();
         state.storage.sql.exec(`INSERT INTO account_closure_fences(user_id,request_id,lease_id,expires_at,state)
@@ -245,10 +224,7 @@ describe('competitive authority', () => {
     // Runtime alarms use wall time. Keep this manually stepped clock beyond the test timeout.
     const now = Date.now() + 60_000;
     const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
-    const stopEvents = () => runInDurableObject(competition, instance => {
-      const internal = instance as unknown as { env: typeof env };
-      internal.env = { ...internal.env, ARENAS_ENABLED: 'false', TOURNAMENTS_ENABLED: 'false' };
-    });
+    const stopEvents = () => patchBindings(competition, { ARENAS_ENABLED: 'false', TOURNAMENTS_ENABLED: 'false' });
     const alarm = () => runInDurableObject(competition, (_instance, state) => state.storage.getAlarm());
     try {
       await stopEvents();
@@ -310,7 +286,7 @@ describe('competitive authority', () => {
   it('keeps a retryable reservation and releases only its first guard when the other player is at the seat cap', async () => {
     const competition = env.COMPETITION.get(env.COMPETITION.idFromName('global'));
     await enableRanked(competition);
-    await pauseAutomaticAlarms(competition);
+    await holdAlarms(competition);
     const [free, capped] = await Promise.all([player(), player()]);
     const existingGames = Array.from({ length: 4 }, () => crypto.randomUUID());
     await env.DB.batch(existingGames.map(id => env.DB.prepare('INSERT INTO active_game_seats(user_id,game_id,acquired_at) VALUES(?,?,?)').bind(capped.id, id, Date.now())));
@@ -336,11 +312,7 @@ describe('competitive authority', () => {
   it('enforces queue, unsettled and retained admission ceilings while preserving existing reservations', async () => {
     const competition = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
     await enableRanked(competition);
-    await pauseAutomaticAlarms(competition);
-    await runInDurableObject(competition, instance => {
-      const internal = instance as unknown as { env: typeof env };
-      internal.env = { ...internal.env, RANKED_GAME_LIMIT: '1', RANKED_QUEUE_LIMIT: '2', RANKED_RETAINED_GAME_LIMIT: '2' };
-    });
+    await holdAlarms(competition, { RANKED_GAME_LIMIT: '1', RANKED_QUEUE_LIMIT: '2', RANKED_RETAINED_GAME_LIMIT: '2' });
     const [a, b, c, d, e] = await Promise.all(Array.from({ length: 5 }, () => player()));
     await competition.joinQueue(a, 'blitz');
     expect(await competition.joinQueue(b, 'blitz')).toMatchObject({ status: 'reserved' });
@@ -349,10 +321,7 @@ describe('competitive authority', () => {
     expect(await competition.joinQueue(e, 'blitz')).toMatchObject({ status: 'closed' });
     expect(await competition.queueStatus(a)).toMatchObject({ status: 'reserved' });
     expect(await competition.health()).toMatchObject({ unsettled: 1, queued: 2, retainedRankedGames: 1, limits: { unsettledGames: 1, queuedPerPool: 2, retainedGames: 2 } });
-    await runInDurableObject(competition, instance => {
-      const internal = instance as unknown as { env: typeof env };
-      internal.env = { ...internal.env, RANKED_GAME_LIMIT: '10000', RANKED_QUEUE_LIMIT: 'invalid', RANKED_RETAINED_GAME_LIMIT: '1' };
-    });
+    await patchBindings(competition, { RANKED_GAME_LIMIT: '10000', RANKED_QUEUE_LIMIT: 'invalid', RANKED_RETAINED_GAME_LIMIT: '1' });
     expect(await competition.joinQueue(e, 'rapid')).toMatchObject({ status: 'closed' });
     expect(await competition.health()).toMatchObject({ limits: { unsettledGames: 10_000, queuedPerPool: Number.MAX_SAFE_INTEGER, retainedGames: 1 } });
     expect(await competition.queueStatus(a)).toMatchObject({ status: 'reserved' });
@@ -393,11 +362,12 @@ describe('competitive authority', () => {
       value.deadline = Date.now() - 1;
       state.storage.sql.exec('UPDATE game_state SET value=?', JSON.stringify(value));
     });
-    const pending = await game.status();
-    expect(pending?.status).toBe('pending-adjudication');
-    await competition.settle(pending!.result!);
-    expect(await competition.joinQueue(white, 'rapid')).toMatchObject({ status: 'settling', pool: 'blitz', gameId: initial.id });
-    expect(await readRating(competition, white)).toBeNull();
+    const flagged = await game.status();
+    expect(flagged?.result?.outcome).toMatchObject({ winner: 'b', reason: 'timeout-win' });
+    expect(await competition.joinQueue(white, 'rapid')).toMatchObject({ status: 'live', pool: 'blitz', gameId: initial.id });
+    await competition.settle(flagged!.result!);
+    expect(await readRating(competition, white)).not.toBeNull();
+    expect(await competition.queueStatus(white)).toEqual({ status: 'idle' });
   });
 
   it('expires a paired ranked game without rating credit and recovers both account slots', async () => {
@@ -427,6 +397,20 @@ describe('competitive authority', () => {
     expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM active_game_seats WHERE game_id=? AND released_at IS NULL').bind(initial.id).first('count')).toBe(0);
   });
 
+  it('records an incident for a ranked result without a matching reservation and accepts nothing', async () => {
+    const outcome = await settleAgainstGame(syntheticResult({ rated: true, reservationId: crypto.randomUUID() }));
+    expect(outcome).toMatchObject({ error: 'unregistered_ranked_game', incidents: ['unregistered_ranked_game'], events: 0 });
+    expect(await outcome.competition.health()).toMatchObject({ incidents: 1, outbox: 0 });
+  });
+
+  it('records the conflict when another delivery commits a different final result while the Game is being asked', async () => {
+    const result = syntheticResult();
+    const outcome = await settleAgainstGame(result, sql => sql.exec(
+      'INSERT INTO processed_results(game_id,event_id,digest,sequence) VALUES(?,?,?,1)', result.id, 'other-event', 'other-digest'));
+    expect(outcome).toMatchObject({ error: 'conflicting_result', incidents: ['conflicting_final_result'], events: 0 });
+    expect(await outcome.competition.health()).toMatchObject({ incidents: 1 });
+  });
+
   it('projects a game and both ratings atomically and prevents an older result from replacing it', async () => {
     const { competition, result, white, black } = await finishedMatch();
     await competition.settle(result);
@@ -437,10 +421,7 @@ describe('competitive authority', () => {
     expect(entries.results).toHaveLength(2);
     expect(entries.results.every(entry => entry.games === 1)).toBe(true);
     const projection = { result: { ...result, status: 'pending-adjudication' } as GameResult, epoch: 1, version: game!.projection_version - 1, ratings: [] };
-    await runInDurableObject(competition, async instance => {
-      const internal = instance as unknown as { project(value: typeof projection): Promise<void> };
-      await internal.project(projection);
-    });
+    await runInDurableObject(competition, instance => privates(instance).project(projection));
     expect(await env.DB.prepare('SELECT status FROM games WHERE id=?').bind(result.id).first('status')).toBe('finished');
   });
 
@@ -448,7 +429,7 @@ describe('competitive authority', () => {
     const [a, b, c, d] = await Promise.all([player(), player(), player(), player()]);
     const one = await finishedMatch([a, b], b);
     const competition = one.competition;
-    await pauseAutomaticAlarms(competition);
+    await holdAlarms(competition);
     await competition.settle(one.result);
     const two = await finishedMatch([a, c], a);
     await competition.settle(two.result);
@@ -472,7 +453,7 @@ describe('competitive authority', () => {
     await competition.processCorrections();
     await evictDurableObject(competition);
     await enableRanked(competition);
-    await pauseAutomaticAlarms(competition);
+    await holdAlarms(competition);
     await finishReplay(competition, decision.id);
     await competition.flush();
 
@@ -517,11 +498,41 @@ describe('competitive authority', () => {
     expect(await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('SELECT sequence FROM corrected_events WHERE game_id IN (?,?,?)', one.result.id, two.result.id, resultThree.id).toArray())).toHaveLength(5);
   });
 
+  it('imports correction decisions around a failing one and keeps each player in order', async () => {
+    const competition = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
+    await holdAlarms(competition);
+    const [a, b] = await Promise.all([player(), player()]);
+    // An unknown game ID leaves nothing to replay, so each decision completes as soon as it is imported.
+    const failing = await reviewedDecision(a, crypto.randomUUID(), ['x']);
+    const behind = await reviewedDecision(a, crypto.randomUUID(), ['unreplayed-game-a']);
+    const other = await reviewedDecision(b, crypto.randomUUID(), ['unreplayed-game-b']);
+    const createdAt = Date.now() - 60_000;
+    for (const [index, decision] of [failing, behind, other].entries()) {
+      await env.DB.prepare('UPDATE rating_correction_outbox SET created_at=? WHERE decision_id=?').bind(createdAt + index, decision.id).run();
+    }
+    const completed = async (decision: { id: string }) => Boolean(await env.DB.prepare('SELECT completed_at FROM rating_correction_outbox WHERE decision_id=?').bind(decision.id).first('completed_at'));
+    const drain = async (done: () => Promise<boolean>) => { for (let step = 0; step < 12 && !await done(); step++) await competition.processCorrections(); };
+
+    await drain(() => completed(other));
+    expect(await completed(other)).toBe(true);
+    for (let step = 0; step < 3; step++) await competition.processCorrections();
+    expect([await completed(failing), await completed(behind)]).toEqual([false, false]);
+    expect(await env.DB.prepare('SELECT last_error FROM rating_correction_outbox WHERE decision_id=?').bind(failing.id).first('last_error')).toBe('invalid_affected_games');
+
+    await env.DB.prepare('UPDATE fairplay_decisions SET affected_game_ids=? WHERE id=?').bind('["unreplayed-game-c"]', failing.id).run();
+    await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec('UPDATE correction_import_retries SET retry_at=0'));
+    await drain(() => completed(behind));
+    expect([await completed(failing), await completed(behind)]).toEqual([true, true]);
+    const mine = new Set([failing.id, behind.id, other.id]);
+    const order = await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec<{ decision_id: string }>('SELECT decision_id FROM correction_decisions ORDER BY rowid').toArray().map(row => row.decision_id));
+    expect(order.filter(id => mine.has(id))).toEqual([other.id, failing.id, behind.id]);
+  });
+
   it('publishes both repaired pools together and restores their ratings through a linked appeal overturn', async () => {
     const [a, b, c] = await Promise.all([player(), player(), player()]);
     const blitz = await finishedMatch([a, b], b);
     const competition = blitz.competition;
-    await pauseAutomaticAlarms(competition);
+    await holdAlarms(competition);
     await competition.settle(blitz.result);
     const rapid = await finishedMatch([a, c], a, 'rapid');
     await competition.settle(rapid.result);
@@ -564,7 +575,7 @@ describe('competitive authority', () => {
     expect(await competition.requestCorrection(appealDecision)).toEqual({ accepted: true, complete: false });
     await evictDurableObject(competition);
     await enableRanked(competition);
-    await pauseAutomaticAlarms(competition);
+    await holdAlarms(competition);
     await finishReplay(competition, appealDecision);
     await competition.flush();
     expect(await Promise.all([
@@ -581,10 +592,38 @@ describe('competitive authority', () => {
     expect(await competition.requestCorrection(appealDecision)).toEqual({ accepted: true, complete: true });
   });
 
+  it('keeps a prepared pool quiet at the publish barrier while its sibling waits to retry', async () => {
+    const [a, b, c] = await Promise.all([player(), player(), player()]);
+    const blitz = await finishedMatch([a, b], b);
+    const competition = blitz.competition;
+    await holdAlarms(competition);
+    await competition.settle(blitz.result);
+    const rapid = await finishedMatch([a, c], a, 'rapid');
+    await competition.settle(rapid.result);
+    await competition.flush();
+    const generations = async () => (await env.DB.prepare('SELECT pool,epoch FROM competition_generations ORDER BY pool').all()).results;
+    const before = await generations();
+    const decision = await reviewedDecision(a, blitz.result.id, [blitz.result.id, rapid.result.id]);
+    await competition.requestCorrection(decision.id);
+    const runs = () => runInDurableObject(competition, (_instance, state) => Object.fromEntries(state.storage.sql.exec<{ pool: string; phase: string; next_at: number }>(
+      'SELECT pool,phase,next_at FROM correction_runs WHERE decision_id=?', decision.id).toArray().map(run => [run.pool, run])));
+    for (let step = 0; step < 30 && (await runs()).blitz.phase !== 'publish'; step++) await competition.processCorrections();
+    expect(await runs()).toMatchObject({ blitz: { phase: 'publish' }, rapid: { phase: expect.not.stringMatching(/^publish$/) } });
+    const retryAt = Date.now() + 30_000;
+    await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec("UPDATE correction_runs SET next_at=?,error='retry_later' WHERE decision_id=? AND pool='rapid'", retryAt, decision.id));
+    await competition.processCorrections();
+    // A prepared run that stays due would re-arm the alarm every millisecond until its sibling retries.
+    expect((await runs()).blitz.next_at).toBeGreaterThanOrEqual(retryAt);
+    expect(await generations()).toEqual(before);
+    await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec("UPDATE correction_runs SET next_at=0 WHERE decision_id=?", decision.id));
+    await finishReplay(competition, decision.id);
+    expect(await generations()).not.toEqual(before);
+  });
+
   it('keeps a pool paused and exposes an unsupported historical policy instead of publishing a guessed repair', async () => {
     const { competition, result, white } = await finishedMatch();
     await competition.settle(result);
-    await pauseAutomaticAlarms(competition);
+    await holdAlarms(competition);
     const decision = await reviewedDecision(white, result.id, [result.id]);
     await competition.requestCorrection(decision.id);
     await runInDurableObject(competition, (_instance, state) => state.storage.sql.exec("UPDATE rating_events SET policy='unknown-v0' WHERE game_id=?", result.id));
@@ -597,7 +636,7 @@ describe('competitive authority', () => {
 
   it('exports bounded immutable pages and replays an isolated restored journal across a durable cursor boundary', async () => {
     const source = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
-    await pauseAutomaticAlarms(source);
+    await holdAlarms(source);
     const [a, ...opponents] = await Promise.all(Array.from({ length: 22 }, () => player()));
     const now = Date.now();
     const results: GameResult[] = opponents.map((opponent, index) => {
@@ -613,10 +652,9 @@ describe('competitive authority', () => {
       };
     });
     await runInDurableObject(source, (instance, state) => {
-      const internal = instance as unknown as { applyFinished(result: GameResult, sequence: number, epoch: number, now: number): unknown };
       for (const result of results) {
         const sequence = state.storage.sql.exec<{ sequence: number }>('INSERT INTO result_events(event_id,game_id,payload,accepted_at) VALUES(?,?,?,?) RETURNING sequence', result.eventId, result.id, JSON.stringify(result), result.endedAt).one().sequence;
-        internal.applyFinished(result, sequence, 1, result.endedAt);
+        privates(instance).applyFinished(result, sequence, 1, result.endedAt);
       }
     });
     const manifest = await source.beginExport();
@@ -625,8 +663,7 @@ describe('competitive authority', () => {
     for (let after = 0; ;) {
       const page = await source.exportEvents({ kind: 'ratings', after, watermark: manifest.watermarks.ratings, limit: 7 });
       const { sha256, ...unsigned } = page;
-      const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(unsigned))))].map(byte => byte.toString(16).padStart(2, '0')).join('');
-      expect(sha256).toBe(digest);
+      expect(sha256).toBe(await sha256Hex(JSON.stringify(unsigned)));
       expect(page.rows.length).toBeLessThanOrEqual(7);
       pages.push(page);
       if (page.nextCursor === null) break;
@@ -640,7 +677,7 @@ describe('competitive authority', () => {
     expect(safeDump).not.toContain('@example.test');
     const recovered = env.COMPETITION.get(env.COMPETITION.idFromName(crypto.randomUUID()));
     await enableRanked(recovered);
-    await pauseAutomaticAlarms(recovered);
+    await holdAlarms(recovered);
     await runInDurableObject(recovered, (_instance, state) => {
       for (const { record } of rows) state.storage.sql.exec(`INSERT INTO rating_events(sequence,game_id,pool,policy,epoch,white_id,black_id,score,pre_white,pre_black,post_white,post_black,accepted_at)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`, record.sequence, record.game_id, record.pool, record.policy, record.epoch, record.white_id, record.black_id, record.score,
@@ -648,11 +685,13 @@ describe('competitive authority', () => {
     });
     const decision = await reviewedDecision(a, results[0].id, [results[0].id]);
     await recovered.requestCorrection(decision.id);
+    const checkpoint = await runInDurableObject(recovered, (_instance, state) => state.storage.sql.exec<{ payload: string; digest: string }>('SELECT payload,digest FROM checkpoints').one());
+    expect(checkpoint.digest).toBe(await sha256Hex(checkpoint.payload));
     await recovered.processCorrections();
     expect(await recovered.correctionStatus(decision.id)).toMatchObject({ complete: false, runs: [{ phase: 'replay', cursor: 20, watermark: 21 }] });
     await evictDurableObject(recovered);
     await enableRanked(recovered);
-    await pauseAutomaticAlarms(recovered);
+    await holdAlarms(recovered);
     await finishReplay(recovered, decision.id);
     expect((await readRating(recovered, a))?.games).toBe(20);
     let expected = initialRating(results[1].endedAt);

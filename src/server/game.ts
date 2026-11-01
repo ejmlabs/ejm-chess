@@ -1,25 +1,24 @@
 import { DurableObject } from 'cloudflare:workers';
 import { Chess } from 'chess.js';
 import { passwordAccountReady, rankedEligibility, revalidateActor, competitiveAccountEligibility } from './auth';
-import { positionOutcome, timeoutOutcome, provedTimeoutOutcome, TIMEOUT_AWAITING_PROOF } from './adjudication';
+import { positionOutcome, timeoutOutcome } from './adjudication';
 import { aiEnabled, type Env } from './env';
 import { consumeGameProtocol, countProtocolEvent, gameProtocolStatus, initializeProtocolLimits } from './abuse';
 import { getEngineLevel, STOCKFISH_BUILD } from '../shared/engine';
 import { captureNativePoint } from './recovery';
-import { ApiError, readJson } from './security';
-import { hasProofAdmission } from './proof-budget';
-import { parseProofResult, proofDigests, transientProof, PROOF_PROFILE, PROOF_RULES_VERSION, PROOF_INSTANCE, PROOF_RESULT_BYTES,
-  type TimeoutProofRequest } from './proof-contract';
+import { retryDelayMs } from './retry';
+import { ApiError } from './security';
 import {
   FORMATS, PRIOR_RULES_VERSIONS, RULES_VERSION, RATING_VERSION,
   type Actor, type AiOpponent, type Color, type CommandReceipt, type CommandReply, type GameCommand,
   type GameOutcome, type GameResult, type GameSnapshot, type InitGame, type MoveEvent,
-  type Seat, type ServerMessage,
+  type Seat, type ServerMessage, type TournamentGame,
 } from '../shared/protocol';
 
 const READY_WINDOW_MS = 120_000;
 const INVITE_WINDOW_MS = 600_000;
 const MAX_FRAME_BYTES = 2_048;
+/** Only games saved before flags resolved at once still wait this long for a final result. */
 export const ADJUDICATION_WAIT_MS = 30_000;
 export const GAME_HOT_RETENTION_MS = 3_600_000;
 
@@ -47,7 +46,6 @@ interface State {
   pgnHeaderVersion?: 1;
   moves: MoveEvent[];
   remaining: { w: number; b: number };
-  turnStartedAt: number | null;
   deadline: number | null;
   readinessDeadline: number | null;
   drawOfferedBy: Color | null;
@@ -59,7 +57,6 @@ interface State {
   /** Retained only to retire unfinished provider-era work safely. */
   ai?: AiOpponent & { turn?: unknown };
   tournament?: InitGame['tournament'];
-  timeoutProof?: InitGame['timeoutProof'];
 }
 
 interface Attachment {
@@ -71,15 +68,6 @@ interface Delivery {
   result: GameResult;
   attempts: number;
   nextAttemptAt: number;
-}
-
-interface ProofWork {
-  pendingVersion: number;
-  attempt: 1 | 2;
-  deliveries: number;
-  nextAttemptAt: number;
-  done: boolean;
-  request: TimeoutProofRequest | null;
 }
 
 function seat(actor: Actor): Seat {
@@ -96,13 +84,44 @@ function colorOf(state: State, id: string): Color | null {
   return state.white.id === id ? 'w' : state.black?.id === id ? 'b' : null;
 }
 
+/** Names only the public labels, so retained provider-era work never leaks into a snapshot or receipt. */
+function publicAi(ai: AiOpponent): AiOpponent {
+  return { modelId: ai.modelId, name: ai.name, actualModel: ai.actualModel, ...(ai.level ? { level: ai.level } : {}) };
+}
+
+function adjudicationDeadline(state: State): number | null {
+  return state.status === 'pending-adjudication' && state.endedAt !== null ? state.endedAt + ADJUDICATION_WAIT_MS : null;
+}
+
+function attachmentOf(socket: WebSocket): Attachment | null {
+  try { return socket.deserializeAttachment() as Attachment | null; } catch { return null; }
+}
+
+function validTournament(item: TournamentGame): boolean {
+  return typeof item.id === 'string' && item.id.length <= 128 && /^[a-zA-Z0-9_.:-]+$/.test(item.id)
+    && (item.format === undefined || ['round-robin-v1', 'arena-v1'].includes(item.format))
+    && Number.isSafeInteger(item.round) && item.round >= 1 && item.round <= 3
+    && (item.format !== 'arena-v1' || item.round === 1)
+    && Number.isSafeInteger(item.deadlineAt) && item.deadlineAt >= 1;
+}
+
+function validInit(input: InitGame | undefined): boolean {
+  if (!input || !/^[\w-]{8,100}$/.test(input.id) || !Object.hasOwn(FORMATS, input.format)
+    || !input.white?.id || input.white.id === input.black?.id) return false;
+  if (input.ai !== undefined && (!input.ai || input.rated || input.black
+    || input.ai.modelId !== STOCKFISH_BUILD || !getEngineLevel(input.ai.level))) return false;
+  const competitive = input.rated || input.tournament;
+  if (competitive && !(input.black && input.reservationId && !input.white.isAnonymous && !input.black.isAnonymous)) return false;
+  return !input.tournament || (!input.rated && !input.ai && validTournament(input.tournament));
+}
+
 function commandPayload(command: GameCommand): string {
   return JSON.stringify(command.type === 'move' || command.type === 'engine-move'
     ? [command.type, command.expectedVersion, command.from, command.to, command.promotion ?? null]
     : [command.type, command.expectedVersion]);
 }
 
-export function parseCommand(value: unknown): GameCommand | null {
+function parseCommand(value: unknown): GameCommand | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const item = value as Record<string, unknown>;
   if (typeof item.id !== 'string' || !/^[\w-]{8,80}$/.test(item.id)
@@ -118,33 +137,21 @@ export function parseCommand(value: unknown): GameCommand | null {
 }
 
 export class Game extends DurableObject<Env> {
+  // The position follows from the start FEN and the move list, so the cache is keyed by exactly those.
   private chess: Chess | null = null;
-  private chessVersion = -1;
-  private proving = false;
+  private chessFen = '';
+  private chessPlies = 0;
   protected recoveryDrill = false;
 
-  constructor(ctx: DurableObjectState, env: Env, internalContext?: DurableObjectState) {
+  constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    // The private capacity composition passes the real native state to super.
-    // Its internal adapter meters the same product storage and scheduling.
-    if (internalContext) { this.ctx = internalContext as typeof this.ctx; ctx = this.ctx; }
     ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS game_state (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)`);
     ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS command_receipts
       (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, payload TEXT NOT NULL, version INTEGER NOT NULL, accepted_at INTEGER NOT NULL)`);
     ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS connections (user_id TEXT PRIMARY KEY, connection_id TEXT NOT NULL)`);
     ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS result_delivery (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)`);
     ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS archived_game (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)`);
-    ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS timeout_proof_work (id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)`);
     initializeProtocolLimits(ctx.storage.sql);
-    const work = this.proofWork();
-    if (work?.request && !work.done) {
-      // A restarted delivery reconciles its saved pool receipt, within the
-      // original deadline and the same two-delivery ceiling per attempt.
-      work.done = work.deliveries >= 2;
-      work.nextAttemptAt = Math.min(work.nextAttemptAt, Date.now());
-      this.saveProofWork(work);
-      ctx.blockConcurrencyWhile(() => this.committed());
-    }
   }
 
   private load(): State | null {
@@ -164,19 +171,16 @@ export class Game extends DurableObject<Env> {
       throw new ApiError(409, 'RECOVERY_TARGET_MISMATCH', 'The game name does not identify this object.');
     }
     const savedRules = this.load()?.rulesVersion ?? this.archived()?.rulesVersion;
-    const rules = savedRules === PROOF_RULES_VERSION || savedRules === PRIOR_RULES_VERSIONS[1] ? savedRules : RULES_VERSION;
+    const rules = savedRules === PRIOR_RULES_VERSIONS[1] ? savedRules : RULES_VERSION;
     return captureNativePoint(this.ctx, { kind: 'Game', name, policies: { rules, ratings: RATING_VERSION } }, () => {
       const state = this.load();
       const archived = this.archived();
-      const work = this.proofWork();
       return { status: state?.status ?? (archived ? 'archived' : 'uninitialized'), version: state?.version ?? archived?.terminalVersion ?? null,
         rules: state?.rulesVersion ?? archived?.rulesVersion ?? RULES_VERSION, deadline: state?.deadline ?? null,
         readinessDeadline: state?.readinessDeadline ?? null, moves: state?.moves.length ?? 0,
         receipts: this.ctx.storage.sql.exec<{ count: number }>('SELECT COUNT(*) AS count FROM command_receipts').one().count,
         latestReceiptAt: this.ctx.storage.sql.exec<{ at: number | null }>('SELECT MAX(accepted_at) AS at FROM command_receipts').one().at,
-        pendingDelivery: Boolean(this.ctx.storage.sql.exec('SELECT 1 FROM result_delivery WHERE id=1').toArray()[0]), archived: Boolean(archived),
-        ...(state?.timeoutProof ? { timeoutProof: { profileVersion: state.timeoutProof.profileVersion,
-          ...(work ? { pendingVersion: work.pendingVersion, attempt: work.attempt, done: work.done } : {}) } } : {}) };
+        pendingDelivery: Boolean(this.ctx.storage.sql.exec('SELECT 1 FROM result_delivery WHERE id=1').toArray()[0]), archived: Boolean(archived) };
     }, this.recoveryDrill);
   }
 
@@ -184,40 +188,29 @@ export class Game extends DurableObject<Env> {
     this.ctx.storage.sql.exec('INSERT INTO game_state(id,value) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value', JSON.stringify(state));
   }
 
-  private proofWork(): ProofWork | null {
-    const row = this.ctx.storage.sql.exec<{ value: string }>('SELECT value FROM timeout_proof_work WHERE id=1').toArray()[0];
-    return row ? JSON.parse(row.value) as ProofWork : null;
-  }
-
-  private saveProofWork(work: ProofWork): void {
-    this.ctx.storage.sql.exec('INSERT INTO timeout_proof_work(id,value) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value', JSON.stringify(work));
-  }
-
   private engine(state: State): Chess {
-    if (!this.chess || this.chessVersion !== state.version) {
+    if (!this.chess || this.chessFen !== state.initialFen || this.chessPlies !== state.moves.length) {
       const chess = new Chess(state.initialFen);
       for (const move of state.moves) chess.move({ from: move.from, to: move.to, promotion: move.promotion });
       this.chess = chess;
-      this.chessVersion = state.version;
+      this.chessFen = state.initialFen;
+      this.chessPlies = state.moves.length;
     }
     return this.chess;
   }
 
   private view(state: State, now: number): GameSnapshot {
     const chess = this.engine(state);
+    const running = state.status === 'active' ? chess.turn() : null;
+    const left = (color: Color) => color === running ? Math.max(0, (state.deadline ?? now) - now) : state.remaining[color];
     return {
       id: state.id, format: state.format, rated: state.rated, rulesVersion: state.rulesVersion,
       status: state.status, version: state.version, white: state.white, black: state.black,
       fen: chess.fen(), turn: chess.turn(), moves: state.moves,
-      clocks: {
-        w: state.status === 'active' && chess.turn() === 'w' ? Math.max(0, (state.deadline ?? now) - now) : state.remaining.w,
-        b: state.status === 'active' && chess.turn() === 'b' ? Math.max(0, (state.deadline ?? now) - now) : state.remaining.b,
-        running: state.status === 'active' ? chess.turn() : null, deadline: state.deadline,
-      },
+      clocks: { w: left('w'), b: left('b'), running, deadline: state.deadline },
       serverNow: now, readinessDeadline: state.readinessDeadline, drawOfferedBy: state.drawOfferedBy,
       outcome: state.outcome, settlement: state.settlement, startedAt: state.startedAt, endedAt: state.endedAt,
-      ...(state.ai ? { ai: { modelId: state.ai.modelId, name: state.ai.name, actualModel: state.ai.actualModel,
-        ...(state.ai.level ? { level: state.ai.level } : {}), thinking: state.status === 'active' && chess.turn() === 'b' } } : {}),
+      ...(state.ai ? { ai: { ...publicAi(state.ai), thinking: running === 'b' } } : {}),
       ...(state.tournament ? { tournament: state.tournament } : {}),
     };
   }
@@ -239,12 +232,13 @@ export class Game extends DurableObject<Env> {
       chess.setHeader('Event', `ejm chess ${state.tournament.id}`);
       chess.setHeader('Round', String(state.tournament.round));
     }
-    if (state.rulesVersion !== 'online-2026-10-v1') chess.setHeader('Termination', state.outcome.reason);
+    // Games saved under the first rules keep their original export and receipt shape.
+    const firstRules = state.rulesVersion === PRIOR_RULES_VERSIONS[0];
+    if (!firstRules) chess.setHeader('Termination', state.outcome.reason);
     const digestFields: unknown[] = [state.rulesVersion, state.id, state.version, state.white.id,
       state.black?.id ?? null, state.format, state.rated, state.outcome, state.endedAt, chess.fen(), state.moves.length,
       state.ai ? [state.ai.modelId, state.ai.name, state.ai.actualModel, ...(state.ai.level ? [state.ai.level] : [])] : null];
-    // Preserve the old receipt wire shape while its durable outbox drains after an upgrade.
-    if (state.rulesVersion !== 'online-2026-10-v1') digestFields.push(state.tournament ?? null);
+    if (!firstRules) digestFields.push(state.tournament ?? null);
     const terminalDigest = JSON.stringify(digestFields);
     return {
       eventId: `${state.id}:${state.version}`, id: state.id, format: state.format, rated: state.rated,
@@ -252,83 +246,65 @@ export class Game extends DurableObject<Env> {
       status: state.status, version: state.version, rulesVersion: state.rulesVersion, terminalDigest,
       outcome: state.outcome, startedAt: state.startedAt, endedAt: state.endedAt,
       createdAt: state.createdAt, pgn: chess.pgn(), plies: state.moves.length,
-      ...(state.ai ? { ai: { modelId: state.ai.modelId, name: state.ai.name, actualModel: state.ai.actualModel,
-        ...(state.ai.level ? { level: state.ai.level } : {}) } } : {}),
+      ...(state.ai ? { ai: publicAi(state.ai) } : {}),
       ...(state.tournament ? { tournament: state.tournament } : {}),
     };
   }
 
+  /** The one terminal transition. It advances the version and writes the result outbox in the same transaction. */
   private finish(state: State, outcome: GameOutcome, now: number): void {
-    const turn = this.engine(state).turn();
-    if (state.status === 'active' && state.deadline !== null) state.remaining[turn] = Math.max(0, state.deadline - now);
+    state.version++;
+    if (state.status === 'active' && state.deadline !== null) state.remaining[this.engine(state).turn()] = Math.max(0, state.deadline - now);
     state.pgnHeaderVersion = 1;
-    state.status = outcome.reason === 'timeout-needs-review' ? 'pending-adjudication' : 'finished';
+    state.status = 'finished';
     state.outcome = outcome;
     state.endedAt = now;
     state.deadline = null;
-    state.turnStartedAt = null;
     state.readinessDeadline = null;
     state.drawOfferedBy = null;
     if (state.ai?.turn) state.ai.turn = null;
     state.settlement = state.rated ? 'pending' : 'unrated';
     this.save(state);
-    if (state.status === 'pending-adjudication' && state.rulesVersion === PROOF_RULES_VERSION && state.timeoutProof) {
-      this.saveProofWork({ pendingVersion: state.version, attempt: 1, deliveries: 0, nextAttemptAt: now, done: false, request: null });
-    } else this.ctx.storage.sql.exec('DELETE FROM timeout_proof_work WHERE id=1');
     const delivery: Delivery = { result: this.result(state), attempts: 0, nextAttemptAt: now };
     this.ctx.storage.sql.exec('INSERT INTO result_delivery(id,value) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET value=excluded.value', JSON.stringify(delivery));
   }
 
-  private expire(state: State, now: number): boolean {
-    let changed = false;
-    const roundDeadline = state.tournament?.deadlineAt ?? Number.POSITIVE_INFINITY;
-    if (state.status === 'active' && state.deadline !== null && now >= state.deadline && state.deadline <= roundDeadline) {
-      state.version++;
-      const flagged = timeoutOutcome(this.engine(state), this.engine(state).turn());
-      const awaitingProof = flagged.reason === 'timeout-win' && state.rulesVersion === PROOF_RULES_VERSION && state.timeoutProof;
-      this.finish(state, awaitingProof ? TIMEOUT_AWAITING_PROOF : flagged, state.deadline);
-      changed = true;
-    }
-    if ((state.status === 'waiting' || state.status === 'ready') && state.readinessDeadline !== null && now >= state.readinessDeadline && state.readinessDeadline <= roundDeadline) {
-      state.version++;
+  /** Ends the game if a deadline has passed. A stored tournament cutoff outranks the game's own clocks. */
+  private expire(state: State, now: number): void {
+    const cutoff = state.tournament?.deadlineAt ?? Number.POSITIVE_INFINITY;
+    const reached = (deadline: number | null): deadline is number => deadline !== null && now >= deadline && deadline <= cutoff;
+    const chess = this.engine(state);
+    const flagged = (): GameOutcome => timeoutOutcome(chess, chess.turn());
+    const waitEnds = adjudicationDeadline(state);
+    if (state.status === 'active' && reached(state.deadline)) {
+      this.finish(state, flagged(), state.deadline);
+    } else if ((state.status === 'waiting' || state.status === 'ready') && reached(state.readinessDeadline)) {
       this.finish(state, { winner: null, score: null, reason: 'readiness-expired' }, state.readinessDeadline);
-      return true;
-    }
-    if (state.ai && ['waiting', 'ready', 'active'].includes(state.status)
+    } else if (state.ai && ['waiting', 'ready', 'active'].includes(state.status)
       && (!aiEnabled(this.env) || state.ai.modelId !== STOCKFISH_BUILD || !getEngineLevel(state.ai.level))) {
-      state.version++;
       this.finish(state, { winner: null, score: null, reason: 'ai-unavailable', aiError: 'AI_UNAVAILABLE' }, now);
-      return true;
+    } else if (reached(waitEnds)) {
+      // finish assigns the next version, which is part of this decision's identity.
+      this.finish(state, { ...flagged(), decisionId: `automatic:${RULES_VERSION}:adjudication:${state.id}:${state.version + 1}` }, waitEnds);
+    } else if (state.tournament && state.status !== 'finished' && now >= cutoff) {
+      this.finish(state, { winner: null, score: null, reason: 'technical-void',
+        decisionId: `tournament:${state.tournament.id}:round:${state.tournament.round}:deadline` }, cutoff);
     }
-    const adjudicationDeadline = state.status === 'pending-adjudication' && state.endedAt !== null ? state.endedAt + ADJUDICATION_WAIT_MS : null;
-    if (adjudicationDeadline !== null && now >= adjudicationDeadline && adjudicationDeadline <= roundDeadline) {
-      state.version++;
-      const policy = state.rulesVersion === PROOF_RULES_VERSION ? PROOF_RULES_VERSION : RULES_VERSION;
-      const decisionId = `automatic:${policy}:adjudication:${state.id}:${state.version}`;
-      this.finish(state, { ...timeoutOutcome(this.engine(state), this.engine(state).turn()), decisionId }, adjudicationDeadline);
-      return true;
-    }
-    if (state.tournament && state.status !== 'finished' && now >= roundDeadline) {
-      state.version++;
-      this.finish(state, { winner: null, score: null, reason: 'technical-void', decisionId: `tournament:${state.tournament.id}:round:${state.tournament.round}:deadline` }, roundDeadline);
-      return true;
-    }
-    return changed;
+  }
+
+  /** When this game's own authority next has work: a clock, a wait, a tournament cutoff or a result delivery retry. */
+  private authorityDue(state: State | null): number | null {
+    const due = [state?.deadline, state?.readinessDeadline, state && adjudicationDeadline(state), this.delivery()?.nextAttemptAt,
+      state && state.status !== 'finished' ? state.tournament?.deadlineAt : null,
+    ].filter((time): time is number => typeof time === 'number');
+    return due.length ? Math.min(...due) : null;
   }
 
   private async schedule(): Promise<void> {
     const state = this.load();
     if (!state && this.archived()) { await this.ctx.storage.deleteAlarm(); return; }
-    const delivery = this.delivery();
-    const due = [state?.deadline, state?.readinessDeadline, delivery?.nextAttemptAt].filter((time): time is number => typeof time === 'number');
-    if (state?.status === 'pending-adjudication' && state.endedAt !== null) due.push(state.endedAt + ADJUDICATION_WAIT_MS);
-    const proof = this.proofWork();
-    if (state?.status === 'pending-adjudication' && proof && !proof.done) due.push(proof.nextAttemptAt);
-    if (state?.tournament && state.status !== 'finished') due.push(state.tournament.deadlineAt);
-    const socketExpiry = this.ctx.getWebSockets().map(socket => {
-      try { return (socket.deserializeAttachment() as Attachment).actor.sessionExpiresAt; } catch { return null; }
-    }).filter((time): time is number => typeof time === 'number');
-    due.push(...socketExpiry);
+    const sessionExpiries = this.ctx.getWebSockets().map(socket => attachmentOf(socket)?.actor.sessionExpiresAt);
+    const due = [this.authorityDue(state), ...sessionExpiries].filter((time): time is number => typeof time === 'number');
     if (!due.length) { await this.ctx.storage.deleteAlarm(); return; }
     await this.ctx.storage.setAlarm(Math.max(Date.now() + 1, Math.min(...due)));
   }
@@ -338,45 +314,34 @@ export class Game extends DurableObject<Env> {
     await this.schedule();
   }
 
+  /** Makes a committed change durable, re-arms the alarm and shows the latest state to every connected player. */
+  private async publish(now: number): Promise<void> {
+    await this.committed();
+    const state = this.load();
+    if (state) this.broadcast(state, now);
+  }
+
   async init(input: InitGame): Promise<GameSnapshot> {
     const now = Date.now();
     if (this.archived()) throw new Error('game_archived');
-    const level = getEngineLevel(input?.ai?.level);
-    if (!input || !/^[\w-]{8,100}$/.test(input.id) || !Object.hasOwn(FORMATS, input.format)
-      || !input.white?.id || input.white.id === input.black?.id
-      || (input.ai !== undefined && (!input.ai || input.rated || input.black || input.ai.modelId !== STOCKFISH_BUILD || !level))
-      || (input.rated && (!input.black || !input.reservationId || input.white.isAnonymous || input.black.isAnonymous))
-      || (input.tournament && (input.rated || input.ai || !input.black || !input.reservationId || input.white.isAnonymous || input.black.isAnonymous
-        || typeof input.tournament.id !== 'string' || input.tournament.id.length > 128 || !/^[a-zA-Z0-9_.:-]+$/.test(input.tournament.id)
-        || (input.tournament.format !== undefined && !['round-robin-v1', 'arena-v1'].includes(input.tournament.format))
-        || !Number.isSafeInteger(input.tournament.round) || input.tournament.round < 1 || input.tournament.round > 3
-        || (input.tournament.format === 'arena-v1' && input.tournament.round !== 1)
-        || !Number.isSafeInteger(input.tournament.deadlineAt) || input.tournament.deadlineAt < 1))) throw new Error('invalid_game');
+    if (!validInit(input)) throw new Error('invalid_game');
     const existingBeforeAdmission = this.load();
-    if (!existingBeforeAdmission && input.rated) {
-      if (!input.timeoutProof || input.timeoutProof.reservationId !== input.id || input.timeoutProof.profileVersion !== PROOF_PROFILE
-        || !await hasProofAdmission(this.env, input.id)
-        || !await this.env.COMPETITION.get(this.env.COMPETITION.idFromName('global')).hasTimeoutProofReservation(input.id, input.reservationId!)) {
-        throw new Error('ranked_proof_admission_required');
-      }
+    if (!existingBeforeAdmission && input.rated
+      && !await this.env.COMPETITION.get(this.env.COMPETITION.idFromName('global')).hasRankedReservation(input.id, input.reservationId!)) {
+      throw new Error('ranked_reservation_required');
     }
-    if (input.timeoutProof && (!input.rated || input.ai || input.tournament)) throw new Error('invalid_proof_game');
     let admittedAt = now;
-    let acceptedCasual = false;
     if (!existingBeforeAdmission && !input.rated && !input.tournament) {
       const admission = await this.env.DB.prepare('SELECT creator_id,storage_state,reservation_id,created_at FROM casual_game_admissions WHERE game_id=?')
         .bind(input.id).first<{ creator_id: string; storage_state: string; reservation_id: string | null; created_at: number }>();
       if (!admission || admission.storage_state !== 'retained' || admission.creator_id !== input.white.id
         || admission.reservation_id !== (input.reservationId ?? null)) throw new Error('casual_admission_required');
       admittedAt = Math.min(now, admission.created_at);
-      acceptedCasual = true;
     }
-    let ai: AiOpponent | undefined;
-    if (input.ai) {
-      if (!aiEnabled(this.env) && !existingBeforeAdmission && !acceptedCasual) throw new Error('engine_unavailable');
-      ai = { modelId: STOCKFISH_BUILD, name: `Stockfish 19.0.1 · ${level!.name}`, actualModel: STOCKFISH_BUILD, level: level!.id };
-    }
-    const tournamentEligible = input.tournament && !this.load()
+    const level = getEngineLevel(input.ai?.level);
+    const ai: AiOpponent | undefined = input.ai && level
+      ? { modelId: STOCKFISH_BUILD, name: `Stockfish 19.0.1 · ${level.name}`, actualModel: STOCKFISH_BUILD, level: level.id } : undefined;
+    const tournamentEligible = input.tournament && !existingBeforeAdmission
       ? (await Promise.all([competitiveAccountEligibility(this.env, input.white.id), competitiveAccountEligibility(this.env, input.black!.id)])).every(item => item.eligible)
       : true;
     const state = this.ctx.storage.transactionSync(() => {
@@ -387,7 +352,6 @@ export class Game extends DurableObject<Env> {
           || existing.ai?.modelId !== input.ai?.modelId
           || existing.ai?.level !== input.ai?.level
           || JSON.stringify(existing.tournament ?? null) !== JSON.stringify(input.tournament ?? null)
-          || JSON.stringify(existing.timeoutProof ?? null) !== JSON.stringify(input.timeoutProof ?? null)
           || existing.reservationId !== (input.reservationId ?? null)) throw new Error('initialization_conflict');
         this.expire(existing, now);
         return existing;
@@ -395,21 +359,18 @@ export class Game extends DurableObject<Env> {
       const chess = new Chess();
       const value: State = {
         id: input.id, format: input.format, rated: input.rated, reservationId: input.reservationId ?? null,
-        rulesVersion: input.timeoutProof ? PROOF_RULES_VERSION : RULES_VERSION, status: input.black || ai ? 'ready' : 'waiting', version: 0,
+        rulesVersion: RULES_VERSION, status: input.black || ai ? 'ready' : 'waiting', version: 0,
         white: seat(input.white), black: ai ? { id: `ai:${input.id}`, name: `${ai.name} (AI)`.slice(0, 120), isAnonymous: false, ready: true } : input.black ? seat(input.black) : null, initialFen: chess.fen(), pgnHeaderVersion: 1, moves: [],
         remaining: { w: FORMATS[input.format].initialMs, b: FORMATS[input.format].initialMs },
-        turnStartedAt: null, deadline: null, readinessDeadline: Math.min(admittedAt + (input.black || ai ? READY_WINDOW_MS : INVITE_WINDOW_MS), input.tournament?.deadlineAt ?? Number.POSITIVE_INFINITY),
+        deadline: null, readinessDeadline: Math.min(admittedAt + (input.black || ai ? READY_WINDOW_MS : INVITE_WINDOW_MS), input.tournament?.deadlineAt ?? Number.POSITIVE_INFINITY),
         drawOfferedBy: null, outcome: null, settlement: input.rated ? 'pending' : 'unrated',
         createdAt: admittedAt, startedAt: null, endedAt: null,
         ...(ai ? { ai } : {}),
         ...(input.tournament ? { tournament: { ...input.tournament } } : {}),
-        ...(input.timeoutProof ? { timeoutProof: { ...input.timeoutProof } } : {}),
       };
       this.save(value);
-      if (!tournamentEligible) {
-        value.version++;
-        this.finish(value, { winner: null, score: null, reason: 'eligibility-revoked' }, now);
-      } else this.expire(value, now);
+      if (!tournamentEligible) this.finish(value, { winner: null, score: null, reason: 'eligibility-revoked' }, now);
+      else this.expire(value, now);
       return value;
     });
     await this.committed();
@@ -434,8 +395,7 @@ export class Game extends DurableObject<Env> {
       this.save(state);
       return { state, available: true };
     });
-    await this.committed();
-    this.broadcast(admission.state, now);
+    await this.publish(now);
     if (!admission.available) throw new Error('seat_unavailable');
     return this.view(admission.state, now);
   }
@@ -469,16 +429,22 @@ export class Game extends DurableObject<Env> {
     return this.view(state, now);
   }
 
-  async status(): Promise<{ id: string; status: GameSnapshot['status']; version: number; startedAt: number | null; result: GameResult | null } | null> {
-    const now = Date.now();
-    const state = this.ctx.storage.transactionSync(() => {
+  private loadCurrent(now: number): State | null {
+    return this.ctx.storage.transactionSync(() => {
       const state = this.load();
       if (state) this.expire(state, now);
       return state;
     });
+  }
+
+  /** `dueAt` lets Competition sleep until this game next needs it. Null means nothing is pending. */
+  async status(): Promise<{ id: string; status: GameSnapshot['status']; version: number; startedAt: number | null; result: GameResult | null; dueAt: number | null } | null> {
+    const now = Date.now();
+    const state = this.loadCurrent(now);
     if (!state) return null;
     await this.committed();
-    return { id: state.id, status: state.status, version: state.version, startedAt: state.startedAt, result: state.outcome ? this.result(state) : null };
+    return { id: state.id, status: state.status, version: state.version, startedAt: state.startedAt,
+      result: state.outcome ? this.result(state) : null, dueAt: this.authorityDue(state) };
   }
 
   async command(actor: Actor, input: GameCommand): Promise<CommandReply> {
@@ -517,23 +483,25 @@ export class Game extends DurableObject<Env> {
         this.expire(state, now);
         return { ok: true, receipt: { id: command.id, version: receipt.version, acceptedAt: receipt.accepted_at }, snapshot: this.view(state, now) };
       }
-      if (this.expire(state, now) || state.status === 'finished' || state.status === 'pending-adjudication') return error('game_over');
+      this.expire(state, now);
+      if (state.outcome) return error('game_over');
+      const player = color === 'w' ? state.white : state.black;
+      // A second tab or a reconnect can repeat Ready after it took effect. Nothing is left to change, so any version succeeds.
+      if (command.type === 'ready' && (state.status === 'active' || (state.status === 'ready' && player?.ready))) {
+        return { ok: true, receipt: { id: command.id, version: state.version, acceptedAt: now }, snapshot: this.view(state, now) };
+      }
       if (command.expectedVersion !== state.version) return error('stale_version');
       const chess = this.engine(state);
       if (command.type === 'ready') {
-        if (state.status !== 'ready' || !state.black) return error('waiting_for_opponent');
+        if (state.status !== 'ready' || !player) return error('waiting_for_opponent');
         if (!canStart) {
-          state.version++;
           this.finish(state, { winner: null, score: null, reason: 'eligibility-revoked' }, now);
           return error('ranked_eligibility_changed');
         }
-        const player = color === 'w' ? state.white : state.black;
-        if (player.ready) return error('already_ready');
         player.ready = true;
-        if (state.white.ready && state.black.ready) {
+        if (state.white.ready && state.black?.ready) {
           state.status = 'active';
           state.startedAt = now;
-          state.turnStartedAt = now;
           state.deadline = now + state.remaining.w;
           state.readinessDeadline = null;
         }
@@ -552,7 +520,7 @@ export class Game extends DurableObject<Env> {
           state.moves.push({ version: state.version + 1, ply: state.moves.length + 1, by: movingColor,
             from: move.from, to: move.to, ...(move.promotion ? { promotion: move.promotion } : {}),
             san: move.san, fen: chess.fen(), acceptedAt: now });
-          state.turnStartedAt = now;
+          this.chessPlies = state.moves.length;
           state.deadline = now + state.remaining[chess.turn()];
           state.drawOfferedBy = null;
         } else if (command.type === 'offer-draw') {
@@ -563,21 +531,18 @@ export class Game extends DurableObject<Env> {
           state.drawOfferedBy = null;
         }
       }
-      state.version++;
-      this.chessVersion = state.version;
       let outcome: GameOutcome | null = null;
       if (command.type === 'move' || command.type === 'engine-move') outcome = positionOutcome(chess);
       if (command.type === 'resign') outcome = { winner: color === 'w' ? 'b' : 'w', score: color === 'w' ? 0 : 1, reason: 'resignation' };
       if (command.type === 'accept-draw') outcome = { winner: null, score: 0.5, reason: 'draw-agreement' };
-      if (outcome) this.finish(state, outcome, now); else this.save(state);
+      if (outcome) this.finish(state, outcome, now);
+      else { state.version++; this.save(state); }
       this.ctx.storage.sql.exec('INSERT INTO command_receipts(id,user_id,payload,version,accepted_at) VALUES(?,?,?,?,?)',
         command.id, actor.id, commandPayload(command), state.version, now);
       const accepted: CommandReceipt = { id: command.id, version: state.version, acceptedAt: now };
       return { ok: true, receipt: accepted, snapshot: this.view(state, now) };
     });
-    await this.committed();
-    const state = this.load();
-    if (state) this.broadcast(state, now);
+    await this.publish(now);
     return reply;
   }
 
@@ -590,12 +555,10 @@ export class Game extends DurableObject<Env> {
       if (!state) throw new Error('game_not_found');
       if (state.outcome?.decisionId === decisionId) return state;
       if (state.status !== 'pending-adjudication') throw new Error('not_pending_adjudication');
-      state.version++;
       this.finish(state, { winner: null, score: null, reason: 'technical-void', decisionId }, now);
       return state;
     });
-    await this.committed();
-    this.broadcast(state, now);
+    await this.publish(now);
     return this.view(state, now);
   }
 
@@ -610,8 +573,7 @@ export class Game extends DurableObject<Env> {
       return state;
     });
     if (!state) return null;
-    await this.committed();
-    this.broadcast(state, now);
+    await this.publish(now);
     return this.view(state, now);
   }
 
@@ -662,7 +624,6 @@ export class Game extends DurableObject<Env> {
       return receipt;
     });
     this.chess = null;
-    this.chessVersion = -1;
     for (const socket of this.ctx.getWebSockets()) socket.close(4004, 'Game archived. Open its replay.');
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.sync();
@@ -695,8 +656,7 @@ export class Game extends DurableObject<Env> {
     this.ctx.storage.sql.exec('INSERT INTO connections(user_id,connection_id) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET connection_id=excluded.connection_id', actor.id, connectionId);
     await this.ctx.storage.sync();
     for (const socket of this.ctx.getWebSockets()) {
-      const attachment = socket.deserializeAttachment() as Attachment | null;
-      if (attachment?.actor.id === actor.id) socket.close(4001, 'Replaced by another connection');
+      if (attachmentOf(socket)?.actor.id === actor.id) socket.close(4001, 'Replaced by another connection');
     }
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
@@ -709,7 +669,7 @@ export class Game extends DurableObject<Env> {
 
   async webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
     const now = Date.now();
-    const attachment = socket.deserializeAttachment() as Attachment | null;
+    const attachment = attachmentOf(socket);
     if (!attachment) { socket.close(1009, 'Invalid frame'); return; }
     const current = this.ctx.storage.sql.exec<{ connection_id: string }>('SELECT connection_id FROM connections WHERE user_id=?', attachment.actor.id).toArray()[0];
     if (current?.connection_id !== attachment.connectionId) { socket.close(4001, 'Connection replaced'); return; }
@@ -776,19 +736,20 @@ export class Game extends DurableObject<Env> {
     if (result.eventId !== expected.eventId || result.terminalDigest !== expected.terminalDigest) return false;
     const delivery = this.delivery();
     if (!delivery) return true;
-    if (delivery.result.status !== 'finished' || delivery.result.eventId !== result.eventId
-      || delivery.result.terminalDigest !== result.terminalDigest) return false;
+    if (delivery.result.eventId !== result.eventId || delivery.result.terminalDigest !== result.terminalDigest) return false;
     await this.deliverResult(delivery, Date.now());
     return this.delivery() === null;
   }
 
   private async deliverResult(delivery: Delivery, now: number): Promise<void> {
+    // A saved pending-adjudication result is acknowledged as pending and keeps the seats until its final result.
+    const final = delivery.result.status === 'finished';
     try {
       const competition = this.env.COMPETITION.get(this.env.COMPETITION.idFromName('global'));
       const acknowledgement = await competition.settle(delivery.result);
       if (!acknowledgement.accepted) throw new Error('result_not_accepted');
-      if (acknowledgement.pending && delivery.result.status === 'finished') throw new Error('settlement_pending');
-      if (delivery.result.status === 'finished') {
+      if (final && acknowledgement.pending) throw new Error('settlement_pending');
+      if (final) {
         await this.env.DB.prepare('UPDATE active_game_seats SET released_at=? WHERE game_id=? AND released_at IS NULL').bind(now, delivery.result.id).run();
       }
       this.ctx.storage.transactionSync(() => {
@@ -806,110 +767,23 @@ export class Game extends DurableObject<Env> {
         const current = this.delivery();
         if (current?.result.eventId !== delivery.result.eventId) return;
         current.attempts++;
-        current.nextAttemptAt = now + Math.min(300_000, 1_000 * 2 ** Math.min(current.attempts, 8));
+        // Counts this failure too, so the first retry waits two seconds.
+        current.nextAttemptAt = now + retryDelayMs(current.attempts);
         this.ctx.storage.sql.exec('UPDATE result_delivery SET value=? WHERE id=1', JSON.stringify(current));
       });
     }
-    await this.committed();
-    const state = this.load();
-    if (state) this.broadcast(state, Date.now());
-  }
-
-  /** Binding only. The public Worker exposes no proof submission endpoint. */
-  async acceptTimeoutProof(value: unknown): Promise<boolean> {
-    const now = Date.now();
-    const accepted = this.ctx.storage.transactionSync(() => {
-      const state = this.load();
-      const work = this.proofWork();
-      if (!state || state.status !== 'pending-adjudication' || state.rulesVersion !== PROOF_RULES_VERSION
-        || !state.timeoutProof || !work?.request || state.version !== work.pendingVersion) return false;
-      if (this.expire(state, now)) return false;
-      const proof = parseProofResult(value, work.request);
-      if (!proof || proof.expiresAt <= now) return false;
-      const outcome = provedTimeoutOutcome(proof);
-      if (!outcome) return false;
-      state.version++;
-      this.finish(state, outcome, state.endedAt!);
-      return true;
-    });
-    await this.committed();
-    const state = this.load();
-    if (state) this.broadcast(state, now);
-    return accepted;
-  }
-
-  /** Alarm work only, outside the synchronous move and clock transaction. */
-  async resolveTimeoutProof(): Promise<void> {
-    if (this.proving) return;
-    const state = this.load();
-    const work = this.proofWork();
-    if (!state || state.status !== 'pending-adjudication' || state.rulesVersion !== PROOF_RULES_VERSION || !state.timeoutProof
-      || !work || work.done || state.version !== work.pendingVersion || work.nextAttemptAt > Date.now()) return;
-    this.proving = true;
-    try {
-      if (!work.request) {
-        const source = { rulesVersion: PROOF_RULES_VERSION as typeof PROOF_RULES_VERSION, initialFen: state.initialFen,
-          moves: state.moves.map(move => move.from + move.to + (move.promotion ?? '')), fen: this.engine(state).fen(),
-          gameId: state.id, pendingVersion: state.version, survivor: this.engine(state).turn() === 'w' ? 'b' as const : 'w' as const };
-        const request: TimeoutProofRequest = { ...source, ...await proofDigests(source), v: 1,
-          profileVersion: PROOF_PROFILE, reservationId: state.id, requestId: `timeout:${state.id}:${state.version}`,
-          expiresAt: state.endedAt! + ADJUDICATION_WAIT_MS, attempt: work.attempt };
-        if (this.load()?.version !== work.pendingVersion) return;
-        work.request = request;
-      }
-      const request = work.request;
-      if (request.expiresAt <= Date.now()) return;
-      work.deliveries++;
-      work.nextAttemptAt = request.expiresAt;
-      this.saveProofWork(work);
-      await this.ctx.storage.sync();
-      let retryDelivery = false;
-      let transient = false;
-      const cancellation = new AbortController();
-      const timer = setTimeout(() => cancellation.abort(), Math.max(1, request.expiresAt - Date.now()));
-      try {
-        if (!this.env.PROVER) throw new Error('proof_binding_unavailable');
-        const response = await this.env.PROVER.get(this.env.PROVER.idFromName(PROOF_INSTANCE)).fetch(new Request('http://proof.internal/prove', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request),
-          signal: cancellation.signal,
-        }));
-        if (!response.ok) {
-          retryDelivery = response.status >= 500 || response.status === 429;
-        } else {
-          const result = parseProofResult(await readJson<unknown>(response, PROOF_RESULT_BYTES), request);
-          if (result && await this.acceptTimeoutProof(result)) return;
-          transient = Boolean(result && transientProof(result));
-        }
-      } catch { retryDelivery = true; }
-      finally { clearTimeout(timer); }
-      this.ctx.storage.transactionSync(() => {
-        const current = this.load();
-        if (current?.status !== 'pending-adjudication' || current.version !== work.pendingVersion) return;
-        if (transient && work.attempt === 1) {
-          work.attempt = 2;
-          work.deliveries = 0;
-          work.request = { ...request, attempt: 2 };
-        } else if (!(retryDelivery && work.deliveries < 2)) work.done = true;
-        work.nextAttemptAt = Math.min(request.expiresAt, Date.now() + 250);
-        this.saveProofWork(work);
-      });
-    } finally { this.proving = false; await this.committed(); }
+    await this.publish(Date.now());
   }
 
   async alarm(): Promise<void> {
     const now = Date.now();
-    const state = this.ctx.storage.transactionSync(() => {
-      const state = this.load();
-      if (state) this.expire(state, now);
-      return state;
-    });
+    const state = this.loadCurrent(now);
     for (const socket of this.ctx.getWebSockets()) {
-      const attachment = socket.deserializeAttachment() as Attachment | null;
+      const attachment = attachmentOf(socket);
       if (!attachment || attachment.actor.sessionExpiresAt <= now) socket.close(4003, 'Session expired');
     }
     await this.ctx.storage.sync();
     if (state) this.broadcast(state, now);
-    await this.resolveTimeoutProof();
     await this.flush();
   }
 }

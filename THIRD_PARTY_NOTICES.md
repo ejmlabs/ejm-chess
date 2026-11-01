@@ -41,7 +41,6 @@ The public `/credits/` route repeats these artwork credits and links.
 | `better-auth` | 1.7.12 | MIT | Bereket Engida |
 | `@better-auth/core` | 1.7.12 | MIT | Bereket Engida |
 | `jose` | 6.2.13 | MIT | Filip Skokan |
-| `@cloudflare/containers` | 0.3.7 | MIT OR Apache-2.0; MIT option retained | Cloudflare, Inc. |
 | `react` and `react-dom` | 19.3.1 | MIT | Meta Platforms, Inc. and affiliates |
 | Public `@ejm/core`, `@ejm/ui`, `@ejm/site`, `@ejm/ssg`, and `@ejm/tokens` code | 0.1.0 | MIT | ejm-ui contributors |
 
@@ -51,72 +50,15 @@ The exact npm release's `gitHead` points to upstream revision
 [verbatim MIT notice](third-party/licenses/glicko2-1.2.2-MIT.txt) is retained.
 It contains literal `<year>` and `<copyright holders>` placeholders. The
 package metadata names Henri Bourcereau as author; no copyright notice has
-been invented. This attribution uncertainty remains a release review item.
+been invented. This attribution uncertainty remains a release review item. The
+[provenance record](third-party/license-provenance.json) records the source URL,
+immutable revision, Git blob and SHA-256 notice hash, and verified npm/lockfile
+SHA-512 tarball integrity. The installed package bytes matched that exact
+tarball. This is provenance, not a legal review.
 
 Shared lab marks, names, and artwork remain subject to their owning
 repository’s brand guidance. A code license is not a claim to the ejmlabs name
 or endorsement. The chess knight and outlined wordmark belong to the shared token asset owner, with generator provenance retained there.
-
-The installed Cloudflare Container helper declares MIT OR Apache-2.0 but omits
-standalone license files. This distribution chooses the MIT option and retains
-the complete [upstream MIT notice](third-party/licenses/cloudflare-containers-0.3.7-MIT.txt)
-from its exact npm `gitHead`, `298169f4aaba82e7b712458b7c6b14fc3e40ad78`.
-The [provenance record](third-party/license-provenance.json) records source
-URLs, immutable revisions, Git blob and SHA-256 notice hashes, and verified
-npm/lockfile SHA-512 tarball integrity for both packages. Installed package
-bytes matched those exact tarballs. This is provenance, not a legal review.
-
-## Private analysis image
-
-The Worker does not import a chess engine or mating solver. Browser practice uses the separate lazy engine described below. A private Container image is implemented and locally built, with analysis disabled
-by default. It has not been published or deployed.
-
-| Image component | Pin | License and retained source |
-| --- | --- | --- |
-| Stockfish | 17.1, commit `03e27488f3d21d8ff4dbf3065603afa21dbd0ef3` | GPLv3; official source archive in `/opt/source/stockfish-17.1.tar.gz`, AUTHORS and COPYING in `/opt/stockfish` |
-| Python chess package | `chess==1.11.2` | GPLv3 or later; complete source archive in `/opt/source/chess-1.11.2.tar.gz`, installed package notices retained |
-| CPython base | 3.13.16 slim-bookworm, immutable amd64 digest in Dockerfile | Python Software Foundation and bundled component licenses retained by the official base |
-
-The official Stockfish binary contains the pinned `nn-1c0000000000.nnue` and
-`nn-37f18f62d772.nnue` networks. The build verifies their full SHA-256 hashes by
-exporting them with Stockfish itself. It also checks the official binary and
-corresponding source archives against `analysis/locks.json`. No engine or model
-download occurs during a game or runtime analysis request.
-
-Preserve the corresponding source, build scripts, licenses, and notices when
-redistributing the image. Review the GPL source-availability path before a public
-image release. The complete license texts accompany the retained source archives.
-See [analysis build and source details](docs/analysis.md#pins-and-source-obligations).
-
-## Experimental adjudication probe
-
-`analysis/adjudication/wasm-probe/` references CHA-Solver 3.0.0 at commit
-`3484c7e65247003fac8705a9290dc2b5d0978b94`, MIT, copyright 2021-2026
-Miguel Ambrona. The probe's Cargo lockfile records transitive dependencies.
-Selected blocked-position fixtures credit that revision's README and test corpus.
-That experimental probe is outside the browser and Worker runtime. The separate
-default-off native timeout-proof adapter below has its own qualification gate.
-
-Retain the candidate's complete MIT notice with any distributed compiled probe
-or copied code. Its upstream source and license are available at the
-[pinned revision](https://github.com/miguel-ambrona/chasolver/tree/3484c7e65247003fac8705a9290dc2b5d0978b94).
-
-## Private timeout-proof image
-
-`proof/` builds the unchanged MIT CHA-Solver revision above and its unchanged
-`analyzer` example. `pins.json` records the source archive, example, Cargo lock
-and official image hashes. The image retains complete upstream source and MIT
-notice, checksum-pinned dependency crate sources/notices, and Rust notices.
-
-Independent history and witness validation uses `chess` 1.11.2, the maintained
-python-chess distribution, licensed GPL-3.0-or-later. Its complete corresponding
-source archive, extracted source and original license are retained in
-`proof/vendor/` and the image's `/opt/source/` path. The source snapshot also
-includes the product adapters, image definition and local qualification inputs.
-Preserve these and any applicable combined-work source and notices before
-distributing the image. Review the GPL source-availability path before a public
-image release. No public image distribution or external license review is
-claimed. See `proof/NOTICES` and [timeout proofs](docs/timeout-proofs.md).
 
 ## Browser Stockfish practice
 

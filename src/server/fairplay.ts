@@ -1,5 +1,5 @@
 import { expireRestrictions, type Actor, type AuthEnv } from './auth';
-import { ApiError, jsonResponse, readJson, requireAdmin, requireSameOrigin, verifyTurnstile } from './security';
+import { ApiError, jsonResponse, readJson, requireAdmin, verifyTurnstile } from './security';
 
 export const APPEAL_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 export const EVIDENCE_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
@@ -107,35 +107,30 @@ async function submitReport(request: Request, env: AuthEnv, actor: Actor): Promi
   return reportReceipt(env, report, 201);
 }
 
-/** Trusted background callers supply references and bounded numeric summaries, never browser evaluations or raw telemetry. */
+/** Trusted callers supply references and a bounded summary, never browser evaluations or raw telemetry. */
 export async function recordEvidence(env: AuthEnv, input: {
-  caseId: string; gameId: string; kind: 'server_game' | 'engine_summary' | 'related_game' | 'farming';
-  sourceRef: string; sourceVersion: string; analysisVersion?: string;
-  summary: { moveCount?: number; positions?: number; forcedPositions?: number; meanLoss?: number; engineAgreement?: number; pattern?: 'repeated-pairs' | 'reciprocal-results' | 'early-resignations'; gameIds?: string[] };
+  caseId: string; gameId: string; kind: 'server_game' | 'related_game' | 'farming';
+  sourceRef: string; sourceVersion: string;
+  summary: { moveCount?: number; pattern?: 'repeated-pairs' | 'reciprocal-results' | 'early-resignations'; gameIds?: string[] };
 }): Promise<string> {
   identifier(input.caseId, 'case');
   identifier(input.gameId, 'game');
   identifier(input.sourceRef, 'source reference');
   string(input.sourceVersion, 'source version', 1, 128);
-  if (input.kind === 'engine_summary' && !input.analysisVersion) throw new ApiError(400, 'ANALYSIS_VERSION_REQUIRED', 'Engine evidence needs an analysis version.');
   const summary = {
-    moveCount: input.summary.moveCount, positions: input.summary.positions, forcedPositions: input.summary.forcedPositions,
-    meanLoss: input.summary.meanLoss, engineAgreement: input.summary.engineAgreement, pattern: input.summary.pattern,
+    moveCount: input.summary.moveCount, pattern: input.summary.pattern,
     gameIds: input.summary.gameIds?.slice(0, 20).map(id => identifier(id, 'related game')),
   };
-  for (const value of [summary.moveCount, summary.positions, summary.forcedPositions, summary.meanLoss, summary.engineAgreement]) {
-    if (value !== undefined && (!Number.isFinite(value) || value < 0 || value > 1_000_000_000)) throw new ApiError(400, 'INVALID_EVIDENCE', 'Check evidence values.');
-  }
   const now = Date.now();
   const id = crypto.randomUUID();
-  await env.DB.prepare(`INSERT OR IGNORE INTO fairplay_evidence(id,case_id,game_id,kind,source_ref,source_version,analysis_version,summary_json,created_at,expires_at,hold_until)
-    SELECT ?,?,?,?,?,?,?,?,?,?,COALESCE((SELECT MAX(appeal_until) FROM fairplay_decisions WHERE case_id=?),0)
+  await env.DB.prepare(`INSERT OR IGNORE INTO fairplay_evidence(id,case_id,game_id,kind,source_ref,source_version,summary_json,created_at,expires_at,hold_until)
+    SELECT ?,?,?,?,?,?,?,?,?,COALESCE((SELECT MAX(appeal_until) FROM fairplay_decisions WHERE case_id=?),0)
     WHERE EXISTS(SELECT 1 FROM fairplay_cases c JOIN games g ON g.id=?
       WHERE c.id=? AND c.automatic_closed_at IS NULL AND g.status='finished' AND g.ai_model_id IS NULL AND (g.white_id=c.subject_id OR g.black_id=c.subject_id))
       AND NOT EXISTS(SELECT 1 FROM casual_game_admissions a WHERE a.game_id=? AND COALESCE(a.archive_error,'') LIKE 'retiring:%' AND a.archive_retry_at>?)
       AND NOT EXISTS(SELECT 1 FROM tournament_game_admissions a WHERE a.game_id=? AND COALESCE(a.archive_error,'') LIKE 'retiring:%' AND a.archive_retry_at>?)
       AND (SELECT COUNT(*) FROM fairplay_evidence WHERE case_id=?)<20`)
-    .bind(id, input.caseId, input.gameId, input.kind, input.sourceRef, input.sourceVersion, input.analysisVersion ?? null, JSON.stringify(summary), now, now + EVIDENCE_RETENTION_MS, input.caseId, input.gameId, input.caseId, input.gameId, now, input.gameId, now, input.caseId).run();
+    .bind(id, input.caseId, input.gameId, input.kind, input.sourceRef, input.sourceVersion, JSON.stringify(summary), now, now + EVIDENCE_RETENTION_MS, input.caseId, input.gameId, input.caseId, input.gameId, now, input.gameId, now, input.caseId).run();
   const existing = await env.DB.prepare(`SELECT e.id FROM fairplay_evidence e JOIN games g ON g.id=e.game_id
     WHERE e.case_id=? AND e.source_ref=? AND e.source_version=? AND e.kind=? AND g.ai_model_id IS NULL`)
     .bind(input.caseId, input.sourceRef, input.sourceVersion, input.kind).first<{ id: string }>();
@@ -378,6 +373,28 @@ export async function expireReports(env: AuthEnv, now = Date.now()): Promise<voi
     ORDER BY c.created_at,c.id LIMIT 500)`).bind(now, now, now - REPORT_REVIEW_WINDOW_MS, now).run();
 }
 
+/** Most rows one pass removes from one table. Every pass is bounded; the schedule sets the pace. */
+export const EXPIRY_BATCH = 500;
+
+/**
+ * Tables that grow with traffic (account request windows, sessions, sign-in limits, released seats).
+ * The minute schedule gives each table room for EXPIRY_BATCH * 1,440 deletions a day, so a backlog
+ * larger than one batch drains over the next runs instead of waiting for a daily pass.
+ */
+export async function cleanupExpiredRows(env: AuthEnv, now = Date.now()): Promise<number> {
+  const day = now - 86_400_000;
+  const results = await env.DB.batch([
+    env.DB.prepare('DELETE FROM request_limits WHERE key IN (SELECT key FROM request_limits WHERE window_start<? LIMIT ?)').bind(day, EXPIRY_BATCH),
+    env.DB.prepare('DELETE FROM identity_change_leases WHERE user_id IN (SELECT user_id FROM identity_change_leases WHERE expires_at<=? LIMIT ?)').bind(now, EXPIRY_BATCH),
+    env.DB.prepare('DELETE FROM verification WHERE id IN (SELECT id FROM verification WHERE expiresAt<? LIMIT ?)').bind(new Date(day).toISOString(), EXPIRY_BATCH),
+    env.DB.prepare('DELETE FROM session WHERE id IN (SELECT id FROM session WHERE expiresAt<? LIMIT ?)').bind(new Date(now).toISOString(), EXPIRY_BATCH),
+    env.DB.prepare('DELETE FROM rateLimit WHERE id IN (SELECT id FROM rateLimit WHERE lastRequest<? LIMIT ?)').bind(day, EXPIRY_BATCH),
+    env.DB.prepare('DELETE FROM active_game_seats WHERE (user_id,game_id) IN (SELECT user_id,game_id FROM active_game_seats WHERE released_at<? LIMIT ?)')
+      .bind(now - 30 * 86_400_000, EXPIRY_BATCH),
+  ]);
+  return results.reduce((total, result) => total + result.meta.changes, 0);
+}
+
 export async function cleanupPrivateData(env: AuthEnv, now = Date.now()): Promise<void> {
   await expireRestrictions(env.DB, now);
   await expireAppeals(env, now);
@@ -403,12 +420,6 @@ export async function cleanupPrivateData(env: AuthEnv, now = Date.now()): Promis
         AND NOT EXISTS(SELECT 1 FROM fairplay_appeals pending WHERE pending.case_id=c.id AND pending.status='pending' AND pending.automatic_closed_at IS NULL)
         AND NOT EXISTS(SELECT 1 FROM fairplay_evidence e WHERE e.case_id=c.id AND e.hold_until>?)
       ORDER BY c.updated_at,c.id,a.id LIMIT 500)`).bind(now - EVIDENCE_RETENTION_MS, now, now),
-    env.DB.prepare('DELETE FROM request_limits WHERE key IN (SELECT key FROM request_limits WHERE window_start<? LIMIT 500)').bind(now - 86_400_000),
-    env.DB.prepare('DELETE FROM identity_change_leases WHERE user_id IN (SELECT user_id FROM identity_change_leases WHERE expires_at<=? LIMIT 500)').bind(now),
-    env.DB.prepare('DELETE FROM verification WHERE id IN (SELECT id FROM verification WHERE expiresAt<? LIMIT 500)').bind(new Date(now - 86_400_000).toISOString()),
-    env.DB.prepare('DELETE FROM session WHERE id IN (SELECT id FROM session WHERE expiresAt<? LIMIT 500)').bind(new Date(now).toISOString()),
-    env.DB.prepare('DELETE FROM rateLimit WHERE id IN (SELECT id FROM rateLimit WHERE lastRequest<? LIMIT 500)').bind(now - 86_400_000),
-    env.DB.prepare('DELETE FROM active_game_seats WHERE (user_id,game_id) IN (SELECT user_id,game_id FROM active_game_seats WHERE released_at<? LIMIT 500)').bind(now - 30 * 86_400_000),
     env.DB.prepare(`DELETE FROM user WHERE id IN (SELECT id FROM user WHERE isAnonymous=1 AND createdAt<?
       AND NOT EXISTS(SELECT 1 FROM active_game_seats a WHERE a.user_id=user.id)
       AND NOT EXISTS(SELECT 1 FROM games g WHERE g.white_id=user.id OR g.black_id=user.id)
@@ -423,7 +434,6 @@ export async function fairPlayHandler(request: Request, env: AuthEnv, actor: Act
   const path = new URL(request.url).pathname;
   if (!path.startsWith('/api/admin/') && !['/api/reports', '/api/appeals', '/api/me/fair-play'].includes(path)) return null;
   if (!actor) throw new ApiError(401, 'SIGN_IN_REQUIRED', 'Sign in to continue.');
-  if (request.method !== 'GET') requireSameOrigin(request, env);
   if (path.startsWith('/api/admin/')) {
     await requireAdmin(request, env, actor);
     if (path === '/api/admin/cases' && request.method === 'GET') return adminCases(request, env);

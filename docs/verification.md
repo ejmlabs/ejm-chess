@@ -11,8 +11,8 @@ or establish a current result. See [source handoff](source-handoff.md) and the
 
 This document retains dated local and protected-host checks. Entries below are
 historical, not a live status page. The [deployment guide](deployment.md) and
-published [timeout-proof report](https://chess.ejmlabs.com/qualification/timeout-proofs.json)
-record release boundaries and proof measurements.
+[live-ready prep](live-ready-prep.md) record release boundaries. The timeout-proof
+path and its public status report were retired on 2026-10-31.
 
 The original implementation was checked locally. A later protected canonical
 preview is deployed; public play remains closed. Product source has not been
@@ -70,7 +70,7 @@ The developer guide now reflects the shared UI owner's mandatory source
 checks and obsolete `enforceDesignKit` option. The separate proof acceptance
 entry is control-only and permanently unarmed in this source. It has no
 scenario adapters or complete work/cost envelope; see
-[timeout proofs](timeout-proofs.md). No release checkbox, public admission,
+timeout proofs (guide removed 2026-10-31). No release checkbox, public admission,
 provider resource or capacity claim changed.
 
 ## Board and standings checkpoint, 2026-10-21 UTC
@@ -110,7 +110,7 @@ versions per seeded entrant, projection used 1,435 advances, 5,816 write rows
 and 113,342 read rows; cleanup took 1,434 advances. These are different retained
 history shapes, not a speed comparison. Nonterminal metadata was direct
 excluded setup. Native Competition alarm cadence and the complete 20,000-Game
-workload remain unqualified. See [capacity qualification](capacity-qualification.md).
+workload remain unqualified. See capacity qualification (guide removed 2026-10-31).
 
 The source now streams standings from immutable versions in bounded candidate
 windows, retains the version needed by an active frozen build, and persists
@@ -124,7 +124,7 @@ thirteen-event Game lifecycle used 97 then 83 write rows, including cold
 wrapper setup. The same 65 projection advances used 336 then 271 write rows.
 This compares the same native fixture; it does not establish an upper bound
 for the full workload. Existing databases keep their original table layout.
-The [capacity guide](capacity-qualification.md) records the comparison and
+The capacity guide (removed 2026-10-31) recorded the comparison and
 the remaining accounting gaps.
 
 ## Lifecycle and capacity checkpoint, 2026-10-21 04:08 UTC
@@ -143,7 +143,7 @@ while uncertain native starts remain closed. The 38 focused proof tests are
 included in the integrated run. Public Container APIs avoid the pinned SDK's
 automatic start retry paths. Provider failure/restart behavior, full receipt
 recovery, the smallest passing tier and complete costs remain unqualified.
-See [timeout proofs](timeout-proofs.md).
+See timeout proofs (guide removed 2026-10-31).
 
 The private capacity adapter uses bound one-use native dispatch tickets and a
 generation retirement fence. A separate pinned-workerd probe passed 11 local
@@ -152,9 +152,9 @@ generation reacquisition, durable state and running-alarm interruption. Its
 no-retry observation lasted 2.5 seconds. That is not a 60-minute shutdown proof
 or a provider run. Socket-used objects retain their permits conservatively.
 Controller accounting, complete envelopes, the fixed driver and full workload
-remain disabled gates; see [capacity qualification](capacity-qualification.md).
+remain disabled gates; see capacity qualification (guide removed 2026-10-31).
 
-The [follow-up measurement scopes](capacity-follow-up.md) prepare full-hour
+The follow-up measurement scopes (guide removed 2026-10-31) prepare full-hour
 retention, real calendar scheduling, ranked proof recovery/cost and the later
 10,000-entry/5,000-live tier. They are unapproved proposals with finite limits,
 not executable or measured scopes. The 72,000-object physical-storage floor
@@ -867,7 +867,7 @@ launch and ranked-admission limits remain in force.
 - The planning PR contains the earlier plan. These latest implementation and
   planning changes are local. No product remote repository was created.
 
-Use the [operations guide](operations.md), [adjudication evidence](adjudication-feasibility.md),
+Use the [operations guide](operations.md),
 [fair play limits](fair-play.md), [tournament contract](tournaments.md), and
 [replay contract](replays.md) for setup, recovery, and remaining launch gates.
 
@@ -924,3 +924,75 @@ behavior from the prior canary build is retained. Focused timeout-related
 Worker tests (81) passed before merge; full canary checklist steps 8+ remain
 paused. This is a protected canary deploy, not a public launch or ranked
 enablement.
+
+## Local load measurement, 2026-11-01
+
+`ejm-ui` removed the route size budget, so load time is the performance bar.
+This records the first measurement of the product build at `d413120` (clean
+source, ejm-ui `5a88e6a`). It is local, headless and simulated: it is not field
+data, not regional latency and not a capacity claim.
+
+**Method.** `npm run build`, then `scripts/perf.mjs` from ejm-ui serves `dist/`
+with gzip and loads every prerendered page in Lighthouse 13.5.0 (desktop profile:
+simulated 10 Mbps, 40 ms round trip, no CPU slowdown, cold cache). It reports
+first contentful paint (FCP) only. The FCP column is the median of 3 loads; the
+recheck column is one later load. Sizes are what each page's HTML references (module
+script, modulepreload, stylesheet), gzip level 9, in KiB (1,024 bytes). The old
+budget's exact accounting is not in the repository, so sizes compare to its
+limits but are not identical; the developer guide was 85.9 KB on 2026-10-21 and
+is 86.5 KiB now.
+
+| Route | FCP ms | Recheck ms | JS KiB raw | JS KiB gzip |
+| --- | ---: | ---: | ---: | ---: |
+| `/` | 428 | 420 | 284.4 | 91.6 |
+| `/play/` | 508 | 506 | 368.8 | 123.1 |
+| `/history/` | 463 | 456 | 302.8 | 99.7 |
+| `/leaderboard/` | 418 | 416 | 295.0 | 96.5 |
+| `/tournaments/` | 443 | 448 | 315.2 | 102.7 |
+| `/account/` | 414 | 415 | 285.7 | 93.2 |
+| `/player/` | 420 | 426 | 294.3 | 96.2 |
+| `/replay/` | 406 | 405 | 283.1 | 91.7 |
+| `/admin/` | 459 | 467 | 323.9 | 106.8 |
+| `/rules/` | 373 | 378 | 270.2 | 86.5 |
+| `/help/` | 402 | 373 | 270.2 | 86.5 |
+| `/credits/` | 373 | 371 | 270.2 | 86.5 |
+| `/privacy/` | 376 | 375 | 270.2 | 86.5 |
+| `/fair-play/` | 373 | 374 | 270.2 | 86.5 |
+| `/docs/developer-guide/` | 372 | 375 | 270.2 | 86.5 |
+| `/404.html` | 372 | 373 | 270.0 | 86.3 |
+
+CSS is one shared file on every route: 64.7 KiB raw, 13.1 KiB gzip. All routes
+sit inside the old limits (play 180 KB JS; guides 95 KB JS and 14 KB CSS).
+`/play/` is the heaviest and slowest page; `/admin/`, `/tournaments/` and
+`/history/` follow. The two board routes (`/play/`, `/replay/`) also fetch the
+chessboard surface after first paint (62.0 KiB raw / 14.8 KiB gzip JS, 11.1 / 1.6
+KiB CSS), which neither table column includes, and Stockfish loads only on demand;
+FCP does not see either. Reruns agree within about 30 ms (`/help/` is the one
+baseline outlier, 29 ms high), and the recheck exited 0 against the baseline.
+
+**Caveats.** One Linux container (4 vCPU) running Google Chrome for Testing
+153.0.8010.12 as root through a wrapper that adds `--no-sandbox`. The server is
+ejm-ui's local static server, not Cloudflare: no edge compression, `_headers`
+caching, HTTP/2, Access or Worker. Only prerendered HTML is measured, so API,
+session and WebSocket work after first paint are outside FCP. The table's FCP column
+is committed as `scripts/perf-baseline.json`. Update it with the `--update`
+command below, and commit it with the change that makes a new number intended.
+
+**Repeat.** From the product, then ejm-ui (a sibling directory). As root in a
+container, `CHROME` must be a wrapper such as
+`exec /opt/pw-browsers/chromium --no-sandbox --disable-dev-shm-usage "$@"`.
+
+```sh
+npm run build
+cd ../ejm-ui
+CHROME=/path/to/chrome node scripts/perf.mjs ../ejm-chess/dist --runs 3 --baseline ../ejm-chess/scripts/perf-baseline.json --update
+CHROME=/path/to/chrome node scripts/perf.mjs ../ejm-chess/dist --runs 3 --baseline ../ejm-chess/scripts/perf-baseline.json
+```
+
+The first perf command records the baseline; the second checks against it and
+exits 1 when a route is a second or more slower. Median of 3 across 16 routes
+takes about 5 minutes. Route sizes, from the product root after the build:
+
+```sh
+node scripts/route-bytes.mjs dist
+```

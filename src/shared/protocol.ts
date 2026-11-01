@@ -34,8 +34,6 @@ export interface InitGame {
   white: Actor;
   black?: Actor;
   reservationId?: string;
-  /** Private server admission metadata. Never accepted from a browser payload. */
-  timeoutProof?: { reservationId: string; profileVersion: string };
   ai?: { modelId: string; level: EngineLevel };
   tournament?: TournamentGame;
 }
@@ -57,10 +55,11 @@ export interface AiOpponent {
 
 export type AiFailure = 'AI_UNAVAILABLE' | 'AI_MODEL_UNAVAILABLE' | 'AI_QUOTA' | 'AI_INVALID_MOVE' | 'AI_PROVIDER_FAILED';
 
+/** `pending-adjudication` and `timeout-needs-review` only describe games saved before a flag was resolved at once. */
 export type GameStatus = 'waiting' | 'ready' | 'active' | 'finished' | 'pending-adjudication';
 export type ResultReason = 'checkmate' | 'stalemate' | 'threefold-repetition' | 'fifty-move-rule'
   | 'insufficient-material' | 'resignation' | 'draw-agreement' | 'readiness-expired'
-  | 'eligibility-revoked' | 'timeout-insufficient-material' | 'timeout-win' | 'timeout-needs-review' | 'timeout-proof-win' | 'timeout-proof-draw'
+  | 'eligibility-revoked' | 'timeout-insufficient-material' | 'timeout-win' | 'timeout-needs-review'
   | 'technical-void' | 'ai-unavailable';
 
 export interface GameOutcome {

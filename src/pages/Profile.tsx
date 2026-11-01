@@ -32,7 +32,7 @@ export default function Profile() {
 
   return <Page variant="application"><AppSection>
     <SectionHead purpose="application" as="h1" title={state.status === 'ready' ? state.profile.name : 'Player'}>
-      <Text as="p">Public ratings count settled ranked games. Casual and AI games add no rating credit.</Text>
+      <Text as="p">Ratings from settled ranked games only.</Text>
     </SectionHead>
     <AppFlow aria-live="polite" aria-busy={state.status === 'loading'}>
       {state.status === 'loading' && <StateBlock kind="loading" message="Loading this player." />}
@@ -42,7 +42,7 @@ export default function Profile() {
       </>}
       {state.status === 'error' && <StateBlock kind="error" message="This profile could not be loaded." action={{ label: 'Retry' }} onAction={() => setAttempt(value => value + 1)} />}
       {state.status === 'ready' && <>
-        {!state.profile.rankedOpen && <Status status="info" label="New ranked play is closed while the launch checks remain." />}
+        {!state.profile.rankedOpen && <Status status="info" label="New ranked play is closed." />}
         <Table label="Player ratings" caption="Settled ratings by time control"
           columns={[{ key: 'format', label: 'Format' }, { key: 'rating', label: 'Rating', align: 'right' }, { key: 'games', label: 'Games', align: 'right' }, { key: 'status', label: 'Status' }]}
           rows={state.profile.pools.map(pool => ({ id: pool.pool, format: `${pool.pool === 'blitz' ? 'Blitz' : 'Rapid'} ${FORMATS[pool.pool].label}`, rating: pool.rating ?? 'Not rated', games: pool.games, status: labels[pool.status] }))}
@@ -54,6 +54,6 @@ export default function Profile() {
         </Text></li>)}</AppGroup>}
       </>}
     </AppFlow>
-    <Text as="p" variant="muted">Read the <Link href="/rules/">rating rules</Link> for provisional and active status, or return to the <Link href="/leaderboard/">leaderboard</Link>.</Text>
+    <Text as="p" variant="muted"><Link href="/leaderboard/">Leaderboard</Link> · <Link href="/rules/">Rating rules</Link></Text>
   </AppSection></Page>;
 }

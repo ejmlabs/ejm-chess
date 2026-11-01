@@ -1,10 +1,9 @@
 import { env } from 'cloudflare:workers';
 import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { Env } from '../src/server/env';
 import { GAME_HOT_RETENTION_MS } from '../src/server/game';
 import { nextRetirementAt, retireGamePayloads, retirementMode, runScaledRetirementPass } from '../src/server/maintenance';
-import { activeGame, player } from './authority-helpers';
+import { activeGame, gamesAnswering, holdAlarms, patchBindings, player } from './authority-helpers';
 
 const authority = () => env.COMPETITION.get(env.COMPETITION.idFromName('global'));
 const scaled = () => ({ ...env, GAME_RETIREMENT_MODE: 'scaled' });
@@ -35,24 +34,20 @@ async function fixtures(count: number, now: number) {
   return { ids, creator };
 }
 
+const archives = { calls: [] as string[], active: 0, peak: 0 };
+
 async function fakeArchives(failures: string[] = []) {
-  await runInDurableObject(authority(), async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void>; retirementTest: { calls: string[]; active: number; peak: number } };
-    internal.retirementTest = { calls: [], active: 0, peak: 0 };
-    internal.env = { ...env, GAME_RETIREMENT_MODE: 'scaled', GAME: {
-      idFromName: env.GAME.idFromName.bind(env.GAME),
-      get: () => ({ archive: async (proof: { gameId: string; expectedVersion: number; terminalDigest: string }) => {
-        const stats = internal.retirementTest;
-        stats.calls.push(proof.gameId); stats.active++; stats.peak = Math.max(stats.peak, stats.active);
-        await env.DB.prepare('SELECT 1').first();
-        stats.active--;
-        if (failures.includes(proof.gameId)) throw new Error('injected_unavailability');
-        return { gameId: proof.gameId, terminalVersion: proof.expectedVersion, terminalDigest: proof.terminalDigest, archivedAt: Date.now() };
-      } }),
-    } as unknown as Env['GAME'] };
-    internal.schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
+  Object.assign(archives, { calls: [], active: 0, peak: 0 });
+  await holdAlarms(authority(), { GAME_RETIREMENT_MODE: 'scaled' });
+  await patchBindings(authority(), gamesAnswering(() => ({
+    archive: async (proof: { gameId: string; expectedVersion: number; terminalDigest: string }) => {
+      archives.calls.push(proof.gameId); archives.active++; archives.peak = Math.max(archives.peak, archives.active);
+      await env.DB.prepare('SELECT 1').first();
+      archives.active--;
+      if (failures.includes(proof.gameId)) throw new Error('injected_unavailability');
+      return { gameId: proof.gameId, terminalVersion: proof.expectedVersion, terminalDigest: proof.terminalDigest, archivedAt: Date.now() };
+    },
+  })));
 }
 
 it('routes concurrent scaled callers through one pass and preserves a real tombstone and replay across restart', async () => {
@@ -62,11 +57,7 @@ it('routes concurrent scaled callers through one pass and preserves a real tombs
   const result = (await setup.game.status())!.result!;
   const now = result.endedAt + GAME_HOT_RETENTION_MS;
   vi.spyOn(Date, 'now').mockReturnValue(now);
-  await runInDurableObject(authority(), async (instance, state) => {
-    (instance as unknown as { env: Env; schedule(): Promise<void> }).env = scaled();
-    (instance as unknown as { schedule(): Promise<void> }).schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
+  await holdAlarms(authority(), scaled());
   const replies = await Promise.all(Array.from({ length: 4 }, () => retireGamePayloads(scaled())));
   expect(replies.reduce((sum, row) => sum + row.attempted, 0)).toBe(1);
   expect(replies.reduce((sum, row) => sum + row.completed, 0)).toBe(1);
@@ -107,8 +98,7 @@ it('keeps a shared persisted token bucket, four in-flight calls, and progress be
   expect(first).toEqual({ attempted: 28, completed: 26, failed: 2 });
   expect(await retireGamePayloads(scaled())).toEqual({ attempted: 4, completed: 4, failed: 0 });
   expect(await retireGamePayloads(scaled())).toEqual({ attempted: 0, completed: 0, failed: 0 });
-  const stats = await runInDurableObject(authority(), instance => (instance as unknown as { retirementTest: { calls: string[]; peak: number } }).retirementTest);
-  expect(stats.calls).toHaveLength(32); expect(new Set(stats.calls).size).toBe(32); expect(stats.peak).toBe(4);
+  expect(archives.calls).toHaveLength(32); expect(new Set(archives.calls).size).toBe(32); expect(archives.peak).toBe(4);
   expect(await nextRetirementAt(scaled(), now + 15)).toBe(now + 32);
   await evictDurableObject(authority()); await fakeArchives(ids.slice(4, 6));
   expect(await retireGamePayloads(scaled())).toEqual({ attempted: 0, completed: 0, failed: 0 });

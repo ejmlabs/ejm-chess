@@ -67,12 +67,13 @@ describe('public arena edge cache', () => {
   it('serves warm spectator reads without sessions, D1 or cookie-specific variants', async () => {
     const first = await get(path);
     expect(first.status).toBe(200);
-    expect(first.headers.get('Cache-Control')).toBe('public, max-age=10, s-maxage=10');
+    expect(first.headers.get('Cache-Control')).toBe('public, no-cache');
     const initial = await first.json();
     const prepare = vi.fn(() => { throw new Error('Warm spectator read must not query D1'); });
     const warm = await get(path + '?unrelated=ignored', { ...config, DB: { prepare } as unknown as D1Database },
       { Cookie: 'unrelated=private-value', Authorization: 'Bearer private-value' });
     expect(warm.status).toBe(200);
+    expect(warm.headers.get('Cache-Control')).toBe('public, no-cache');
     expect(await warm.json()).toEqual(initial);
     expect(prepare).not.toHaveBeenCalled();
     expect(warm.headers.has('Set-Cookie')).toBe(false);

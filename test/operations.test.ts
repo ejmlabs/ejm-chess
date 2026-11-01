@@ -11,7 +11,7 @@ beforeEach(async () => {
     env.DB.prepare('UPDATE budget_receipt_counts SET count=0'),
     env.DB.prepare('DELETE FROM budget_months'),
     env.DB.prepare('DELETE FROM operations_changes'),
-    env.DB.prepare("UPDATE operations_control SET version=0,games_stopped=0,email_stopped=0,analysis_stopped=0,changed_at=NULL,changed_by=NULL,reason=NULL WHERE id='product'"),
+    env.DB.prepare("UPDATE operations_control SET version=0,games_stopped=0,email_stopped=0,changed_at=NULL,changed_by=NULL,reason=NULL WHERE id='product'"),
   ]);
 });
 

@@ -2,8 +2,8 @@
 
 ## Current status
 
-Ordinary operation is unattended. Private reports and optional engine summaries
-are informational. They cannot convict a player, restrict an account, or remove
+Ordinary operation is unattended. Private reports are informational, with no
+engine screening. They cannot convict a player, restrict an account, or remove
 ratings. Report receipts state whether review is available. The default receipt
 says that human review is unavailable and no action follows from the report.
 
@@ -11,12 +11,7 @@ Server authority rejects illegal commands and forged clocks or results.
 Turnstile, session checks, request limits, queue admission, and tournament
 reservations add friction to automated abuse. They cannot prove that a player
 used no outside help. Unsupervised engine assistance cannot be reliably
-eliminated by this product. Screening is disabled by default and has not been
-calibrated for public play.
-
-A bounded local screening evaluation uses licensed public game records and
-controlled examples. It measures the current summaries and sampling limits;
-it does not establish a cheating classifier or a safe sanction threshold.
+eliminated by this product.
 
 ## Player rules
 
@@ -48,13 +43,11 @@ remain separate from human review history.
 
 A repeated report returns the same private receipt and closure, including after
 its ordinary evidence expires. It does not reopen the case, refresh retention
-or recreate deleted evidence. A late engine summary can remain in its existing
-private job record but cannot attach new case evidence or reopen the report.
-Pending optional analysis does not extend the seven-day review window.
+or recreate deleted evidence.
 
 Closure and deletion are separate. Existing evidence keeps its ordinary 90-day
 expiry and any valid hold. Receipts and permitted case/audit metadata remain;
-permanent storage still grows and is subject to the documented admission ceiling.
+permanent storage still grows; platform storage bounds and the budget stop apply.
 
 ## Optional human review
 
@@ -71,8 +64,7 @@ A concern is not proof. A reviewed restriction needs retained evidence from
 at least two games, a server record, and a written explanation of corroborating
 facts. Never sanction on accuracy, a shared IP address, window focus, or report
 count alone. Do not collect focus signals or invasive device fingerprints.
-Reporter identities, report text, reviewer notes, and raw engine evidence stay
-private. A player receives the decision reason and expiry.
+Reporter identities, report text, and reviewer notes stay private. A player receives the decision reason and expiry.
 
 The database records case versions, evidence references, reviewer identity,
 decision reasons, corroboration, notices, and an audit trail. Restrictions last
@@ -101,8 +93,9 @@ An overturn revokes the related restriction and preserves the audit trail.
 The correction outbox replays the affected rating pool into a separate
 generation, publishes the completed projection, and drains results recorded
 during repair. Immutable results, rating events, checkpoints, and decision
-history are not deleted by expiry or casual payload retirement. Production
-restore and review/appeal acceptance checks remain launch gates.
+history are not deleted by expiry or casual payload retirement. The restore
+drill is follow-up only; review and appeal acceptance checks apply only if
+reviewed mode is enabled.
 
 ## Evidence retention and limits
 
@@ -130,69 +123,38 @@ recorded after retirement may retain the private D1 replay without recreating
 the retired Game payload. See [operations](operations.md) for retry, retirement,
 permanent storage ceilings, and the limits of automatic recovery.
 
-## Screening evaluation and uncertainty
+## Limits of detection
 
-The retained evaluation cohort contains 24 games from the September 2026
-[Lichess CC0 archive](https://database.lichess.org/). It includes four games in
-each of six groups: 5+3 and 10+5, each with lower, middle and higher recorded
-rating bands. Selection uses the mean of the two Lichess ratings. Those ratings
-are not ejm-chess ratings and do not transfer here.
+There is no engine screening, assistance classifier, measured false-positive
+rate, measured false-negative rate, cheating probability, or enforcement
+threshold. Server-side Stockfish analysis was deleted on 2026-10-31. Nothing here
+can justify automated accusations, restrictions, rating changes, or a
+reviewed-player badge.
 
-The collector takes the first matching ordinary-length games from a bounded
-archive prefix. This is a small stratified convenience sample, not a random
-sample of chess players. No retained record has a BOT title, but the evaluation
-does not independently prove account type or that either player used no help.
-All public games have unknown assistance ground truth. A strong game, an
-engine-like move, or a low loss score is not a cheating finding.
+Unattended operation keeps reports informational. If reviewed operation is
+proposed, first define the staffed case capacity, response window,
+corroboration standard and appeal coverage; unattended operation supplies no
+review-capacity plan.
 
-Separate controlled transcripts cover single-legal-move positions, sparse
-engine choices during and after the opening, and wholly engine-chosen play.
-Synthetic choices are labelled as synthetic. They are not presented as human
-games. The local run sampled none of two planted opening choices and one of
-three planted middle-game choices. One public-game side had no sampled
-positions; another had 100% agreement from just one position. Those scores
-provide no valid cheating threshold. Position sampling can miss deliberate
-assistance, while forced choices provide no evidence of a player's independent
-decisions. Missing or unfinished
-analysis is neither clearance nor guilt.
+## Competitive evidence still needed
 
-There is no assistance classifier, measured false-positive rate, measured
-false-negative rate, cheating probability, or enforcement threshold. The
-evaluation supplies score distributions, exact controlled sampling coverage,
-failed-job counts and source hashes. It cannot justify automated accusations,
-restrictions, rating changes, or a reviewed-player badge. The
-[reproduction and uncertainty report](../analysis/qualification/report.md)
-records the local evidence and its limits. These checks establish no deployed
-throughput, regional latency, operating cost, or public capacity.
-
-Unattended operation keeps reports and engine summaries informational. Leave
-optional server analysis disabled unless its separate resource, cost, privacy
-and deployment checks pass. Do not use the evaluation command as a switch for
-ranked admission. If reviewed operation is proposed, first define the staffed
-case capacity, response window, corroboration standard and appeal coverage;
-this unattended evaluation supplies no review-capacity plan.
-
-## Competitive launch evidence still needed
+Ranked opens with `RANKED_ENABLED=true` (owner decision, 2026-10-31). The
+launch path in [live-ready prep](live-ready-prep.md) covers live mail, cron and
+player flows. The rest is evidence to gather after opening.
 
 - Tested objective abuse controls, private report access, expiry, and recovery.
 - An accepted timeout policy, including the blocked-position limit of the material timeout rule.
-  Casual and unattended flags use that material rule (loss with mating material, otherwise draw).
-  Ranked proof games may wait up to 30 seconds for a private proof, then fall back to the same
-  rule, rated. Technical voids remain for unfinished tournament/arena wall-clock cases and for
-  an owner admin void of a still-pending proof game; they are not the ordinary timeout outcome.
+  Every mode, ranked included, uses that rule at the flag: a loss for the player who ran out
+  when the opponent has mating material, otherwise a draw. Technical voids remain for unfinished
+  tournament/arena wall-clock cases; they are not the ordinary timeout outcome.
 - Verified production retention and recovery under the published
   [privacy policy](privacy.md), including saved later-closure reapplication.
   Password-confirmed export and closure replace a staffed account-request
   promise; their bounded isolated drill is not production acceptance.
-- Measured queue, CPU, memory, storage, latency, and cost under the intended load.
+- Measured queue, CPU, memory, storage, latency, and cost under real load, after opening.
 - Live email, Turnstile, hostname, and deployed schedule checks.
-- If screening is enabled, approved Container resources, a reproducible public
-  game and controlled-assistance evaluation, and an accepted uncertainty policy.
-  Unknown labels cannot supply a measured false-positive rate.
 - If reviewed mode is enabled, staffed review, corroboration, notices, appeals,
   correction/reversal, and recovery acceptance checks.
-
-Do not open ranked admission by changing only `RANKED_ENABLED`.
 
 ## Objective request and protocol limits
 
@@ -280,9 +242,14 @@ permits at most two started games for an unordered pair in a rolling 24 hours.
 
 `authority.farming` in the private operations response includes the policy,
 checked and flagged totals, pattern counts, coverage, lookup limits, and at
-most 20 recent flagged game references. Account IDs and raw check records stay
-inside the Competition authority. The retained ranked-game ceiling bounds
-checks to 1,000 game rows. A normal check visits at most 4,000 candidate rows
+most 20 recent flagged game references. Totals, pattern counts and recent
+references describe the newest 1,000 checks by insertion order. Coverage
+counts read at most 1,000 pending or incomplete checks through their index, so
+an old gap is never hidden. When either scan reaches its limit, `truncated` is
+true and the counts are lower bounds. Status returns at most 2,002 rows
+however many checks are retained. Account IDs and raw check records stay
+inside the Competition authority. A fixed guard of 1,000 retained check rows
+bounds checks. A normal check visits at most 4,000 candidate rows
 through indexed pair, account, and winner windows, and updates at most 1,000
 distinct check records. Each lookup returns at most 1,001 rows. Its extra row
 detects an unexpected breach of the retained bound, after which motif work
@@ -294,12 +261,12 @@ public throughput or latency claim.
 
 Older v1 records upgrade from their accepted result journal through a
 versioned keyset cursor, at most eight per maintenance alarm. The cursor
-survives restart. Indexed pending probes keep scheduling work small; the
-private full status still scans the capped retained checks for aggregates.
-Coverage reports pending upgrades and incomplete checks separately. A missing
-accepted source or a lookup/update guard leaves an explicit reason. Neither
-condition denies game settlement or invents a farming result. Coverage is
-complete only when neither pending nor incomplete records remain.
+survives restart. Indexed pending probes keep scheduling work small, and the
+private status stays within the bounded reads above. Coverage reports pending
+upgrades and incomplete checks separately. A missing accepted source or a
+lookup/update guard leaves an explicit reason. Neither condition denies game
+settlement or invents a farming result. Coverage is complete only when neither
+pending nor incomplete records remain.
 
 These records remain with the authority; ordinary evidence cleanup does not
 erase them. Production retention and backup expiry remain launch gates.

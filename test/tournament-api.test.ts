@@ -1,10 +1,10 @@
 import { env } from 'cloudflare:workers';
-import { createExecutionContext, runInDurableObject, waitOnExecutionContext } from 'cloudflare:test';
+import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { afterEach, expect, it, vi } from 'vitest';
 import handler from '../src/server/index';
 import { currentActor, hasRecoveryEmail } from '../src/server/auth';
-import type { Env } from '../src/server/env';
 import type { TournamentView } from '../src/shared/tournaments';
+import { holdAlarms } from './authority-helpers';
 
 const origin = 'http://localhost:8787';
 let address = 1;
@@ -38,12 +38,7 @@ it('maps routine tournament RPC failures to safe HTTP 4xx responses and successf
   const startsAt = Math.ceil(Date.now() / 3_600_000) * 3_600_000 + 3_600_000;
   const clock = vi.spyOn(Date, 'now').mockReturnValue(startsAt - 16 * 60_000);
   const competition = env.COMPETITION.get(env.COMPETITION.idFromName('global'));
-  await runInDurableObject(competition, async (instance, state) => {
-    const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-    internal.env = { ...internal.env, TOURNAMENTS_ENABLED: 'true' };
-    internal.schedule = async () => {};
-    await state.storage.deleteAlarm();
-  });
+  await holdAlarms(competition, { TOURNAMENTS_ENABLED: 'true' });
   const entrants = await Promise.all(Array.from({ length: 5 }, () => user()));
   const withoutCredential = await user();
   await env.DB.prepare("UPDATE account SET password=NULL WHERE userId=? AND providerId='credential'").bind(withoutCredential.actor.id).run();

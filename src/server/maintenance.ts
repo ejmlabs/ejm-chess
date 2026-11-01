@@ -1,18 +1,33 @@
 import type { Env } from './env';
 import { ADJUDICATION_WAIT_MS, GAME_HOT_RETENTION_MS } from './game';
 import { cleanupBudgetReceipts } from './budget';
+import { DAY } from './schedule';
 
-export const GAME_MAINTENANCE_BATCH = 4;
-export const GAME_MAINTENANCE_RETRY_MS = 300_000;
-export const GAME_RETIREMENT_SCALED_BATCH = 32;
-export const GAME_RETIREMENT_CONCURRENCY = 4;
-const RETIREMENT_TOKENS = 32_000;
+const GAME_MAINTENANCE_BATCH = 4;
+const GAME_MAINTENANCE_RETRY_MS = 300_000;
+const GAME_RETIREMENT_SCALED_BATCH = 32;
+const GAME_RETIREMENT_CONCURRENCY = 4;
+// The D1 bucket holds milli-tokens, so tokens per second is also milli-tokens per millisecond.
+const RETIREMENT_TOKENS_PER_SECOND = 32;
+const RETIREMENT_BURST_MILLI = 32_000;
 
 type Ledger = 'casual_game_admissions' | 'tournament_game_admissions';
 interface Candidate { ledger: Ledger; game_id: string; result_version: number; terminal_digest: string }
 export interface MaintenanceResult { attempted: number; completed: number; failed: number }
 
 const ledgers: Ledger[] = ['casual_game_admissions', 'tournament_game_admissions'];
+/**
+ * Competition projects a game to D1 only when its result lands, so an unwatched game has no projection while it
+ * plays. Recovery leaves it this long after admission for the Game's own alarm and delivery before polling it.
+ */
+const UNPROJECTED_GRACE_MS = 30_000;
+/** No game outlives its clocks: two initial allowances plus an increment for every ply of the cap is about 18 hours. */
+const GAME_MAX_AGE_MS = DAY;
+/** Competition polls every game it admitted through a durable intent. Only older casual admissions have none. */
+const UNWATCHED: Record<Ledger, string> = {
+  casual_game_admissions: 'casual_game_admissions.reservation_id IS NULL',
+  tournament_game_admissions: '0',
+};
 
 async function takeBudget(env: Env, kind: 'game-retirement' | 'game-recovery', now: number): Promise<boolean> {
   const window = Math.floor(now / 60_000) * 60_000;
@@ -89,8 +104,8 @@ async function retirePreviewPayloads(env: Env, now: number): Promise<Maintenance
 
 async function takeScaledBudget(env: Env, now: number): Promise<boolean> {
   const row = await env.DB.prepare(`UPDATE game_retirement_budget
-    SET tokens_milli=MIN(32000,tokens_milli+MAX(0,?-refilled_at)*32)-1000,refilled_at=MAX(refilled_at,?)
-    WHERE id=1 AND MIN(32000,tokens_milli+MAX(0,?-refilled_at)*32)>=1000 RETURNING tokens_milli`)
+    SET tokens_milli=MIN(${RETIREMENT_BURST_MILLI},tokens_milli+MAX(0,?-refilled_at)*${RETIREMENT_TOKENS_PER_SECOND})-1000,refilled_at=MAX(refilled_at,?)
+    WHERE id=1 AND MIN(${RETIREMENT_BURST_MILLI},tokens_milli+MAX(0,?-refilled_at)*${RETIREMENT_TOKENS_PER_SECOND})>=1000 RETURNING tokens_milli`)
     .bind(now, now, now).first();
   return row !== null;
 }
@@ -135,14 +150,15 @@ export async function nextRetirementAt(env: Env, now = Date.now()): Promise<numb
   if (row.ready_at > now) return row.ready_at;
   const budget = await env.DB.prepare('SELECT tokens_milli,refilled_at FROM game_retirement_budget WHERE id=1').first<{ tokens_milli: number; refilled_at: number }>();
   if (!budget) throw new Error('retirement_budget_missing');
-  const tokens = Math.min(RETIREMENT_TOKENS, budget.tokens_milli + Math.max(0, now - budget.refilled_at) * 32);
-  return tokens >= 1_000 ? now + 1 : Math.max(now, budget.refilled_at) + Math.ceil((1_000 - tokens) / 32);
+  const tokens = Math.min(RETIREMENT_BURST_MILLI, budget.tokens_milli + Math.max(0, now - budget.refilled_at) * RETIREMENT_TOKENS_PER_SECOND);
+  return tokens >= 1_000 ? now + 1 : Math.max(now, budget.refilled_at) + Math.ceil((1_000 - tokens) / RETIREMENT_TOKENS_PER_SECOND);
 }
 
 export async function retirementStatus(env: Env) {
   const work = await env.DB.prepare('SELECT COUNT(*) AS pending,MIN(ready_at) AS oldestDue FROM game_retirement_work').first<{ pending: number; oldestDue: number | null }>();
   return { mode: retirementMode(env), ...work, batch: GAME_RETIREMENT_SCALED_BATCH,
-    concurrency: GAME_RETIREMENT_CONCURRENCY, tokensPerSecond: 32, tokenBurst: 32, hotRetentionMs: GAME_HOT_RETENTION_MS };
+    concurrency: GAME_RETIREMENT_CONCURRENCY, tokensPerSecond: RETIREMENT_TOKENS_PER_SECOND,
+    tokenBurst: RETIREMENT_BURST_MILLI / 1_000, hotRetentionMs: GAME_HOT_RETENTION_MS };
 }
 
 /** All expanded callers share the same coordinator, token bucket and alarm. */
@@ -153,16 +169,38 @@ export async function retireGamePayloads(env: Env, now = Date.now()): Promise<Ma
   return retirePreviewPayloads(env, now);
 }
 
-/** Retry expired authority work even after a Durable Object alarm has exhausted retries. */
+/**
+ * An admission whose Game holds no state after any game could have ended never started and never will.
+ * The permanent ID stays in its ledger as an archived row with no terminal version, which also stops
+ * every later creation, and the seats it held are freed.
+ */
+async function abandonAdmission(env: Env, ledger: Ledger, gameId: string, now: number): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE ${ledger} SET storage_state='archived',archived_at=?
+      WHERE game_id=? AND storage_state='retained' AND NOT EXISTS(SELECT 1 FROM games WHERE id=?)`).bind(now, gameId, gameId),
+    env.DB.prepare(`UPDATE active_game_seats SET released_at=? WHERE game_id=? AND released_at IS NULL
+      AND EXISTS(SELECT 1 FROM ${ledger} WHERE game_id=? AND storage_state='archived' AND archived_at=? AND terminal_version IS NULL)`)
+      .bind(now, gameId, gameId, now),
+  ]);
+}
+
+/**
+ * Retry expired authority work even after a Durable Object alarm has exhausted retries.
+ * D1 holds no Game deadlines, so a healthy game cannot be told from an overdue one. Competition already
+ * reads each game it admitted at least every five minutes, so this fallback skips those until they are older than
+ * any game can be. A game Competition cannot see is polled from the end of the adjudication wait.
+ * Only an answered status call proves a Game absent. A failed call keeps the five-minute poll and never abandons.
+ */
 async function recoverUnattendedGames(env: Env, now: number): Promise<MaintenanceResult> {
-  const select = ledgers.map(ledger => `SELECT '${ledger}' AS ledger,${ledger}.game_id,
+  const select = ledgers.map(ledger => `SELECT '${ledger}' AS ledger,${ledger}.game_id,${ledger}.created_at,
       COALESCE(g.ended_at,${ledger}.created_at) AS due_at
     FROM ${ledger} LEFT JOIN games g ON g.id=${ledger}.game_id
     WHERE ${ledger}.storage_state='retained' AND ${ledger}.archive_retry_at<=?
-      AND ${ledger}.created_at<=? AND (g.id IS NULL OR (g.status='pending-adjudication' AND g.ended_at<=?))`).join(' UNION ALL ');
-  const args = ledgers.flatMap(() => [now, now - ADJUDICATION_WAIT_MS, now - ADJUDICATION_WAIT_MS]);
+      AND ((g.status='pending-adjudication' AND g.ended_at<=?)
+        OR (g.id IS NULL AND ${ledger}.created_at<=CASE WHEN ${UNWATCHED[ledger]} THEN ? ELSE ? END))`).join(' UNION ALL ');
+  const args = ledgers.flatMap(() => [now, now - ADJUDICATION_WAIT_MS, now - UNPROJECTED_GRACE_MS, now - GAME_MAX_AGE_MS]);
   const candidates = (await env.DB.prepare(`${select} ORDER BY due_at,game_id LIMIT ?`)
-    .bind(...args, GAME_MAINTENANCE_BATCH).all<Pick<Candidate, 'ledger' | 'game_id'>>()).results;
+    .bind(...args, GAME_MAINTENANCE_BATCH).all<Pick<Candidate, 'ledger' | 'game_id'> & { created_at: number }>()).results;
   const result = { attempted: 0, completed: 0, failed: 0 };
   for (const candidate of candidates) {
     if (!await takeBudget(env, 'game-recovery', now)) break;
@@ -173,8 +211,8 @@ async function recoverUnattendedGames(env: Env, now: number): Promise<Maintenanc
     result.attempted++;
     try {
       const game = env.GAME.get(env.GAME.idFromName(candidate.game_id));
-      await game.status();
-      await game.flush();
+      if (await game.status() === null && candidate.created_at <= now - GAME_MAX_AGE_MS) await abandonAdmission(env, candidate.ledger, candidate.game_id, now);
+      else await game.flush();
       result.completed++;
     } catch { result.failed++; }
   }

@@ -3,9 +3,8 @@ import { evictDurableObject, runInDurableObject } from 'cloudflare:test';
 import { expect, it } from 'vitest';
 import type { Env } from '../src/server/env';
 import type { GameResult } from '../src/shared/protocol';
-import { activeGame } from '../test/authority-helpers';
+import { activeGame, holdAlarms } from '../test/authority-helpers';
 
-declare const __QUALIFICATION_DURATION_MS__: number;
 const RATE = 20;
 
 function latency(values: number[]) {
@@ -38,19 +37,12 @@ it('measures 20 synthetic pre-admitted unique settlements/sec for an elapsed 15-
   function result(index: number): GameResult {
     const id = `${prefix}-${index}`;
     return { ...template, id, eventId: `${id}:${template.version}`, terminalDigest: `synthetic-pre-admitted:${id}`,
-      createdAt: baseAt - 1_000, startedAt: baseAt - 500, endedAt: baseAt, reservationId: undefined };
+      createdAt: baseAt - 1_000, startedAt: baseAt - 500, endedAt: baseAt };
   }
   const authorityName = crypto.randomUUID();
   const competition = env.COMPETITION.get(env.COMPETITION.idFromName(authorityName));
-  async function configure() {
-    await runInDurableObject(competition, async (instance, state) => {
-      const internal = instance as unknown as { env: Env; schedule(): Promise<void> };
-      internal.env = { ...internal.env, ARENAS_ENABLED: 'false', TOURNAMENTS_ENABLED: 'false', RANKED_ENABLED: 'false',
-        GAME: { idFromName: (name: string) => name, get: (name: string) => ({ status: async () => ({ result: result(Number(name.slice(prefix.length + 1))) }) }) } as unknown as Env['GAME'] };
-      internal.schedule = async () => {};
-      await state.storage.deleteAlarm();
-    });
-  }
+  const configure = () => holdAlarms(competition, { ARENAS_ENABLED: 'false', TOURNAMENTS_ENABLED: 'false', RANKED_ENABLED: 'false',
+    GAME: { idFromName: (name: string) => name, get: (name: string) => ({ status: async () => ({ result: result(Number(name.slice(prefix.length + 1))) }) }) } as unknown as Env['GAME'] });
   await configure();
   const samples: number[] = [];
   const batchTimes: number[] = [];

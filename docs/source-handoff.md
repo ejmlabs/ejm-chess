@@ -18,8 +18,8 @@ The implementation was restored from a private source-retention archive:
 
 Archive integrity, member hashes, sizes and modes were verified against the
 private inventory. The retained source had no committed product HEAD. It
-includes the partial capacity failure-receipt patch, which was unreviewed,
-untested and undeployed when retained. This PR preserves that state; it is not
+included a partial capacity failure-receipt patch, since deleted with the
+capacity harness (2026-10-31). This PR preserves the retained state; it is not
 a qualified release candidate or proof of current live service behavior.
 
 The old temporary checkout is gone. The private archive and original planning
@@ -40,10 +40,10 @@ workspace/
 
 The shared source is the public `ejmlabs/ejm-ui` revision recorded in
 [`.github/ui-source.json`](../.github/ui-source.json), the pin file the other
-consumers use. It is `56301e39a8a78356851259fd50571f1551bc1cbf`, the ejm-ui
-`main` commit that merged [ejm-ui PR #59](https://github.com/ejmlabs/ejm-ui/pull/59)
-(the systemic kit), which includes the public `@ejm/ui/components/Chessboard`
-leaf and `useSearch` from `@ejm/ssg`. A pin selects
+consumers use, and the single home of the revision. It is an ejm-ui `main`
+commit that includes the systemic kit
+([ejm-ui PR #59](https://github.com/ejmlabs/ejm-ui/pull/59)), the public
+`@ejm/ui/components/Chessboard` leaf and `useSearch` from `@ejm/ssg`. A pin selects
 source. It does not publish a package or prove compatibility; the install,
 typecheck and build below do. No shared implementation is vendored into this
 product.
@@ -66,31 +66,28 @@ keeps the registry versions and integrity fields of every remaining package.
 
 ## Configuration gap
 
-Six private provider configurations were intentionally excluded and are ignored
+Two private provider configurations were intentionally excluded and are ignored
 by Git:
 
 - `wrangler.jsonc`
-- `wrangler.capacity.jsonc`
-- `wrangler.proof-acceptance.jsonc`
-- `wrangler.proof-qualification.jsonc`
-- `wrangler.proof-service.jsonc`
 - `wrangler.recovery-drill.jsonc`
 
 Reconstruct them from reviewed current provider state and the retained private
-records. Preserve distinct production, local, recovery, proof and capacity
+records. The three `wrangler.proof-*.jsonc` configs of the retired timeout-proof
+path (2026-10-31) and `wrangler.capacity.jsonc` of the deleted capacity
+harness are no longer needed. Preserve distinct production, local and recovery
 boundaries. Do not paste provider identifiers, private destinations, credentials
 or old execution windows into public source. Keep secrets in local variables
 or the provider secret store.
 
 Status on 2026-10-30: a reviewed local `wrangler.jsonc` (gitignored) exists with
 production bindings plus `env.local` for Worker tests and the protected canary
-deploy. The five specialty configs remain absent as private copies in this
+deploy. The specialty config remains absent as a private copy in this
 checkout. Non-secret templates live under [`config-examples/`](../config-examples/README.md);
 copy an example to the matching gitignored filename, then fill IDs from private
-records before capacity, proof-acceptance, proof-qualification, proof-service or
-recovery-drill commands. Shared UI source is the pinned `ejm-ui` revision above;
-keep discovery publication behind an approved public opening. See
-[live-ready prep](live-ready-prep.md).
+records before recovery-drill commands. Shared UI source is the pinned `ejm-ui`
+revision above; keep discovery publication behind an approved public opening.
+See [live-ready prep](live-ready-prep.md).
 
 Worker tests read `wrangler.jsonc` in the local environment. Recovery tests also
 read `wrangler.recovery-drill.jsonc`. Worker dry-run packaging and preview need

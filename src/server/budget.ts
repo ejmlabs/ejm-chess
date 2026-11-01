@@ -1,28 +1,21 @@
 import { ApiError } from './security';
-import { isolatedGameBudget } from './capacity-policy';
 
-export type BudgetKind = 'games' | 'email' | 'analysis';
+export type BudgetKind = 'games' | 'email';
 export interface BudgetEnv {
   DB: D1Database;
   NEW_WORK_STOPPED?: string;
-  MONTHLY_GAME_LIMIT?: string;
-  MONTHLY_EMAIL_LIMIT?: string;
-  MONTHLY_ANALYSIS_LIMIT?: string;
-  MONTHLY_SIGNUP_LIMIT?: string;
-  SIGNUP_ATTEMPT_LIMIT?: string;
 }
 
 const policies = {
   games: { stop: 'games_stopped' },
   email: { stop: 'email_stopped' },
-  analysis: { stop: 'analysis_stopped' },
 } as const;
-const kinds: BudgetKind[] = ['games', 'email', 'analysis'];
+const kinds: BudgetKind[] = ['games', 'email'];
 const RECEIPT_RETENTION_MS = 62 * 86_400_000;
 export const BUDGET_CLEANUP_BATCH = 100;
 
 interface Control {
-  version: number; games_stopped: number; email_stopped: number; analysis_stopped: number;
+  version: number; games_stopped: number; email_stopped: number;
   changed_at: number | null; changed_by: string | null; reason: string | null;
 }
 interface Month {
@@ -37,11 +30,6 @@ function period(now: number): number {
 }
 function monthName(value: number): string { return `${Math.floor(value / 12)}-${String(value % 12 + 1).padStart(2, '0')}`; }
 
-/** Reports usage only. The Cloudflare budget stop is the economic gate. */
-export function monthlyLimit(env: BudgetEnv, kind: BudgetKind): number {
-  if (kind === 'games' && isolatedGameBudget(env)) return 20_000;
-  return Number.MAX_SAFE_INTEGER;
-}
 function stoppedByEnv(env: BudgetEnv): boolean {
   return env.NEW_WORK_STOPPED !== undefined && env.NEW_WORK_STOPPED !== 'false';
 }
@@ -78,10 +66,6 @@ export async function reserveMonthlyWork(env: BudgetEnv, kind: BudgetKind, id: s
   const current = period(now);
   const policy = policies[kind];
   try {
-    const isolated = kind === 'games' ? isolatedGameBudget(env) : undefined;
-    // Reserve the permanent run unit before the existing atomic monthly SQL.
-    // Failed/uncertain normal admission keeps the run charge. No refund path.
-    if (isolated && !await isolated.reserve(id, units)) return false;
     const result = await env.DB.batch([
       env.DB.prepare(`INSERT INTO budget_months(kind,slot,period,updated_at) VALUES(?,?,?,?)
         ON CONFLICT(kind,slot) DO UPDATE SET period=excluded.period,used=0,denied=0,first_denied_at=NULL,updated_at=excluded.updated_at
@@ -100,31 +84,10 @@ export async function reserveMonthlyWork(env: BudgetEnv, kind: BudgetKind, id: s
 }
 
 /** A preflight for a new queue/registration entry. A later receipt is still required. */
-export async function newWorkAllowed(env: BudgetEnv, kind: BudgetKind, now = Date.now()): Promise<boolean> {
+export async function newWorkAllowed(env: BudgetEnv, kind: BudgetKind): Promise<boolean> {
   if (stoppedByEnv(env)) return false;
-  const policy = policies[kind];
   try {
-    const isolated = kind === 'games' ? isolatedGameBudget(env) : undefined;
-    const allowance = () => env.DB.prepare(`SELECT 1 FROM operations_control WHERE id='product' AND ${policy.stop}=0`).bind().first();
-    if (!isolated) return Boolean(await allowance());
-    // Both reads are already funded. A denied run still wins over a D1 error.
-    const [available, allowed] = await Promise.allSettled([
-      Promise.resolve().then(() => isolated.available()),
-      Promise.resolve().then(allowance),
-    ]);
-    if (available.status === 'rejected') throw available.reason;
-    if (!available.value) return false;
-    if (allowed.status === 'rejected') throw allowed.reason;
-    return Boolean(allowed.value);
-  } catch { throw unavailable(); }
-}
-
-/** Optional engine work may finish a running call, but a stop blocks its next call. */
-export async function workStopped(env: BudgetEnv, kind: BudgetKind): Promise<boolean> {
-  if (stoppedByEnv(env)) return true;
-  try {
-    const row = await env.DB.prepare(`SELECT ${policies[kind].stop} AS stopped FROM operations_control WHERE id='product'`).first<{ stopped: number }>();
-    return !row || row.stopped !== 0;
+    return Boolean(await env.DB.prepare(`SELECT 1 FROM operations_control WHERE id='product' AND ${policies[kind].stop}=0`).bind().first());
   } catch { throw unavailable(); }
 }
 
@@ -132,10 +95,10 @@ export async function workStopped(env: BudgetEnv, kind: BudgetKind): Promise<boo
 export async function budgetStatus(env: BudgetEnv, now = Date.now()) {
   const current = period(now);
   const [control, months, receipts, changes, signup] = await Promise.all([
-    env.DB.prepare('SELECT version,games_stopped,email_stopped,analysis_stopped,changed_at,changed_by,reason FROM operations_control WHERE id=?').bind('product').first<Control>(),
+    env.DB.prepare('SELECT version,games_stopped,email_stopped,changed_at,changed_by,reason FROM operations_control WHERE id=?').bind('product').first<Control>(),
     env.DB.prepare('SELECT kind,period,used,denied,first_denied_at,updated_at FROM budget_months ORDER BY period DESC,kind').all<Month>(),
     env.DB.prepare('SELECT kind,count FROM budget_receipt_counts').all<{ kind: BudgetKind; count: number }>(),
-    env.DB.prepare('SELECT version,games_stopped,email_stopped,analysis_stopped,changed_at,changed_by,reason FROM operations_changes ORDER BY version DESC LIMIT 8').all<Control>(),
+    env.DB.prepare('SELECT version,games_stopped,email_stopped,changed_at,changed_by,reason FROM operations_changes ORDER BY version DESC LIMIT 8').all<Control>(),
     env.DB.prepare("SELECT period,monthly_attempts,lifetime_attempts FROM signup_budget WHERE id='product'").first<SignupBudget>(),
   ]);
   if (!control || !signup) throw unavailable();
@@ -163,7 +126,7 @@ export async function budgetStatus(env: BudgetEnv, now = Date.now()) {
 /** Retain permanent game receipts. Never remove an accepted game or delivery record. */
 export async function cleanupBudgetReceipts(env: BudgetEnv, now = Date.now()): Promise<number> {
   const result = await env.DB.prepare(`DELETE FROM budget_receipts WHERE rowid IN
-    (SELECT rowid FROM budget_receipts WHERE kind IN ('email','analysis') AND created_at<? ORDER BY created_at,id LIMIT ?)
+    (SELECT rowid FROM budget_receipts WHERE kind='email' AND created_at<? ORDER BY created_at,id LIMIT ?)
     RETURNING 1 AS removed`)
     .bind(now - RECEIPT_RETENTION_MS, BUDGET_CLEANUP_BATCH).all();
   return result.results.length;

@@ -47,12 +47,27 @@ describe('Worker admission and private read contracts', () => {
     expect((await replay.json() as GameSnapshot).id).toBe(id);
   });
 
+  it('lists only the signed-in account’s own open games', async () => {
+    const [white, outsider] = await Promise.all([account(), account()]);
+    const id = crypto.randomUUID();
+    expect((await worker.fetch(request('/api/games', white, { id, format: 'blitz' }), env)).status).toBe(201);
+    const open = async (cookie: string) => (await (await worker.fetch(request('/api/games/open', cookie), env)).json() as { ids: string[] }).ids;
+    expect(await open(white)).toEqual([id]);
+    expect(await open(outsider)).toEqual([]);
+    expect((await worker.fetch(request('/api/games/open'), env)).status).toBe(401);
+  });
+
   it('rejects cross-origin mutations before a game is created', async () => {
     const cookie = await account();
     const id = crypto.randomUUID();
     const result = await worker.fetch(request('/api/games', cookie, { id, format: 'blitz' }, { Origin: 'https://unrelated.example' }), env);
     expect(result.status).toBe(403);
     expect(await env.GAME.get(env.GAME.idFromName(id)).status()).toBeNull();
+    for (const path of ['/api/account/complete', '/api/account/export', '/api/account/close', '/api/reports', '/api/appeals', '/api/admin/decisions']) {
+      const denied = await worker.fetch(request(path, cookie, {}, { Origin: 'https://unrelated.example' }), env);
+      expect(denied.status, path).toBe(403);
+      expect(await denied.json(), path).toMatchObject({ error: 'INVALID_ORIGIN' });
+    }
   });
 
   it('does not let a third player claim an occupied invitation', async () => {
@@ -98,6 +113,31 @@ describe('Worker admission and private read contracts', () => {
     expect([401, 403]).toContain(retry.status);
   });
 
+  it('redirects other hosts to the canonical origin and never to a host named in the path', async () => {
+    const other = 'http://127.0.0.1:8787';
+    const page = await worker.fetch(new Request(`${other}/play/?game=1`), env);
+    expect(page.status).toBe(308);
+    expect(page.headers.get('Location')).toBe(`${origin}/play/?game=1`);
+    const smuggled = await worker.fetch(new Request(`${other}//evil.example/x?y=1`), env);
+    expect(smuggled.status).toBe(308);
+    expect(new URL(smuggled.headers.get('Location')!).origin).toBe(origin);
+  });
+
+  it('applies the owner gate and private headers to every spelling of an admin or account page', async () => {
+    for (const path of ['/%61dmin/', '/%61dmin/index.html', '//admin/', '/admin%2f', '/admin.html', '/Admin/']) {
+      const denied = await worker.fetch(request(path), env);
+      expect(denied.status, path).toBe(403);
+      expect(await denied.json()).toMatchObject({ error: 'ADMIN_REQUIRED' });
+    }
+    for (const path of ['/account/', '/%61ccount/', '//account/', '/account.html']) {
+      const page = await worker.fetch(request(path), env);
+      expect(page.status, path).toBe(200);
+      expect(page.headers.get('Cache-Control'), path).toBe('no-store');
+      expect(page.headers.get('X-Robots-Tag'), path).toContain('noindex');
+      await page.body?.cancel();
+    }
+  });
+
   it('keeps account recovery pages private and uses the configured local socket origin', async () => {
     const localOrigin = 'http://localhost:8791';
     const assets = {
@@ -117,6 +157,17 @@ describe('Worker admission and private read contracts', () => {
       .toContain('ws://localhost:8791');
     expect(policy).not.toContain('ws://localhost:8787');
     await response.body?.cancel();
+  });
+
+  it('serves staging on its own origin with its own socket source', async () => {
+    const staging = 'https://staging.chess.ejmlabs.com';
+    const response = await worker.fetch(new Request(`${staging}/api/config`), { ...env, AUTH_BASE_URL: staging, LOCAL_DEV: 'false' });
+    expect(response.status).toBe(200);
+    const connect = response.headers.get('Content-Security-Policy')!.split('; ').find(value => value.startsWith('connect-src '))!.split(' ');
+    expect(connect).toContain('wss://staging.chess.ejmlabs.com');
+    expect(response.headers.get('Content-Security-Policy')).toContain('upgrade-insecure-requests');
+    const redirect = await worker.fetch(new Request('https://chess.ejmlabs.com/play/'), { ...env, AUTH_BASE_URL: staging, LOCAL_DEV: 'false' });
+    expect(redirect.headers.get('Location')).toBe(`${staging}/play/`);
   });
 
   it('uses the browser-engine practice gate and rejects disabled or forged computer admission before taking a seat', async () => {
@@ -155,6 +206,22 @@ describe('Worker admission and private read contracts', () => {
     connected.webSocket!.close(1000, 'Test complete');
   });
 
+  it('gives the private Game binding the seat identity but never the browser identity or session cookie', async () => {
+    const cookie = await account();
+    const id = crypto.randomUUID();
+    await worker.fetch(request('/api/games', cookie, { id, format: 'blitz' }), env);
+    const me = await (await worker.fetch(request('/api/me', cookie), env)).json() as { id: string };
+    let forwarded: Headers | undefined;
+    const stub = { fetch: async (internal: Request) => { forwarded = internal.headers; return new Response('ok'); } };
+    const bindings = { ...env, GAME: { idFromName: (name: string) => name, get: () => stub } } as unknown as Env;
+    const connect = request(`/api/games/${id}/connect`, cookie, undefined, { Upgrade: 'websocket', 'x-chess-actor': JSON.stringify({ id: 'forged' }) });
+    expect((await worker.fetch(connect, bindings)).status).toBe(200);
+    expect(forwarded!.get('Cookie')).toBeNull();
+    const actor = JSON.parse(forwarded!.get('x-chess-actor')!);
+    expect(actor.id).toBe(me.id);
+    expect(actor).not.toHaveProperty('email');
+  });
+
   it('limits malformed writes and unknown connection IDs before their route-specific work', async () => {
     const cookie = await account();
     const actor = (await currentActor(request('/api/me', cookie), env))!;
@@ -187,7 +254,7 @@ describe('Worker admission and private read contracts', () => {
     const bindings = { ...env, AUTH_SECRET: '', COMPETITION: undefined as unknown as Env['COMPETITION'] };
     const list = await worker.fetch(request('/api/arenas'), bindings);
     expect(list.status).toBe(200);
-    expect(list.headers.get('Cache-Control')).toBe('public, max-age=10, s-maxage=10');
+    expect(list.headers.get('Cache-Control')).toBe('public, no-cache');
     for (const path of ['/api/arenas/missing-arena', '/api/arenas/missing-arena/standings']) {
       const missing = await worker.fetch(request(path), bindings);
       expect(missing.status).toBe(404);

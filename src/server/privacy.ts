@@ -3,7 +3,7 @@ import { ACCOUNT_EXPORT_CATEGORIES, ACCOUNT_PRIVACY_POLICY, type AccountClosureR
 import { beginIdentityChange, createAuth, hasRecoveryEmail, type Actor } from './auth';
 import { consumeAccountRequest } from './abuse';
 import type { Env } from './env';
-import { ApiError, jsonResponse, readJson, requireSameOrigin } from './security';
+import { ApiError, jsonResponse, readJson } from './security';
 
 const PAGE_RECORDS = 50;
 const PAGE_BYTES = 256 * 1024;
@@ -56,7 +56,6 @@ export async function applyAccountClosure(db: D1Database, accepted: AccountClosu
 }
 
 export async function closeAccount(request: Request, env: Env, actor: Actor): Promise<Response> {
-  requireSameOrigin(request, env);
   const body = await readJson(request, 2048);
   if (body.confirmation !== 'CLOSE' || typeof body.requestId !== 'string' || !identifier.test(body.requestId)) {
     throw new ApiError(400, 'CLOSURE_CONFIRMATION_REQUIRED', 'Confirm account closure using the account form.');
@@ -109,7 +108,6 @@ async function exportRows(db: D1Database, userId: string, category: AccountExpor
 }
 
 export async function exportAccount(request: Request, env: Env, actor: Actor): Promise<Response> {
-  requireSameOrigin(request, env);
   const body = await readJson(request, 2048);
   if (typeof body.category !== 'string' || !ACCOUNT_EXPORT_CATEGORIES.includes(body.category as AccountExportCategory)
     || (body.cursor !== undefined && (typeof body.cursor !== 'string' || !/^[a-zA-Z0-9_.:-]{1,200}$/.test(body.cursor)))

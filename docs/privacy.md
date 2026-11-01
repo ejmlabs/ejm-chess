@@ -51,6 +51,9 @@ retains a neutral account label, creation time, opaque player ID and a minimal
 closure receipt. A durable Competition fence and database guards prevent
 in-flight sign-in, reset or admission from reviving the account. A lost response
 does not undo a committed closure. Old cookies and reset links lose access.
+A leaderboard page or public profile already in the edge cache can still show
+the account's previous public name and rating for up to 10 seconds after
+closure. No private field is ever cached.
 
 Game IDs, player IDs, PGNs, moves, results, historical player names, tournament
 records, rating/correction history, tombstones and minimal case audit remain.
@@ -74,30 +77,33 @@ version and completion time, without credentials or email.
 
 Ages below are cleanup eligibility, not a promise of deletion at that instant.
 Scheduled cleanup is bounded and can be delayed. Appeal and evidence holds apply.
+The edge keeps public leaderboard, profile and arena reads for 10 seconds. They
+carry no cookie, session or private field, and the cache key ignores both.
 
 | Records | Policy |
 | --- | --- |
 | Credentials and recovery email | Account lifetime; removed on accepted closure |
 | Minimized account identity and closure receipt | Permanent competition and minimal audit exceptions |
-| Sessions, including stored IP/user-agent fields | Seven-day validity; daily bounded cleanup; removed on closure |
+| Sessions, including stored IP/user-agent fields | Seven-day validity; cleanup every minute in bounded batches; removed on closure |
 | Reset/verification secrets | Fifteen-minute validity; cleanup after expiry plus one day; account-owned reset rows removed on closure |
-| Request windows | One-day cleanup eligibility |
-| Released seat records | 30-day cleanup eligibility |
+| Request windows and sign-in rate limits | One-day cleanup eligibility; minute-schedule batches |
+| Released seat records | 30-day cleanup eligibility; minute-schedule batches |
+| Cron heartbeat | One row per schedule with run times and failed stage names; no personal data |
 | Ordinary evidence and report text | 90 days, subject to appeal and evidence holds |
 | Private reviewer notes, corroboration and appeal text | Minimized 90 days after final case action, once appeal windows and holds end |
-| Analysis summaries and dead letters | 30-day cleanup eligibility |
-| Email/analysis budget receipts | 62-day cleanup eligibility |
+| Email budget receipts | 62-day cleanup eligibility |
 | Game IDs, PGNs, results, historical names, rating/correction history and minimal case audit | Permanent retained history |
 | Native provider recovery history | Rolling 30 days on the verified Paid D1 and SQLite Durable Object backends |
 | Raw synthetic drill files | Delete after acceptance within 30 days; retain sanitized reports and hashes |
 
 Proved eligible unrated Game payloads can retire after one hour. Permanent
-replay, IDs and audit remain. Ranked authority remains stored. Storage ceilings
-bound admission; retention does not imply unlimited service capacity.
+replay, IDs and audit remain. Ranked authority remains stored. Platform storage
+bounds and the budget stop limit admission; retention does not imply unlimited
+service capacity.
 
 Your account actions require your current session and password. Private case
 and operational access requires the verified owner account and Cloudflare
-Access. Reports and engine summaries remain informational in unattended mode.
+Access. Reports remain informational in unattended mode.
 These automated controls are the account-request route; no human response time
 is offered. Losing a password without recovery email has no operator bypass.
 

@@ -2,6 +2,7 @@ import { AppActions, AppFlow, AppGroup, AppHeading } from '@ejm/ui/layout/Applic
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from '@ejm/ssg';
 import { Button } from '@ejm/ui/components/ui/button';
+import { Disclosure } from '@ejm/ui/components/ui/disclosure';
 import { StateBlock } from '@ejm/ui/components/StateBlock';
 import { Table } from '@ejm/ui/components/Table';
 import { Page } from '@ejm/ui/layout/Band';
@@ -17,7 +18,10 @@ import type { TournamentList, TournamentView } from '../shared/tournaments';
 
 const date = new Intl.DateTimeFormat('en', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
 const title = (event: Pick<TournamentView, 'cadence' | 'pool'>) => `${event.cadence === 'hourly' ? 'Hourly' : event.cadence === 'daily' ? 'Daily' : 'Weekly'} ${event.pool === 'blitz' ? 'blitz' : 'rapid'}`;
-const status = (value: string) => value.replaceAll('-', ' ').replaceAll('_', ' ');
+const statusWords: Record<string, string> = { draining: 'Finishing games', registering: 'Registration open', intermission: 'Between rounds' };
+const status = (value: string) => { const words = statusWords[value] ?? value.replaceAll('-', ' ').replaceAll('_', ' '); return words.charAt(0).toUpperCase() + words.slice(1); };
+// No product cap reports Number.MAX_SAFE_INTEGER; show only a real limit.
+const entrantCount = (entrants: number, max: number) => Number.isSafeInteger(max) && max < Number.MAX_SAFE_INTEGER ? `${entrants} / ${max}` : String(entrants);
 const active = (event: TournamentView) => ['starting', 'running', 'intermission'].includes(event.status);
 
 function timeLeft(deadline: number, now: number) {
@@ -40,7 +44,7 @@ async function arenaStandings(id: string, cursor: string | null): Promise<ArenaS
   return page;
 }
 
-function ArenaEvents({ me, accountReady, now }: { me: Me | null; accountReady: boolean; now: number }) {
+function ArenaEvents({ me, accountReady, now, onGame }: { me: Me | null; accountReady: boolean; now: number; onGame(game: { id: string; href: string } | null): void }) {
   const [data, setData] = useState<ArenaList | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [summary, setSummary] = useState<ArenaSummary | null>(null);
@@ -169,11 +173,11 @@ function ArenaEvents({ me, accountReady, now }: { me: Me | null; accountReady: b
       requestGeneration.current++;
       setPrivateData({ accountId: actorId, value }); setPrivateError(null);
       const messages = {
-        register: 'Registered. Join the queue when you are ready to play.',
-        withdraw: 'You withdrew from this arena.',
-        queue: 'Queue request accepted. Your status below confirms when the reservation is ready.',
-        pause: 'Pause requested. Wait for the reservation to release before resuming.',
-        resume: 'Resume requested. Your status below confirms when you can be paired.',
+        register: 'Registered.',
+        withdraw: 'Withdrawn.',
+        queue: 'Queue joined.',
+        pause: 'Pause requested.',
+        resume: 'Resume requested.',
       };
       setNotice({ eventId: id, accountId: actorId, text: messages[kind] });
     } catch (reason) {
@@ -186,6 +190,8 @@ function ArenaEvents({ me, accountReady, now }: { me: Me | null; accountReady: b
     }
   }
 
+  const assigned = own?.state === 'playing' && own.gameId ? own.gameId : null;
+  useEffect(() => { onGame(assigned && selectedId ? { id: assigned, href: '/play/?game=' + encodeURIComponent(assigned) } : null); }, [assigned, selectedId, onGame]);
   const eventState = own?.status ?? selected?.status;
   const entryOpen = Boolean(selected && data?.enabled && ['scheduled', 'running'].includes(eventState ?? '')
     && now >= selected.registrationOpensAt && now < selected.closesAt);
@@ -197,46 +203,44 @@ function ArenaEvents({ me, accountReady, now }: { me: Me | null; accountReady: b
     registered: 'Registered. Join the queue when you are ready.',
     reserving: 'Reserving your place in the queue. Wait for confirmation before choosing another game.',
     queued: 'Waiting for an allowed opponent. Keep this page open and watch for your game.',
-    playing: own?.gameId ? 'Your board is ready. Open it and confirm readiness.' : 'Preparing your board. Your reservation remains held.',
+    playing: own?.gameId ? 'Your game is ready. Open it and press Ready within two minutes.' : 'Preparing your board. Your place is held.',
     paused: 'Queue paused. Resume when you are ready to play.',
     releasing: 'Releasing your previous reservation. Wait before queueing again.',
     withdrawn: 'You have withdrawn from this arena.',
   };
 
   return <AppFlow as="section" aria-labelledby="arena-heading">
-    <AppGroup as="header"><AppHeading as="h2" id="arena-heading"><Text variant="strong">Arena events</Text></AppHeading>
-      <Text as="p">Play successive unrated games while pairing is open. Register, then join the queue when you are ready.</Text>
+    <AppGroup as="header"><AppHeading as="h2" id="arena-heading">Arenas</AppHeading>
+      <Text as="p">Play game after game while pairing is open: one hour for blitz, two for rapid. Register, then join the queue.</Text>
     </AppGroup>
-    <Text as="p" variant="muted">Pairing lasts one hour for blitz and two for rapid. Equal points share a rank. <Link href="#arena-rules">Arena rules</Link>.</Text>
     {listError && <AppGroup><StateBlock kind="error" message={listError} /><div><Button variant="link" disabled={loading} onClick={() => void refresh()}>Retry arena schedule</Button></div></AppGroup>}
     {!data && !listError && <StateBlock kind="loading" message="Loading arena events." />}
     {data && <>
-      {!data.enabled && <div><Status status="info" label="New arena entry is closed on this service. Accepted games can finish." /></div>}
+      {!data.enabled && <div><Status status="info" label="Arena entry is closed. Games in progress can finish." /></div>}
       {data.events.length === 0
         ? <StateBlock kind="empty" message="No arena events are published yet. This schedule refreshes automatically." />
         : <AppFlow><Rule />{data.events.map(event => <div key={event.id}><AppFlow as="article">
           <AppGroup><AppHeading as="h3"><Button variant="link" aria-expanded={event.id === selectedId} onClick={() => select(event)}>{title(event)} arena</Button></AppHeading>
             <Text as="p"><time dateTime={new Date(event.startsAt).toISOString()}>{date.format(event.startsAt)}</time> · {FORMATS[event.pool].label}</Text>
-            <Text as="p" variant="muted">{status(event.status)} · {event.entrants} / {event.maxEntrants} registered
+            <Text as="p" variant="muted">{status(event.status)} · {entrantCount(event.entrants, event.maxEntrants)} registered
               {event.status === 'running' && <> · Pairing closes in {timeLeft(event.closesAt, now)}</>}
-              {event.status === 'draining' && <> · {event.unresolvedGames} accepted games still resolving</>}
+              {event.status === 'draining' && <> · {event.unresolvedGames} games still finishing</>}
             </Text>
             {event.reason && <Text as="p" variant="muted">{event.reason}</Text>}
           </AppGroup>
-          <AppActions><Button variant="ghost" onClick={() => select(event)}>View arena</Button></AppActions>
         </AppFlow><Rule /></div>)}</AppFlow>}
     </>}
     {selectedId && <AppFlow as="section" aria-labelledby="arena-detail-heading" aria-busy={loading}>
       <AppGroup as="header"><AppHeading as="h3" id="arena-detail-heading" tabIndex={-1} ref={detailHeading}>{selected ? title(selected) + ' arena' : 'Arena details'}</AppHeading>
         {selected && <Text as="p">{status(selected.status)}. Pairing closes <time dateTime={new Date(selected.closesAt).toISOString()}>{date.format(selected.closesAt)}</time>.
-          {selected.status === 'draining' && <> Accepted games are still resolving. Standings remain provisional.</>}
+          {selected.status === 'draining' && <> Games are still finishing. Standings are provisional.</>}
         </Text>}
       </AppGroup>
       {detailError && <AppGroup><StateBlock kind="error" message={detailError} /><div><Button variant="link" disabled={loading} onClick={restartStandings}>Refresh from first page</Button></div></AppGroup>}
       {selected && <AppFlow as="section" aria-label="Your arena entry">
         <AppHeading as="h4">Your entry</AppHeading>
         {!accountReady ? <Text as="p">Checking your account.</Text>
-          : !accountId ? <Text as="p">Use a username and password account to enter. <Link href="/account/">Open Account</Link> to sign in or finish your account, then return here. Recovery email is optional. You can read standings without signing in.</Text>
+          : !accountId ? <Text as="p"><Link href="/account/">Sign in or create an account</Link> to enter. Standings are public.</Text>
             : <>
               {activePrivateError && <StateBlock kind="error" message={activePrivateError} />}
               {activeError && <StateBlock kind="error" message={activeError} />}
@@ -255,7 +259,7 @@ function ArenaEvents({ me, accountReady, now }: { me: Me | null; accountReady: b
                 {own?.gameId && <Button asChild><Link href={'/play/?game=' + encodeURIComponent(own.gameId)}>{own.state === 'releasing' ? 'View your game' : 'Open your game'}</Link></Button>}
                 <Button variant="link" disabled={busy || loading} onClick={() => void refresh()}>Refresh your status</Button>
               </AppActions>
-              {!entryOpen && !['playing', 'reserving', 'releasing'].includes(own?.state ?? '') && <Text as="p" variant="muted">New entry and queueing need an open arena. Registration opens 15 minutes before the start.</Text>}
+              {!entryOpen && !['playing', 'reserving', 'releasing'].includes(own?.state ?? '') && <Text as="p" variant="muted">Registration opens 15 minutes before the start.</Text>}
             </>}
       </AppFlow>}
       {pageNotice && <Text as="p" role="status">{pageNotice}</Text>}
@@ -273,11 +277,10 @@ function ArenaEvents({ me, accountReady, now }: { me: Me | null; accountReady: b
           <Button variant="secondary" disabled={loading || !standings.nextCursor} onClick={() => { if (standings.nextCursor) choosePage(standings.nextCursor); }}>Next page</Button>
           <Button variant="link" disabled={loading} onClick={restartStandings}>Latest first page</Button>
         </AppActions>
-          <Text as="p" variant="muted">Pages stay within one snapshot. Latest first page restarts with the newest published standings.</Text></AppGroup>
+        </AppGroup>
       </>}
     </AppFlow>}
-    <section id="arena-rules"><Prose>
-      <AppHeading as="h3">Arena rules</AppHeading>
+    <Disclosure id="arena-rules" summary="Arena rules"><Prose>
       <p>Register from 15 minutes before the start until pairing closes. Registration alone leaves your account free. Join the queue to reserve it.
         Finish or pause and release that reservation before choosing another game or event.</p>
       <p>Open your assigned game and confirm readiness within two minutes. This page never opens a game for you. After each settled game, queue again explicitly.
@@ -287,8 +290,8 @@ function ArenaEvents({ me, accountReady, now }: { me: Me | null; accountReady: b
       <p>Accepted games finish after pairing closes, with an 18-minute blitz or 40-minute rapid wall limit including readiness.
         Games unfinished at the wall limit become technical voids. Service delays can keep an event draining while accepted results recover.</p>
       <p>Games are unrated and do not affect the global leaderboard. Published standings may lag your private score.
-        The shown entrant limit is a configured admission cap; larger public capacity has not been verified.</p>
-    </Prose></section>
+        Arenas have no product entrant limit. Behavior under heavy load is still being measured.</p>
+    </Prose></Disclosure>
   </AppFlow>;
 }
 
@@ -307,6 +310,17 @@ export default function Tournaments() {
   const requestGeneration = useRef(0);
   const actionPending = useRef(false);
   const eligible = Boolean(me?.accountReady);
+  const [arenaGame, setArenaGame] = useState<{ id: string; href: string } | null>(null);
+  const roundGame = data?.events.flatMap(event => event.games.filter(game => game.id === event.myGameId && ['ready', 'active'].includes(game.status))
+    .map(game => ({ id: game.id, href: '/play/?game=' + encodeURIComponent(game.id), label: `${title(event)}, round ${game.round}` })))[0] ?? null;
+  const readyGame = roundGame ?? (arenaGame && { ...arenaGame, label: 'Arena' });
+  // A background tab shows the assignment in its title; the player still opens the game and presses Ready.
+  useEffect(() => {
+    if (!readyGame) return;
+    const previous = document.title;
+    document.title = 'Your game is ready | chess';
+    return () => { document.title = previous; };
+  }, [readyGame?.id]);
 
   const refresh = useCallback(async () => {
     const generation = ++requestGeneration.current;
@@ -367,22 +381,24 @@ export default function Tournaments() {
   }
 
   return <Page variant="application"><AppFlow as="section">
-    <SectionHead purpose="application" as="h1" title="Tournaments">
-      <Text as="p">Choose a timed arena or the small round-robin preview. All event games are unrated.</Text>
+    <SectionHead purpose="application" as="h1" title="Events">
+      <Text as="p">Unrated arenas and round-robins. Hourly blitz on the hour, daily rapid at 18:00 UTC, weekly rapid on Sundays at 16:00 UTC.</Text>
     </SectionHead>
-    <Text as="p" variant="muted">Hourly blitz at the hour. Daily rapid at 18:00 UTC. Weekly rapid on Sundays at 16:00 UTC.</Text>
+    {readyGame && <AppGroup as="section" aria-labelledby="ready-game-heading" role="status">
+      <AppHeading as="h2" id="ready-game-heading">Your game is ready</AppHeading>
+      <Text as="p">{readyGame.label}. Open it and press Ready within two minutes. A no-show scores zero.</Text>
+      <AppActions><Button asChild><Link href={readyGame.href}>Open your game</Link></Button></AppActions>
+    </AppGroup>}
     {error && <AppGroup><StateBlock kind="error" message={error} /><div><Button variant="link" disabled={busy} onClick={() => void refresh()}>Retry</Button></div></AppGroup>}
     {message && <div role="status"><Status status="info" label={message} /></div>}
-    <ArenaEvents me={me} accountReady={accountReady} now={now} />
-    <AppFlow as="section"><AppGroup as="header"><AppHeading as="h2"><Text variant="strong">Round-robin preview</Text></AppHeading>
-      <Text as="p">Three or four players. Three rounds. The next round starts automatically.</Text>
+    <ArenaEvents me={me} accountReady={accountReady} now={now} onGame={setArenaGame} />
+    <AppFlow as="section"><AppGroup as="header"><AppHeading as="h2">Round-robins</AppHeading>
+      <Text as="p">Three or four players, three rounds, no prizes. Rounds start automatically; stay on this page between them.</Text>
     </AppGroup>
-      {!data && !error && <StateBlock kind="loading" message="Loading tournaments." />}
+      {!data && !error && <StateBlock kind="loading" message="Loading events." />}
       {data && <>
-        {!data.enabled && <div><Status status="info" label="New round-robin preview entry is closed on this service." /></div>}
-        {!eligible && <Text as="p">Join with a username and password account. <Link href="/account/">Open Account</Link> to sign in or finish your account, then return here. Recovery email is optional.</Text>}
-        <Text as="p">Three or four players, three rounds, no prizes. Games are unrated and event points stay separate from global ratings.
-          {' '}Stay on the tournament page between rounds. <Link href="#event-rules">Read the time and no-show rules</Link> before joining.</Text>
+        {!data.enabled && <div><Status status="info" label="Round-robin entry is closed." /></div>}
+        {!eligible && <Text as="p"><Link href="/account/">Sign in or create an account</Link> to join. Standings are public.</Text>}
         {data.events.length === 0 ? <StateBlock kind="empty" message="No events are scheduled yet; this page refreshes automatically." /> : <AppFlow>
           <Rule />
           {data.events.map(event => <div key={event.id}><AppFlow as="article">
@@ -394,11 +410,10 @@ export default function Tournaments() {
                 {active(event) && <> · Round {event.round} of {event.rounds}</>}
               </Text>
               {event.reason && <Text as="p" variant="muted">{status(event.reason)}</Text>}
-              {event.myStatus === 'skipped-busy' && <Text as="p">You were busy in another game when this event started.</Text>}
-              {event.myStatus === 'skipped-ineligible' && <Text as="p">Your account could not enter when this event started. Check your account status.</Text>}
+              {event.myStatus === 'skipped-busy' && <Text as="p">You were in another game when this event started.</Text>}
+              {event.myStatus === 'skipped-ineligible' && <Text as="p">Your account could not enter when this event started.</Text>}
             </AppGroup>
             <AppActions>
-              <Button variant="ghost" onClick={() => select(event)}>Standings</Button>
               {event.status === 'registering' && event.myStatus === 'registered'
                 ? <Button variant="secondary" disabled={busy} onClick={() => void action(event, 'withdraw')}>Leave</Button>
                 : event.status === 'registering' && <Button disabled={busy || !eligible || !data.enabled || event.players.length >= event.maxPlayers} onClick={() => void action(event, 'register')}>Join tournament</Button>}
@@ -427,8 +442,7 @@ export default function Tournaments() {
           </AppGroup><Rule /></li>)}</AppGroup></AppFlow>}
         </AppFlow>}
       </>}
-      <section id="event-rules"><Prose>
-        <AppHeading as="h3">Round-robin rules</AppHeading>
+      <Disclosure id="event-rules" summary="Round-robin rules"><Prose>
         <p>Registration opens 15 minutes before the start. You need a username and password account and a free seat when it starts. Recovery email is optional.
           Fewer than three available players cancels the event. Once admitted, finish the event before joining another game.</p>
         <p>Each player meets every opponent once. With three players, each receives one bye. A win or bye earns one point, a draw half a point.
@@ -439,6 +453,6 @@ export default function Tournaments() {
           An unfinished or unresolved game is void and gives both players zero points. No operator is needed to advance rounds.</p>
         <p>Times and countdowns can shift during an outage. No event contains undisclosed bots.
           Read the <Link href="/rules/">online rules</Link> and <Link href="/fair-play/">fair play limits</Link>.</p>
-      </Prose></section>
+      </Prose></Disclosure>
     </AppFlow></AppFlow></Page>;
 }

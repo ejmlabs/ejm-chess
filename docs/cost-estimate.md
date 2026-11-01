@@ -2,15 +2,16 @@
 
 Prices checked **20 October 2026, Pacific time**. Amounts are USD before tax.
 This estimate supports the [$100 monthly chess budget](cloudflare-budget.md).
-It gives explicit usage scenarios. Later isolated proof usage is recorded in
-the [dated provider report](qualification/provider-proof-20261021.md). Complete
-monthly and whole-account costs remain unqualified, so these figures are
-neither a forecast nor an invoice cap.
+It gives explicit usage scenarios. Complete monthly and whole-account costs
+remain unqualified, so these figures are neither a forecast nor an invoice cap.
 
 The current policy, adopted October 22, is one $100 monthly spending target,
 usage alerts and an emergency stop (thresholds are kept in the private provider record). Earlier service allocations,
 mandatory reserves and repeated financial reviews are superseded. The dated
-calculations below remain estimates, not launch requirements.
+calculations below remain estimates, not launch requirements. On 2026-10-31 the
+owner removed arbitrary product caps, retired the private timeout-proof path and
+deleted the capacity harness and server-side analysis. The proof and capacity
+estimates below are historical and describe no current cost.
 
 ## Current scope
 
@@ -20,18 +21,16 @@ Other projects use the same account, and their usage can consume included
 quantities or trigger the account-wide alerts.
 
 The private canonical configuration no longer enforces monthly application
-caps. Cloudflare budget alerts and the stop webhook are the economic control.
-Feature gates still disable ranked, tournaments, arenas, browser computer games
-and server analysis until the final release. These are usage counters, not
-measured capacity or dollar allowances. The [deployment guide](deployment.md)
+caps and no product caps. Cloudflare budget alerts and the stop webhook are the
+economic control; alerts can lag. Feature gates still disable ranked,
+tournaments, arenas and browser computer games until the launch release. Counters are usage records, not measured capacity or dollar
+allowances. The [deployment guide](deployment.md)
 records actual publication and activation state.
 
 The estimate includes Worker traffic, Game and Competition SQLite Durable
 Objects, D1, and account mail. Browser Stockfish runs on the player's device,
 with no model tokens or server-engine inference charge. Its downloaded files
-still use hosting resources. No server-analysis queue or Container is bound in
-the canonical configuration. Enabling those services needs a separate deployed
-cost and cold-start assessment. Observability is disabled in this snapshot.
+still use hosting resources. Observability is disabled in this snapshot.
 
 ## Published rates used
 
@@ -117,8 +116,7 @@ For example, the higher 5,000-game case with inclusions is $5 base + $3 Worker
 requests + $3.40 CPU + $0.60 DO requests + $25 DO duration. Its other modeled
 units fit the published allowances. Without inclusions, SQL writes add $50 and
 the total reaches $93.95. Whole-account invoice rounding and allocation can
-differ. The 10,000-game row is a sensitivity calculation, not approval to raise
-the current game limit.
+differ. The 10,000-game row is a sensitivity calculation, not a game limit.
 
 For a separate spectator unit, 10,000 spectator-hours refreshing every ten
 seconds produce 3.6 million refreshes. At an assumed ten CPU milliseconds per
@@ -157,7 +155,9 @@ See [budget stops and recovery](cloudflare-budget.md).
 
 ## Qualification spend and remaining measurements
 
-### Timeout-proof review, 21 October 2026 UTC
+### Timeout-proof review, 21 October 2026 UTC (retired path)
+
+Historical. The proof path was retired on 2026-10-31 and has no current cost.
 
 The isolated basic-tier proof run passed its fixed corpus. Its then-current
 $20 monthly share remained unqualified at that review. A conditional 1,000-game model with at most 2,000
@@ -181,12 +181,11 @@ and operations are free or apply retail R2 billing without confirmation. The
 completed run and its measurement limits. It remains dated evidence; the current
 financial policy below does not turn its unresolved checks into passes.
 
-### Current proof financial policy
+### Current financial policy
 
-Use the single $100 target, existing alerts and stop described above. The
-isolated capacity run keeps its approved $25 incremental ceiling. Runtime
-bounds, source integrity and actual proof and tournament results remain
-required. No per-service financial review is an additional release gate.
+Use the single $100 target, existing alerts and stop described above. Runtime
+bounds and source integrity remain required. No per-service financial review is
+a release gate, and there are no product caps.
 
 #### Historical allocation worksheet, 2026-10-21
 
@@ -226,38 +225,27 @@ One additional awake Prover month adds 342,835.2 GB-seconds and triggers a secon
 duration unit in that combined envelope. No guaranteed stop-failure maximum was
 proved. This worksheet does not replace the current alerts and stop or actual
 provider results. Accepted work and bounded shutdown continue through a stop.
-Production proof and ranked activation require the real proof, settlement,
-recovery and remaining release checks. See
-[proof gates](timeout-proofs.md#separate-financial-source-and-provider-gates).
+Ranked activation no longer involves a proof Container; see
+[live-ready prep](live-ready-prep.md).
 
 ### Other qualification work
 
-The saved 29-game screening evaluation used a network-disabled local Docker
-run. It made no cloud engine or token calls. Local wall time is not billed
-Worker CPU. Deployment, migrations and provider checks may incur usage; their
-actual delta has not been collected, so their cost is not recorded as zero.
+Deployment, migrations and provider checks may incur usage; their actual delta
+has not been collected, so their cost is not recorded as zero.
 
-The proposed 20 unique settlements/second for 15 minutes requires **18,000
-games**. That exceeds the current 10,000 allowance and its hard ceiling.
-The owner approved a separate once-only isolated plan with at most
-20,000 permanently charged synthetic admissions and a $25 incremental ceiling
-inside the $100 monthly target. It requires 18,000 regular native results and 1,000 distinct
-delayed results. Its frozen candidate, fixed UTC schedule and fresh complete
-cost ledger still need separate owner approval before provisioning or load.
-Production ceilings stay unchanged. See the
-[capacity qualification guide](capacity-qualification.md) and
-[arena qualification](arena-design.md#qualification-gates).
-Do not reset counters, refund reservations or recycle IDs to fit the run.
-This estimate alone authorizes no provider action or additional spend.
+Owner decision, 2026-10-31: the 2,000-player capacity harness and its isolated
+$25 run are deleted. The 20 unique settlements/second for 15 minutes plan (18,000
+games) is no longer planned work. If demand ever needs checking, write a small
+staging load script then. Do not reset counters, refund reservations or recycle
+IDs to fit any run. This estimate alone authorizes no provider action or
+additional spend.
 
-Before any cloud drill, record its one-time dollar allowance inside the $100
-monthly envelope, resource IDs, initial usage, stop criteria and headroom for
-accepted work. Start with a bounded canary, read provider usage afterward,
-and reconcile delayed billing before expanding. No defensible dollar estimate
-for the full drill exists until its actual request, duration and SQL profile is
-measured.
+Before any cloud drill or load script, record its one-time dollar allowance
+inside the $100 monthly envelope, resource IDs, initial usage, stop criteria and
+headroom for accepted work. Start with a bounded canary, read provider usage
+afterward, and reconcile delayed billing before expanding.
 
-Before public or ranked expansion, collect:
+After opening, collect:
 
 - Billed request mix and CPU for assets, signup, password signin, recovery,
   public reads, denied requests and maintenance, including the 50 ms auth limit.
@@ -272,8 +260,7 @@ Before public or ranked expansion, collect:
 - Real cron/alarm execution, regional recovery, load limits and measured cost
   per 1,000 games and 10,000 spectator-hours.
 
-Public price sources, exact inputs, per-service calculations, local config hash
-and a standard-library reproduction script are retained in
-[`analysis/qualification/costs/`](../analysis/qualification/costs/README.md).
-This doc does not establish deployed costs, capacity, worldwide latency,
-restoration, alert delivery, or readiness to open ranked play.
+Public price sources are linked in the rates table above. The earlier cost
+reproduction script under `analysis/qualification/costs/` was removed with the
+analysis tooling on 2026-10-31; git history keeps it. This doc does not establish deployed costs, capacity, worldwide latency,
+restoration, or alert delivery.

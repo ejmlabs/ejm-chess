@@ -21,10 +21,11 @@ deployment readback, and compatible rollback. Recheck exact resource ownership,
 bindings and live configuration for each approved deployment; a dated canary
 record does not qualify a later candidate.
 
-New deployments default to closed ranked admission. Enable `RANKED_ENABLED`
-only with the qualified private proof binding and the release's player and
-recovery checks. A static build or Worker dry run alone does not establish a
-working production release.
+New deployments default to closed ranked admission. `RANKED_ENABLED=true`
+alone opens ranked play, after the release's player and recovery checks. A
+static build or Worker dry run alone does not establish a working production
+release. The ordered release sequence and exact production values are in
+[live-ready prep](live-ready-prep.md).
 
 ## Local preview
 
@@ -64,34 +65,27 @@ origin in each.
 | `DB` | D1 auth, active-seat, and fair play records |
 | `GAME` | Per-game SQLite Durable Object namespace |
 | `COMPETITION` | Serialized queue and rating owner |
-| `AUTH_BASE_URL` | Exact canonical origin; only explicit loopback mode permits another host |
+| `AUTH_BASE_URL` | `https://chess.ejmlabs.com`, or `https://staging.chess.ejmlabs.com` for staging; only explicit loopback mode permits another host |
 | `AUTH_SECRET` | Better Auth secret, at least 32 characters |
 | `LOCAL_DEV` | Explicit loopback development only; never enable on the public host |
 | `OPERATION_MODE` | `unattended` by default; only exact `reviewed` enables new human case decisions |
 | `GAME_RETIREMENT_MODE` | Missing or `preview` keeps four archive attempts per minute; exact `scaled` enables the bounded shared coordinator described below; other values close retirement |
-| `TOURNAMENTS_ENABLED` | Enables new automatic unrated round-robin events and entry; accepted events drain when disabled |
-| `ARENAS_ENABLED` | Enables timed arenas; their release settings require the corresponding capacity qualification |
-| `ARENA_ENTRANT_LIMIT` | No product cap by default; a positive integer may set one. Platform storage and the monthly budget apply |
-| `ARENA_GAME_LIMIT` | No product cap by default; a positive integer may set one. Platform storage and the monthly budget apply |
-| `ARENA_RETAINED_GAME_LIMIT` | No product cap by default; a positive integer may set one. Retirement and the monthly budget bound growth |
-| `ARENA_GAME_ID_LIMIT` | No product cap by default; a positive integer may set one. The monthly budget bounds new IDs |
-| `ARENA_AUTHORITY_BYTE_LIMIT` | 4 GiB Competition SQLite platform safety stop, including reserved unfinished-game headroom; accepted results still drain |
-| `RANKED_ENABLED` | Closed by default; credential-backed accounts still need eligibility checks; recovery email is optional |
-| `TIMEOUT_PROOF_PROFILE` | `off`; only exact `cha-native-3484c7e6-v1` with qualified private binding and positive proof limit permits new ranked games |
-| `MONTHLY_PROOF_LIMIT` | `0`; positive settings capped at 1,000 games per UTC month, with two credits per accepted game and 1,000 permanent receipts total |
-| `PROVER` | Optional private timeout-proof Container namespace; absent from default configuration; one fixed singleton, four shared ranked slots, one native job |
-| `NEW_WORK_STOPPED` | Exact `true` stops new signup attempts, game reservations, account-security sends, and server engine calls; existing signin and accepted games/results retain their recovery paths |
-| `MONTHLY_GAME_LIMIT` | Deprecated; usage counter only. No admission cap |
-| `MONTHLY_EMAIL_LIMIT` | Deprecated; usage counter only. No admission cap |
-| `MONTHLY_ANALYSIS_LIMIT` | Deprecated; usage counter only. Analysis remains disabled |
-| `MONTHLY_SIGNUP_LIMIT` | Deprecated; usage counter only. No admission cap |
-| `SIGNUP_ATTEMPT_LIMIT` | Deprecated; lifetime usage counter only. No admission cap |
-| `CASUAL_GAME_LIMIT` | No product cap by default; a positive integer may set one. Retirement and the monthly budget bound growth |
-| `CASUAL_GAME_ID_LIMIT` | No product cap by default; a positive integer may set one. The monthly budget bounds new IDs |
-| `RANKED_GAME_LIMIT` | No product cap by default; a positive integer may set one |
-| `RANKED_QUEUE_LIMIT` | No product cap by default; a positive integer may set one |
-| `RANKED_RETAINED_GAME_LIMIT` | No product cap by default; a positive integer may set one |
-| `AI_ENABLED` | Browser Stockfish practice gate; enabled in local config and set explicitly in the public release. No provider key or token quota; see [computer practice](ai-opponents.md). |
+| `TOURNAMENTS_ENABLED` | Exact `true` enables new automatic unrated round-robin events and entry; any other value closes them. Disabling cancels events that have not started; running events finish. No fixed event, payload or ID cap applies |
+| `ARENAS_ENABLED` | Exact `true` opens timed arenas, independent of ranked; any other value closes them. Disabling cancels unstarted events; running events finish |
+| `ARENA_ENTRANT_LIMIT` | Unset means no product cap; a positive integer sets one; `0` or a malformed value closes admission. Platform storage and the monthly budget apply |
+| `ARENA_GAME_LIMIT` | Unset means no product cap; a positive integer sets one; `0` or a malformed value closes admission. Platform storage and the monthly budget apply |
+| `ARENA_RETAINED_GAME_LIMIT` | Unset means no product cap; a positive integer sets one; `0` or a malformed value closes admission. Retirement and the monthly budget bound growth |
+| `ARENA_GAME_ID_LIMIT` | Unset means no product cap; a positive integer sets one; `0` or a malformed value closes admission. The monthly budget bounds new IDs |
+| `ARENA_AUTHORITY_BYTE_LIMIT` | 4 GiB (`4294967296`) is both default and maximum; a lower positive integer reduces it; `0`, a malformed or a larger value closes admission. Competition SQLite platform safety stop, including reserved unfinished-game headroom; accepted results still drain |
+| `RANKED_ENABLED` | Exact `true` opens ranked queueing and play; closed otherwise. Credential-backed accounts still need eligibility checks; recovery email is optional. `/api/config` reports `ranked` from this flag. Setting `false` is the ranked-only stop in [live-ready prep](live-ready-prep.md#stop-levers) |
+| `PRODUCTION_RESOURCE_IDS` | Private comma list of production D1 and namespace IDs. The isolated recovery drill Worker reads it and refuses those resources; unset or empty refuses every run. The public Worker does not read it |
+| `NEW_WORK_STOPPED` | Unset or exact `false` leaves new work open. `true`, and any other value, stops new signup attempts, game reservations, account-security sends; existing signin and accepted games/results retain their recovery paths |
+| `CASUAL_GAME_LIMIT` | Unset means no product cap; a positive integer sets one; `0` or a malformed value closes new casual admission. Retirement and the monthly budget bound growth |
+| `CASUAL_GAME_ID_LIMIT` | Unset means no product cap; a positive integer sets one; `0` or a malformed value closes new casual admission. The monthly budget bounds new IDs |
+| `RANKED_GAME_LIMIT` | No product cap by default; a positive integer sets one. `0` or a malformed value keeps no cap |
+| `RANKED_QUEUE_LIMIT` | No product cap by default; a positive integer sets one. `0` or a malformed value keeps no cap |
+| `RANKED_RETAINED_GAME_LIMIT` | No product cap by default; a positive integer sets one. `0` or a malformed value keeps no cap |
+| `AI_ENABLED` | Browser Stockfish practice gate. Exact `true` opens new practice; unset or any other value closes it. Enabled in local config and in the protected canary. No provider key or token quota; see [computer practice](ai-opponents.md). |
 | `TURNSTILE_SITE_KEY` | Public challenge key for the configured hostname and actions |
 | `TURNSTILE_SECRET_KEY` | Private server verification secret |
 | `EMAIL` and `EMAIL_FROM` | Email binding and approved sender `chess@ejmlabs.com`; onboarding and verification/recovery delivery to the approved recipient are recorded; broad delivery, outage and complete cost checks remain open |
@@ -99,11 +93,6 @@ origin in each.
 | `CF_ACCESS_TEAM_DOMAIN` | Exact Cloudflare Access team domain |
 | `CF_ACCESS_AUD` | Expected Access application audience |
 | `OWNER_EMAILS` | Explicit verified account allowlist, also matched to Access identity |
-| `ANALYSIS_QUEUE` | Optional delivery hint; D1 retains analysis work for scheduled recovery |
-| `ANALYSIS_ENABLED` | `false`; separate from ranked admission |
-| `ANALYSIS_DAILY_LIMIT` | 20 attempts per UTC day by default, hard ceiling 100 |
-| `ANALYZER` | Optional private sleeping Stockfish Container namespace |
-| `ANALYSIS_DEAD_LETTER_QUEUE` | Optional notification path; durable dead letters stay in D1 |
 
 Secrets belong in Cloudflare’s secret storage. Enter them through a provider UI
 or hidden input. Never put them in the public bundle or Wrangler variables.
@@ -119,6 +108,11 @@ npm test
 npm run build
 npm run worker:check
 ```
+
+Load time is checked from the sibling `ejm-ui` repository after the build:
+`node scripts/perf.mjs ../ejm-chess/dist --baseline ../ejm-chess/scripts/perf-baseline.json`
+([PERF.md](https://github.com/ejmlabs/ejm-ui/blob/main/scripts/PERF.md);
+[recorded run and full command](verification.md#local-load-measurement-2026-11-01)).
 
 Inspect the generated public guides, navigation, metadata, piece credits, and
 asset links. Check desktop and narrow screens, light and dark themes, keyboard
@@ -155,31 +149,23 @@ this accounting bounded. Signin and existing games continue. Exhaustion pauses
 signup; do not reset counters or delete accounts to conceal it. These caps
 do not bound ordinary HTTP traffic, signin attempts or the provider invoice.
 
-These admission limits protect this local beta. They are not measured
-worldwide capacity. Finishing a game or releasing a seat does not free retained
-payload capacity. Successful proved retirement does. The permanent ID ledger
-and minimal Game tombstone remain. Admitted creators may retry and opponents
-may join an available retained invitation when the cap is full.
-Unknown IDs and cap-denied creates must not invoke a Game RPC and allocate
-empty object storage. Invalid casual limits close new admission.
+Product admission limits are off by default (owner decision, 2026-10-31).
+Behavior under heavy load is still being measured, and worldwide capacity is
+not established. If an owner sets a casual limit, finishing a game or releasing
+a seat does not free retained payload capacity. Successful proved retirement
+does. The permanent ID ledger and minimal Game tombstone remain. Admitted
+creators may retry and opponents may join an available retained invitation when
+a set limit is full. Unknown IDs and limit-denied creates must not invoke a Game
+RPC and allocate empty object storage. Invalid casual limits close new
+admission.
 
-Ranked limits use their defaults for invalid/nonpositive values, cap positive
-values at 1000, and can be reduced before a deployment. The retained-ranked
-ceiling is separate from the unsettled limit. Existing games and result
-outboxes must drain even while new admission is closed. Do not delete a ledger
-or raise a ceiling to hide storage growth. Ranked authority and rating events
-are not retired by the casual payload job. Their retained ceiling still closes
-new admission. Permanent replay, account, case, tournament ID, and rating records
-also grow. A separate permanent ID ceiling stops new admission; payload
-retirement does not prove bounded total storage or unlimited operation.
-
-Optional automatic analysis requires exact `ANALYSIS_ENABLED=true`. Disabled
-or missing analysis configuration leaves ranked result projection and outbox
-drain independent of a Queue binding, including rows saved by older deployments.
-Those optional sample steps are skipped after successful projection; enabling
-analysis later does not backfill them. Already accepted Queue/D1 jobs remain
-stored. With analysis enabled, a missing or failed Queue keeps its saved
-outbox intent for retry. See [analysis recovery](analysis.md#durable-work-and-recovery).
+Ranked limits also default to no product cap. A nonpositive or malformed value
+keeps that default, and a positive value sets one before a deployment. Existing
+games and result outboxes must drain even while new admission is closed. Do not
+delete a ledger or raise a ceiling to hide storage growth. Ranked authority and
+rating events are not retired by the casual payload job. Permanent replay,
+account, case, tournament ID, and rating records also grow; payload retirement
+does not prove bounded total storage or unlimited operation.
 
 The private Game binding also supports `retryResultDelivery` after transport
 recovery. It requires the exact saved terminal event ID and digest, then uses
@@ -187,12 +173,15 @@ normal Competition settlement and seat release. It can bypass a delivery retry
 delay but cannot create a result or change clocks, history or the outcome.
 Ordinary alarms retain their backoff. No public HTTP route exposes this method.
 
-The per-minute scheduled handler runs bounded Competition, game recovery,
-payload retirement, and report-to-analysis maintenance before draining analysis. Independent tasks
-report safe stage names on failure. Authority status retains failed stages,
-projection lag, repair lag, incidents, and pending counts. The daily 03:15 UTC
-trigger also runs bounded private-data and analysis cleanup. A
-source schedule is not proof a deployed trigger is operating.
+The per-minute scheduled handler runs bounded Competition, game recovery and
+payload retirement maintenance. Independent tasks report safe stage names on
+failure. Authority status retains failed stages,
+projection lag, repair lag, incidents, and pending counts. An incident records
+a rejected result (conflicting, unverified, or a ranked result with no matching
+reservation) and changes no rating or outcome. Every minute it also trims
+expired rows (see below). The daily 03:15 UTC trigger adds bounded private-case
+retention cleanup. A source schedule is not proof a deployed trigger is
+operating; read the [cron heartbeat](#cron-heartbeat).
 Wrangler development does not run checked-in cron expressions on its own.
 Use its `--test-scheduled` mode and the displayed local scheduled endpoint to
 dispatch the minute or daily expression, or run an authorized owner maintenance
@@ -200,15 +189,61 @@ cycle. Merely refreshing History reads its D1 projection and does not repair a
 missed local scheduled invocation.
 
 Game recovery checks at most four admitted IDs per UTC minute across repeated
-or concurrent calls. It retries missing terminal projections and overdue
-adjudication through the authority's normal status/outbox path. Failed or live
-records have a five-minute poll cooldown so the oldest four cannot starve the
-rest. A large outage backlog may delay this fallback; the stored outcome time
+or concurrent calls. It retries overdue pending adjudication (games saved under
+earlier rules versions) and missing terminal projections through the
+authority's normal status/outbox path. D1 holds no Game deadlines, so it cannot
+tell a healthy game from an overdue one. Competition already reads every
+game it admitted through a durable intent (casual, round-robin, arena and
+ranked), so recovery skips those until the admission is a day old, longer than
+any clock allows. A casual game admitted before durable intents (no
+reservation) has no such owner and is polled once 30 seconds have passed.
+Polled records have a five-minute cooldown so the oldest four cannot starve the
+rest. Fifteen healthy admitted games cost 30 recovery polls in ten minutes
+before this change and none after (local run, not staged or released).
+A large outage backlog may delay this fallback; the stored outcome time
 still uses the original deadline. Durable Object alarms remain the first path.
+
+An admission a day old whose Game answers a status call with no state never
+started and never will. Recovery marks it abandoned: its ledger row becomes
+`archived` with no terminal version, which keeps the row and permanent ID,
+returns only the retained payload slot and stops every later creation. Its
+unreleased seats are released, and it is not polled again. A status call that
+fails never abandons a row; it keeps the five-minute poll. A Game holding any
+state, including a never-started terminal result, follows its normal result
+and retirement path. This fallback does not edit a Competition intent for the
+same ID.
+
+Competition reads each live game it admitted when that Game next has work, and
+never more than five minutes later. The Game reports this due time in its
+status reply: the clock deadline, the readiness wait, the tournament cutoff,
+the end of a legacy adjudication wait, or a result delivery retry. Every Game
+arms its own alarm for these and pushes its result at once, so a read follows
+a status change and recovers a lost alarm or push. A move can bring a deadline
+forward; the Game alarm covers it, and the five-minute bound covers a lost
+alarm. A late read delays delivery only, because a flag keeps its original
+deadline as its result time. For casual and arena games a failed status call
+retries after one second, then after twice as long each time up to 60 seconds,
+and a success starts over at one second. A reply without a due time falls back
+to the five-minute bound. A due time already passed is retried after one second,
+then after as long as it has been overdue, up to 60 seconds, never in a tight loop.
+Ten live rapid games cost 190 Game status reads over the first ten minutes of
+play at the earlier fixed 30-second poll and 11 now (local mocked-clock run,
+not staged or released). A resignation, a draw or a flag still settles through
+the Game's own delivery, so it waits for no read.
 Competition serializes alarm updates and keeps an earlier pending deadline.
 A full maintenance pass can advance a deadline due when it began, while keeping
 alarms armed after its start. After dispatch, maintenance arms the next deadline.
 Repeated player requests cannot postpone a pending alarm.
+Failing work waits twice as long each time up to 60 seconds, so an outage costs a
+few wakeups a minute. Arena and casual items start at one second. Ranked match
+creation, a ranked result projection and a Game's result delivery start at two
+seconds; their cap was about four minutes before. A tournament recovery waits 30
+seconds, then a minute. A maintenance pass in which any stage failed also arms the
+next alarm no earlier than one second, then 2, 4 and so on up to 60 seconds after
+it, because a failed stage leaves its work due and skips the stages after it. The
+first pass without a failure ends the wait, and a restart begins at one second. A
+full D1 outage with work due cost one wakeup every millisecond and costs 15 in ten
+minutes now (local mocked-clock run, not staged or released).
 New arena entries reserve the existing 50-per-second, burst-100 registration
 bucket before external session, eligibility and budget checks. An empty bucket
 returns `ARENA_RETRY` without D1 or controller calls, event discovery or
@@ -261,7 +296,7 @@ IDs and replay. This proves logical cleanup for that batch. A sample SQLite
 database kept the same allocated size after cleanup; physical storage
 reclamation, 72,000-payload steady state and live cost remain unproved. Use
 the [local qualification report](local-qualification.md) for methods and
-measurements. Keep public admission at its conservative limits.
+measurements. Measure live demand after opening.
 
 When tournaments are enabled, registration opens 15 minutes before hourly
 blitz, daily rapid at 18:00 UTC, and Sunday rapid at 16:00 UTC. The initial
@@ -270,25 +305,26 @@ games, with a 60-second intermission. A blitz round ends after 18 minutes and a
 rapid round after 40 minutes. Event standings are separate from global ratings.
 Missing players, changed eligibility, service interruptions, and round cutoffs
 use stored cancellation or no-score outcomes and release event reservations.
-The current fixed safety limits are three active events, 256 retained event
-records, 100,000 retained event Game payloads, and 1,000,000 permanent event game IDs.
+Round-robin and arena events have no product cap on active events, retained
+event records, retained Game payloads or game IDs (owner decision, 2026-10-31).
 Old event presentation records can be removed after seven days once all their
 Game payloads are retired; game replay and permanent ID records remain.
 
-The requested public capacity for hundreds and thousands of entrants is not
-qualified. Native local checks cover three 2,000-entry events sharing 1,000
+Public capacity for hundreds and thousands of entrants is not qualified. The
+2,000-player capacity harness was deleted on 2026-10-31 and no provider load run
+is planned. Native local checks cover three 2,000-entry events sharing 1,000
 real games, duplicate results, restart recovery and complete paged standings.
-The default-disabled arena work still needs deployed authentication, cache,
-alarm, regional, sustained admission, storage and cost evidence before public
-admission is raised. See [the local methods and limits](local-qualification.md).
+Deployed authentication, cache, alarm, regional, sustained admission, storage
+and cost behavior is measured after opening. See
+[the local methods and limits](local-qualification.md). If demand ever needs
+checking, write a small staging load script then.
 
-Arena configuration keeps the feature disabled. Larger accepted settings are inputs for explicitly scoped local
-qualification. They do not raise the approved monthly spending envelope,
-authorize a public deployment, or prove capacity. Malformed or out-of-range
-arena limits close admission. Record and byte headroom, budget stop,
-start-rate admission, cross-mode reservations, permanent IDs, and retirement
-throughput remain separate checks. Per-event entrants and global game/storage
-ceilings must not be confused when planning a workload.
+The `ARENA_*` limit variables are optional owner inputs. Unset means no product
+cap. They do not raise the approved monthly spending envelope or prove
+capacity. Malformed or out-of-range values close admission. Record and byte
+headroom, budget stop, start-rate admission, cross-mode reservations, permanent
+IDs, and retirement throughput remain safety checks. Per-event entrants and
+global game/storage ceilings must not be confused when planning a workload.
 
 Open `/admin/` with the matching verified owner account and Cloudflare Access
 identity. Cases use 20-row cursor pages; use Older cases or Newest cases to
@@ -305,14 +341,86 @@ batch. Private operations reports fixed counter keys, not request bodies or
 account identifiers inside those counter objects. Game-specific security
 counters require both the owner account and Access identity. Informational
 ranked farming checks include pending rating-repair results and expose their
-policy, work limits, and pending or incomplete coverage. They never apply a
+policy, work limits, and pending or incomplete coverage. Their status reads a
+bounded window and reports `truncated` beyond it. They never apply a
 penalty or change queue priority. See [fair-play operations](fair-play.md) for
 the exact patterns, public request windows, counter privacy, and retained bounds.
 
-See [analysis](analysis.md) for the private engine build, disabled Container
-bindings, measured memory/throughput, daily cap, leases, dead letters, and canary
-gates. The 0.25-CPU local profile hit its deadline. Do not provision that tier
-as a validated analysis service.
+### Cron heartbeat
+
+Each cron invocation records one D1 row per schedule in `cron_heartbeats`
+(migration `0016`): when the run started, when it finished and the stages of the
+latest failure. `GET /api/admin/operations` returns it as `cron.minute` and
+`cron.daily` with `schedule`, `startedAt`, `finishedAt`, `lastError` and
+`lastErrorAt`; all are null for a schedule that has not run. Implemented and
+locally tested; the canary records nothing until migration `0016` is applied and
+this revision is released.
+
+A schedule is healthy when `finishedAt` is not older than `startedAt`, is recent
+(the minute schedule within about three minutes, the daily one within a day plus
+the run), and `lastErrorAt` is null or older than `startedAt`. A run that died
+leaves `startedAt` newer than `finishedAt`. `lastError` lists stage names
+(`competition`, `unattended_games`, `expired_rows`, `private_cleanup`), never
+messages, and a later clean run does not erase it. A failing stage never stops
+the others. A failed heartbeat write is logged as `heartbeat_failed` and never
+stops maintenance. Alarm-driven Competition maintenance is not part of this
+record; `authority.lastMaintenanceError` still reports it.
+
+### Expired-row cleanup
+
+The minute schedule removes one bounded batch of 500 rows per table per run
+(`cleanupExpiredRows`) from the tables that grow with traffic: account request
+windows (`request_limits`), identity-change leases, expired verification
+secrets, expired sessions, sign-in rate limits (`rateLimit`) and seats released
+30 days ago. That is room for 720,000 deletions per table per day, and a backlog
+larger than one batch drains over the next runs. Each statement seeks an index;
+migration `0016` adds the missing released-seat index, so an idle run reads no
+rows. Implemented and locally tested; the released canary still runs the daily
+pass until this revision ships.
+
+Growth measured on a local D1 by driving the real routes:
+
+| Activity | Rows created | Removed |
+| --- | --- | --- |
+| One sign-up or sign-in | 1 `session`, and 1 `rateLimit` per client address and path | Session 7 days after sign-in; limit row 1 day after last request |
+| A signed-in account reading, writing or opening sockets | 1 `request_limits` row per kind used, reused in place, plus 1 `seat:` row when it takes a seat | 1 day after last use |
+| One game | 1 `active_game_seats` row per player | 30 days after release |
+
+The earlier daily pass removed 500 rows per table per day. At 4 rows per active
+account, 2 per game and 1 per sign-in it fell behind above about 125 daily
+active accounts, 250 games or 500 sign-ins a day. Watch `lastError` on the
+minute heartbeat; a table that still lags would show as a rising D1 size, not as
+an error. The daily run keeps private-case retention (report expiry, evidence
+and text minimization) and legacy guest removal (at most 100 a day, no new rows).
+Those grow only with reports, which the 1,000-open-case cap and the daily limit
+per reporter already bound.
+
+### Public read cache
+
+Unauthenticated public JSON reads share one helper (`src/server/public-cache.ts`):
+the arena schedule, summary and standings, the leaderboard and public player
+profiles. The edge keeps a response for 10 seconds in the Cache API; browsers
+receive `public, no-cache` and revalidate against it. The cache key is the path
+plus the route's documented parameters only: `cursor` for arena standings, and
+`pool` and `cursor` for the leaderboard. Cookies, headers and any other query
+parameter never create a variant. A warm read does no D1 query and no session
+lookup, so these routes do not count against the per-account read window. A
+failed or missing read is never stored. Private or per-viewer data and every
+mutation stay outside the helper. Leaderboard and profile caching is implemented
+and locally tested, not yet released.
+
+Not cached, on purpose: `GET /api/config` (reads no storage) and
+`GET /api/tournaments[/:id]` (they carry the caller's own status and a
+`serverNow` clock sample that countdowns depend on).
+
+The cache bounds repeat reads, not distinct ones. Random player IDs, many
+leaderboard cursors and the uncached tournament reads still reach D1 or the
+Competition, and the product adds no cap for them. The Cloudflare-side control
+is a WAF rate-limiting rule on the zone, counted per client IP, for example
+`http.request.method eq "GET" and (starts_with(http.request.uri.path, "/api/players/") or http.request.uri.path eq "/api/leaderboard" or starts_with(http.request.uri.path, "/api/tournaments") or starts_with(http.request.uri.path, "/api/arenas"))`
+with a Managed Challenge once a client passes a threshold the owner picks (120
+requests a minute is a starting point). The owner creates it in the dashboard;
+this repository does not apply it.
 
 ## Recovery
 
@@ -328,15 +436,18 @@ Capture synchronizes one object's storage, inspects its schema/state under a
 concurrency barrier and returns hashes, native bookmark, exact object ID, alarm,
 policy versions, watermarks and pending counts. It never changes a clock,
 receipt, result, epoch or outbox. It returns no raw account, session or evidence
-rows. The format fails closed above 4,096 rows or 2 MiB per object, or when the
-provider cannot supply a bookmark. Production has no restore/restart endpoint.
+rows. A Competition larger than one page (4,096 rows or 2 MiB) captures page by
+page: each response carries a `cursor` to send back until a response is the
+complete envelope. A Game must fit one page and otherwise answers
+`409 RECOVERY_CAPTURE_LIMIT`. Capture fails closed when the provider cannot
+supply a bookmark. Production has no restore/restart endpoint.
 
 See [the exact capture routes and isolated provider drill](recovery-drill.md)
 for protected invocation, resource checks, D1-before-DO ordering, private
 manifests, undo records and verification limits. Local guard and fixture checks
-do not establish provider restoration or full-service recovery. Keep task 6.3
-and ranked launch gates open until the actual rehearsal and retention policy
-are recorded.
+do not establish provider restoration or full-service recovery. The
+restore-and-replay provider drill is follow-up only, not a launch gate (owner
+decision, 2026-10-31); its code stays.
 
 ### Client disconnect or stale position
 
@@ -353,40 +464,21 @@ Use the existing idempotent delivery path. Do not replay a browser-supplied
 result or apply ad hoc updates to one player’s rating.
 
 A timeout ends the game at its deadline with a loss for the player who ran out
-when the other side has mating material, otherwise a draw. Only a ranked v3
-proof game waits up to 30 seconds for a private proof and then applies the same
-rule, rated. The durable result outbox releases seats through accepted
-settlement. Late or repeated alarms, maintenance, and result delivery cannot
-duplicate a terminal event. A fully blocked position with no possible mate
-scores as a loss; ranked play stays closed until the policy and recovery limits
-are accepted and verified.
-Recovery preserves a stored game's original rules version. The settlement
-boundary accepts known v1, v2 and the default-off v3 proof policy and still
-requires exact authority data. Historical automatic void decisions name the v2
-operational policy even when the original game record remains v1; new v3 voids
-name v3. Existing v1 delivery receipts retain their original wire shape; an
-unknown rules version is rejected.
+when the other side has mating material, otherwise a draw. This is the same in
+every mode, including ranked, and the result is rated there. The durable result
+outbox releases seats through accepted settlement. Late or repeated alarms,
+maintenance, and result delivery cannot duplicate a terminal event. A fully
+blocked position with no possible mate scores as a loss.
 
-The private v3 proof pool holds its slot and two game credits through pending
-adjudication and settlement. Existing accepted proof work drains through the
-same game stop used by monthly budget controls. Do not remove its binding while
-reserved games remain. A supported exact proof can settle once before the
-unchanged deadline; failed or unknown work cannot extend it. Profile and ranked
-enablement remain gated on local and provider corpus/resource/cost qualification.
-See [timeout-proof operations and reproduction](timeout-proofs.md).
-The same guide documents the separate unarmed fixed-corpus provider harness.
-Its isolated bindings, permanent stop, two-hour expiry, finite reservations
-and command allowance are qualification controls, not production launch or an
-invoice cap. Review fresh resource ownership and complete costs before adding
-any paid Container to that template. Keep cost and source-permit reviews,
-actual owner residual-cost acceptance and later provider-resource evidence
-separate, with immutable hashes bound to the exact private candidate.
-Financial adoption alone grants no extra work or production admission.
-See [the four records](timeout-proofs.md#separate-financial-source-and-provider-gates).
+Recovery preserves a stored game's original rules version. The settlement
+boundary accepts the known stored versions and still requires exact authority
+data. Historical automatic void decisions name the v2 operational policy even
+when the original game record remains v1. Existing v1 delivery receipts retain
+their original wire shape; an unknown rules version is rejected.
 
 ### Authentication or mail outage
 
-Keep ranked admission closed and show a retryable failure for email operations.
+Show a retryable failure for email operations. Ranked and arena play continue.
 Password signup, signin and player competition eligibility do not need mail.
 Recovery email is optional; accounts without one have no email password reset.
 Verify the sender and budget settings before retrying verification or recovery.
@@ -432,8 +524,8 @@ open report becomes eligible for `expired-unreviewed` closure after seven days,
 without a human decision, unresolved appeal or future evidence hold. The daily
 private cleanup closes at most 500 through an indexed age query, preserves the
 1,000-open-case cap, receipts and normal evidence expiry, and records automatic
-outcome/time separately. Duplicate reports and late analysis cannot reopen a
-case or extend retention. An unresolved appeal closes after 14 days as
+outcome/time separately. Duplicate reports cannot reopen a case or extend
+retention. An unresolved appeal closes after 14 days as
 `expired-unreviewed`, with its separate automatic metadata.
 It creates no human decision and does not silently reverse historical ratings.
 Keep notices and historical decisions intact. See [fair play](fair-play.md).
@@ -461,17 +553,17 @@ is no production import endpoint. This journal excludes Better Auth accounts,
 private cases, active game state, sockets, and game delivery outboxes. It cannot
 restore the entire service. A coordinated provider backup/export and rehearsal
 of those stores, privacy controls, restore tooling, and backup expiry remain
-launch gates. Keep the originals and an offline copy under an owner-approved
+follow-up work, not launch gates. Keep the originals and an offline copy under an owner-approved
 retention and access policy.
 
 ### Data loss or corruption
 
-Close ranked admission, preserve current state, and stop repairs that could
+Stop new work, preserve current state, and stop repairs that could
 overwrite evidence. Follow an approved backup and restore procedure for D1 and
 the affected Durable Objects. No production backup restoration has been
-verified yet. Restoration and rating replay must be rehearsed before launch.
+verified yet. Rehearse restoration and rating replay as follow-up work.
 
-### Full-service backup and restore gates
+### Full-service backup and restore follow-up
 
 The authority journal drill proves a bounded event replay contract. It does not
 prove service restoration. Use the maintained provider D1 Time Travel and
@@ -485,7 +577,6 @@ The remaining recovery work is concrete:
 | D1 | Rehearse approved native recovery of accounts, sessions, replay, seats, reports, restrictions, admissions, budget receipts/counters and stops on isolated synthetic data; verify schema and reapply post-boundary closures before access opens; any separate SQL export needs explicit approval |
 | Competition | Capture a fixed-watermark private journal; restore the serialized authority with pending reservations, outboxes, repair state, and rating epochs; reconcile events accepted after the watermark |
 | Game objects | Enumerate admitted permanent IDs; capture supported recovery bookmarks and rehearse active clocks, accepted command receipts, pending results, archived tombstones, and reconnect ownership |
-| Optional analysis | Reconcile durable D1 jobs and existing queue deliveries without duplicate evidence or losing a stored summary |
 | Configuration | Preserve resource IDs, bindings, secret names, cron, origin, Access, Turnstile, sender configuration, and the exact deployable revision; keep secret values in an approved secret store |
 
 Before any production restore, close new admission, preserve the current state,
@@ -506,44 +597,38 @@ endpoint or copy private production data into fixtures.
 
 ## Public launch gates
 
-**Owner policy update, 2026-10-30.** Do not gate public opening on a pre-run
-2,000-player workload. The monthly billing stop, security controls and
-platform-safety ceilings govern admission. Measure demand after opening. The
-capacity-run requirements below are retained as follow-up qualification, not a
-launch blocker.
+**Owner policy update, 2026-10-31.** Ranked play, arenas and tournaments open
+with `RANKED_ENABLED`, `ARENAS_ENABLED` and `TOURNAMENTS_ENABLED` after the
+critical path in [live-ready prep](live-ready-prep.md): protected-host player
+flows, then live mail, alert, cron and stop readbacks. There are no arbitrary
+product caps. Cloudflare budget alerts and the `$85` stop webhook are the
+economic limit; alerts can lag, so this is not a hard invoice cap. Security and
+abuse limits, protocol and input bounds, bounded per-request and per-alarm work,
+fair-play rules (including 2 ranked games per pair per 24 hours), platform
+safety bounds and the explicit stops stay. Ranked uses the material timeout
+rule only, as casual does.
 
-The owner approved the initial release sequence on 2026-10-21 UTC. Public
-ranked play and the first large-arena tier open together after four checks:
-the real Game/proof/Competition recovery path; the full approved
-2,000-player-per-event provider workload; protected-host player flows; and live
-privacy, admission and spending-control readback. The October 22 spending policy
-uses one $100 monthly target, usage alerts and an emergency stop (thresholds are kept in the private provider record).
-Earlier service allocations and mandatory reserves no longer gate launch.
-The isolated capacity run retains its approved $25 incremental ceiling.
-See [proof qualification](timeout-proofs.md),
-[the fixed capacity run](capacity-qualification.md),
-[spending controls](cloudflare-budget.md), and
-[live-ready prep](live-ready-prep.md) for offline prep versus live verify rows.
-
-The nine-day calendar observation, full-hour retention/endurance workload,
-six-region WAN benchmarks and later capacity tier remain unfinished
-[follow-up qualification](capacity-follow-up.md). They do not block this
-initial release or establish supported performance. Keep public ceilings
-within the passing first-tier evidence and remaining monthly headroom.
-Optional server analysis stays disabled. A frozen provider workload still
-requires the separate approval recorded in its run plan.
+**Tooling decision, 2026-10-31.** The 2,000-player capacity harness and
+server-side Stockfish analysis are deleted. No provider load run is planned, and
+reports carry no engine screening. The restore-and-replay provider drill is
+follow-up only and gates nothing. Browser Stockfish practice stays. Measure
+demand after opening; if it ever needs checking, write a small staging load
+script then. The October 22 spending policy (one $100 monthly target, usage
+alerts, an emergency stop; thresholds are kept in the private provider record)
+replaces earlier service allocations and reserves. See
+[spending controls](cloudflare-budget.md).
 
 | Gate | Required evidence |
 | --- | --- |
-| Legal rules | Versioned online rules, tested legal moves, clocks, restart recovery, material timeout rule, and ranked proof fallback when enabled |
+| Legal rules | Versioned online rules, tested legal moves, clocks, restart recovery, material timeout rule in every mode |
 | Ranked docs vs code | Player Guide and architecture match implemented matchmaking, color balance, Glicko starts (1500 / RD 350 / vol 0.06), pair limit (2/24h), and correction batches of 20; two-session verify still required |
 | Accounts | Canonical host, secure cookies, real email delivery, session expiry/revocation, and active-seat identity checks |
 | Fair play | Tested objective abuse controls, private reports with honest review availability, no statistical sanctions, expiry, and accepted cheating limits; optional reviewed mode needs corroboration and appeal/correction checks |
 | Abuse controls | Turnstile host/action checks, bounded requests, rate limits, queue limits, and reconnect admission |
 | Access policy | Validated Access JWT, owner account match, least privilege, and no development bypass |
 | Privacy | Password-confirmed export/closure, retained history, appeal/evidence holds, bounded minimization, native-history expiry and reapplication of later closures before restored authentication or admission opens |
-| Recovery | Tested outbox retries, duplicate delivery, object restart, database restoration, and rating replay/reversal |
-| Capacity and cost | Measured workload with explicit concurrency, CPU, storage, latency, queue, and spending limits |
+| Recovery | Tested outbox retries, duplicate delivery and object restart. The restore-and-replay provider drill is follow-up only |
+| Capacity and cost | Not a launch gate. Spending follows budget alerts and the stop; load, CPU, storage and latency are measured after opening |
 | Publication | Owner-approved resources and release, live origin/TLS checks, public docs, navigation, assets, and license notices |
 
 Record the test environment, date, workload, result, and owner for each gate.

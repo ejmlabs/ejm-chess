@@ -1,4 +1,0 @@
-# Reuse the locally built, pinned runtime. This target is never deployed.
-FROM ejm-chess-analysis:local
-COPY runner.py test_runner.py benchmark.py ./
-CMD ["python", "-m", "unittest", "-v", "test_runner.py"]
